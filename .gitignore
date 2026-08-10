@@ -24,3 +24,7 @@ frontend/vite.config.js.timestamp-*.mjs
 # Editor
 .vscode/
 .idea/
+
+# 源码传输包（git archive 产物，非源码）
+*.tar.gz
+*.tar
