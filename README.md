@@ -20,7 +20,7 @@ aether-nav/
 │  ├─ app.py               入口与 API 路由
 │  ├─ models.py            数据模型与 visible_links_for（四层权限）
 │  ├─ config.py            配置（SQLite 路径、上传目录、前端 dist）
-│  ├─ seed.py              示例数据注入
+│  ├─ seed.py              首次启动初始化（仅创建默认管理员）
 │  ├─ migrate_*.py         数据迁移脚本（运行一次）
 │  ├─ requirements.txt
 │  ├─ instance/app.db      SQLite 数据库（运行时生成）
@@ -49,7 +49,7 @@ aether-nav/
 python -m venv .venv && .venv/Scripts/activate      # Windows
 pip install -r backend/requirements.txt
 cd aether-nav
-python -m backend.seed        # 首次：建表并注入示例数据
+python -m backend.seed        # 首次：建表并创建默认管理员（admin / admin123）
 python -m backend.app          # 启动，监听 http://localhost:5000
 ```
 
@@ -66,16 +66,17 @@ npm run dev            # 开发服务器 http://localhost:5173
 字体（Inter）与图标（Material Symbols）已通过 `@fontsource` **本地化打包**，离线/内网可用，
 不再依赖 Google Fonts CDN。
 
-### 演示账号
+### 默认管理员
 
-| 用户   | 密码      | 角色   |
-|--------|-----------|--------|
-| admin  | admin123  | 管理员 |
-| alice  | alice123  | 成员   |
-| guest  | guest123  | 访客   |
+首次启动（`python -m backend.seed` 或容器启动）会创建一个默认管理员，**不注入任何演示数据**。
+凭据可用环境变量覆盖：`ADMIN_USERNAME`（默认 `admin`）、`ADMIN_PASSWORD`（默认 `admin123`）、
+`ADMIN_DISPLAY`、`ADMIN_AVATAR`。
 
-访客仅可见「权限=所有人」的链接，并可使用站内搜索；加密链接（如「私有网盘」，密码 `secret123`）
-打开前需输入密码。
+| 用户  | 密码      | 角色   |
+|-------|-----------|--------|
+| admin | admin123  | 管理员 |
+
+分类与链接数据请通过后台管理页（`/admin`）录入，或直接维护数据库（见下方 Docker / Navicat 说明）。
 
 ## 生产构建 & 部署
 
@@ -92,17 +93,34 @@ python -m backend.app            # Flask 自动托管 dist/ 下的 SPA
 
 访问 `http://<host>:5000` 即为完整应用。
 
-### Docker（群晖 DSM 部署）
+### Docker 部署
 
-项目根提供 `Dockerfile`，多阶段构建：stage1 用 Node 构建前端，stage2 用 Python 运行 Flask。
+项目根提供 `Dockerfile`（多阶段：stage1 用 Node 构建前端，stage2 用 Python + gunicorn 运行 Flask）
+与 `docker-compose.yml`。
 
 ```bash
-docker build -t aether-nav .
-docker run -d -p 5000:5000 -v aether-data:/app/backend/instance -v aether-uploads:/app/backend/uploads aether-nav
+docker compose up -d --build      # 构建并启动，监听 http://localhost:5000
 ```
 
-在群晖 Container Manager 中：导入上述镜像，映射端口 `5000`，并挂载两个卷保留数据库与上传的图标，
-即可常年运行。详见 `docker-compose.yml`。
+`docker-compose.yml` 通过 bind 挂载把数据落到宿主机 `./data`：
+
+- `./data/instance/app.db` —— SQLite 数据库（首次启动由 seed 建表 + 默认管理员）
+- `./data/uploads` —— 本地图标存储
+
+**用 Navicat 直接维护数据**：Navicat 新建「SQLite」连接 → 选择现有数据库文件 → 指向
+`./data/instance/app.db`（容器启动后才会生成）。常用表：
+
+- `categories`：`parent_id` 为 `NULL` 表示父分类；子分类填父分类的 `id`。`visible`(1/0)、
+  `archived`(0)、`color`(如 `#6C5CE7`)、`position`(排序)、`owner_id`(填管理员 `id`，通常 1)。
+- `links`：`category_id` 关联 `categories.id`；`url_internal` / `url_external` 至少填一个；
+  `title` 必填；`permission` 填 `all`（所有人可见）；`owner_id` 填管理员 `id`；
+  `is_active` 填 1；`icon` 可填 `link`。`has_password` 默认 0。
+
+父/子分类导入顺序：先插父分类拿到 `id`，再插子分类并把 `parent_id` 指向它；链接的
+`category_id` 必须指向已存在的分类 `id`。修改后刷新页面即可见。
+
+在群晖 Container Manager 中：导入构建好的镜像，映射端口 `5000`，并挂载 `./data/instance` 与
+`./data/uploads` 即可常年运行。
 
 ## 已实现 / 待迭代
 

@@ -4,11 +4,14 @@ services:
     container_name: aether-nav
     ports:
       - "5000:5000"
+    environment:
+      # 默认管理员账号（首次启动 seed 创建）；如需自定义改这里即可
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+      - SECRET_KEY=change-me-in-prod
+      - TOKEN_SECRET=change-me-in-prod
     volumes:
-      - aether-db:/app/backend/instance
-      - aether-uploads:/app/backend/uploads
+      # 绑定到宿主机 ./data，方便用 Navicat 等工具直接打开 ./data/instance/app.db 维护数据
+      - ./data/instance:/app/backend/instance
+      - ./data/uploads:/app/backend/uploads
     restart: unless-stopped
-
-volumes:
-  aether-db:
-  aether-uploads:
