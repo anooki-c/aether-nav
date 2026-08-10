@@ -77,7 +77,9 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
       <TopBar v-if="!isLogin && !isAdmin && !isSettings" @add-link="openQuick" />
       <div id="main-scroll" class="flex-1 min-h-0 overflow-y-auto pb-20 lg:pb-0">
         <router-view v-slot="{ Component }">
-          <component :is="Component" />
+          <Transition name="route">
+            <component :is="Component" />
+          </Transition>
         </router-view>
       </div>
     </div>
@@ -119,5 +121,14 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
 .toast-fade-leave-to {
   opacity: 0;
   transform: translate(-50%, -10px);
+}
+/* 路由切换：整页淡入（仅 opacity，避免两页同屏重叠/跳动） */
+.route-enter-active,
+.route-leave-active {
+  transition: opacity 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.route-enter-from,
+.route-leave-to {
+  opacity: 0;
 }
 </style>

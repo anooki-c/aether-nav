@@ -101,12 +101,12 @@ watch(() => store.weatherCity, fetchWeather)
     class="flex items-center gap-2 h-10 px-3 rounded-full bg-surface-container hover:bg-surface-variant transition-colors text-on-surface select-none"
     :title="error || (cityName ? cityName + ' 天气' : '天气')"
   >
-    <!-- 编辑态：输入城市 -->
+    <!-- 编辑态：输入城市（输入元素每次 v-if 新建，挂载即播放上浮淡入） -->
     <input
       v-if="editing"
       ref="inputRef"
       v-model="cityInput"
-      class="w-20 bg-transparent outline-none font-body-sm text-body-sm text-on-surface border-b border-outline-variant"
+      class="w-20 bg-transparent outline-none font-body-sm text-body-sm text-on-surface border-b border-outline-variant wfade-in"
       placeholder="城市"
       @keyup.enter="commitEdit"
       @blur="commitEdit"
@@ -138,3 +138,14 @@ watch(() => store.weatherCity, fetchWeather)
     </template>
   </div>
 </template>
+
+<style scoped>
+/* 编辑态输入框：挂载即轻微上浮淡入，避免瞬替 */
+.wfade-in {
+  animation: wfadeIn 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+@keyframes wfadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>

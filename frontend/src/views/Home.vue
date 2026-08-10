@@ -139,16 +139,18 @@ watch(() => store.scrollNonce, async () => {
 
     <!-- 吸顶模式下搜索条下方补一段留白，避免首个分类紧贴 -->
     <div :class="searchFixed ? 'pt-8' : ''">
-    <div v-if="loading" class="text-center text-on-surface-variant py-12 font-body-md text-body-md">加载中…</div>
+    <Transition name="fade" mode="out-in">
+      <div v-if="loading" key="loading" class="text-center text-on-surface-variant py-12 font-body-md text-body-md">加载中…</div>
 
-    <div v-else-if="!groups.length" class="text-center py-20">
-      <span class="material-symbols-outlined text-5xl text-outline-variant">search_off</span>
+      <div v-else-if="!groups.length" key="empty" class="text-center py-20">
+        <span class="material-symbols-outlined text-5xl text-outline-variant empty-pop">search_off</span>
       <p class="mt-3 font-headline-sm text-headline-sm text-on-surface-variant">暂无可见链接</p>
       <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">试试切换内外网<span v-if="store.allowHomeEdit">，或使用顶栏的 + 添加链接</span></p>
     </div>
 
-    <section
-      v-for="(g, gi) in orderedGroups"
+      <div v-else key="content">
+      <section
+        v-for="(g, gi) in orderedGroups"
       :key="g.category.id"
       :id="'cat-section-' + g.category.id"
       :class="['mb-10', !entranceDone ? 'home-group' : '', searchFixed ? 'scroll-mt-[168px]' : 'scroll-mt-20']"
@@ -176,9 +178,9 @@ watch(() => store.scrollNonce, async () => {
         </draggable>
 
         <!-- 静态网格（访客 / 未开启拖拽） -->
-        <div v-else :class="gridClass">
+        <TransitionGroup v-else :class="gridClass" name="card" tag="div">
           <LinkCard v-for="l in g.links" :key="l.id" :link="l" :compact="cardCompact" @open="openLink" />
-        </div>
+        </TransitionGroup>
       </div>
 
       <!-- 移动端：4 列 1:1 方形卡（仅 icon + 标题） -->
@@ -186,6 +188,8 @@ watch(() => store.scrollNonce, async () => {
         <SquareCard v-for="l in g.links" :key="l.id" :link="l" @open="openLink" />
       </div>
     </section>
+      </div>
+    </Transition>
     </div>
 
     <PasswordModal v-model:open="showPwd" :link="pendingLink" />
@@ -201,5 +205,33 @@ watch(() => store.scrollNonce, async () => {
 }
 .home-group {
   animation: homeGroupIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* 加载态 ↔ 内容/空状态：淡入淡出（out-in，避免同屏重叠） */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+/* 空状态图标：轻微弹入（rare/first-time 的 delight 预算） */
+.empty-pop {
+  animation: emptyPop 300ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes emptyPop {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* 链接卡片新增进入 + 重排平滑（仅静态网格；拖拽网格由 vuedraggable 处理） */
+.card-enter-active {
+  transition: opacity 220ms cubic-bezier(0.23, 1, 0.32, 1), transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.card-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.card-move {
+  transition: transform 250ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 </style>
