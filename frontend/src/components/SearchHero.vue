@@ -56,7 +56,7 @@ watch(
 <template>
   <section
     class="flex flex-col items-center w-full max-w-2xl mx-auto"
-    :class="props.sticky ? 'py-3' : 'mt-3 mb-8'"
+    :class="props.sticky ? 'pt-2 pb-4' : 'mt-3 mb-8'"
   >
     <!-- 引擎切换 pill -->
     <div class="flex gap-2 flex-wrap justify-center" :class="props.sticky ? 'mb-3' : 'mb-4'">
