@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  /* ===== 浅色主题：语义色令牌（RGB 通道，供 <alpha-value> 透明度修饰符使用） ===== */
+  --c-surface: 252 248 255;            /* #fcf8ff */
+  --c-surface-dim: 220 216 228;        /* #dcd8e4 */
+  --c-surface-bright: 252 248 255;     /* #fcf8ff */
+  --c-surface-container-lowest: 255 255 255;
+  --c-surface-container-low: 246 242 254;
+  --c-surface-container: 240 236 248;
+  --c-surface-container-high: 235 230 242;
+  --c-surface-container-highest: 229 224 237;
+  --c-on-surface: 28 27 35;            /* #1c1b23 */
+  --c-on-surface-variant: 71 69 84;    /* #474554 */
+  --c-inverse-surface: 49 47 56;       /* #312f38 */
+  --c-inverse-on-surface: 243 239 251; /* #f3effb */
+  --c-outline: 120 117 134;            /* #787586 */
+  --c-outline-variant: 200 196 215;    /* #c8c4d7 */
+  --c-surface-tint: 88 71 210;         /* #5847d2 */
+  --c-surface-variant: 229 224 237;    /* #e5e0ed */
+
+  --c-primary: 83 65 205;              /* #5341cd */
+  --c-on-primary: 255 255 255;
+  --c-primary-container: 108 92 231;   /* #6c5ce7 */
+  --c-on-primary-container: 250 246 255;
+  --c-inverse-primary: 198 191 255;    /* #c6bfff */
+  --c-primary-fixed: 228 223 255;      /* #e4dfff */
+  --c-primary-fixed-dim: 198 191 255;  /* #c6bfff */
+  --c-on-primary-fixed: 22 0 102;      /* #160066 */
+  --c-on-primary-fixed-variant: 64 41 186;
+
+  --c-secondary: 96 92 109;            /* #605c6d */
+  --c-on-secondary: 255 255 255;
+  --c-secondary-container: 229 223 244;/* #e5dff4 */
+  --c-on-secondary-container: 102 98 116;
+  --c-secondary-fixed: 229 223 244;
+  --c-secondary-fixed-dim: 201 196 216;
+  --c-on-secondary-fixed: 28 26 40;
+  --c-on-secondary-fixed-variant: 72 69 85;
+
+  --c-tertiary: 136 72 0;              /* #884800 */
+  --c-on-tertiary: 255 255 255;
+  --c-tertiary-container: 172 93 0;    /* #ac5d00 */
+  --c-on-tertiary-container: 255 245 241;
+  --c-tertiary-fixed: 255 220 195;     /* #ffdcc3 */
+  --c-tertiary-fixed-dim: 255 183 125; /* #ffb77d */
+  --c-on-tertiary-fixed: 47 21 0;
+  --c-on-tertiary-fixed-variant: 110 57 0;
+
+  --c-error: 239 68 68;                /* #EF4444 */
+  --c-on-error: 255 255 255;
+  --c-error-container: 255 218 214;    /* #ffdad6 */
+  --c-on-error-container: 147 0 10;    /* #93000a */
+
+  --c-background: 252 248 255;         /* #fcf8ff */
+  --c-on-background: 28 27 35;         /* #1c1b23 */
+
+  --c-bg-page: 240 242 245;            /* #F0F2F5 */
+  --c-bg-card: 255 255 255;
+  --c-text-primary: 26 26 46;          /* #1A1A2E */
+  --c-text-secondary: 107 114 128;     /* #6B7280 */
+
+  --c-success: 16 185 129;             /* #10B981 */
+  --c-warning: 245 158 11;             /* #F59E0B */
+  --c-info: 59 130 246;                /* #3B82F6 */
+  --c-brand: 108 92 231;               /* #6C5CE7 */
+}
+
+.dark {
+  color-scheme: dark;
+  /* ===== 深色主题：仅「随模式反转」的令牌切换为深色，*-fixed / primary 等保持不变 ===== */
+  --c-surface: 20 18 26;               /* #14121a */
+  --c-surface-dim: 20 18 26;
+  --c-surface-bright: 58 55 68;        /* #3a3744 */
+  --c-surface-container-lowest: 14 13 19;
+  --c-surface-container-low: 28 26 35; /* #1c1a23 */
+  --c-surface-container: 33 30 40;     /* #211e28 */
+  --c-surface-container-high: 43 41 52;
+  --c-surface-container-highest: 54 51 63;
+  --c-on-surface: 230 225 234;         /* #e6e1ea */
+  --c-on-surface-variant: 200 196 215; /* #c8c4d7 */
+  --c-inverse-surface: 252 248 255;    /* 反向：浅色表面 */
+  --c-inverse-on-surface: 20 18 26;
+  --c-outline: 146 143 163;            /* #928fa3 */
+  --c-outline-variant: 71 69 84;       /* #474554 */
+  --c-surface-tint: 198 191 255;       /* #c6bfff */
+  --c-surface-variant: 71 69 84;       /* #474554 */
+
+  --c-secondary: 201 196 216;          /* #c9c4d8 */
+  --c-on-secondary: 28 26 40;
+  --c-secondary-container: 72 69 85;   /* #484555 */
+  --c-on-secondary-container: 229 223 244;
+
+  --c-tertiary: 255 183 125;           /* #ffb77d */
+  --c-on-tertiary: 47 21 0;
+  --c-tertiary-container: 110 57 0;    /* #6e3900 */
+  --c-on-tertiary-container: 255 220 195;
+
+  --c-error: 255 180 171;              /* #ffb4ab */
+  --c-on-error: 105 0 5;
+  --c-error-container: 147 0 10;
+  --c-on-error-container: 255 218 214;
+
+  --c-background: 20 18 26;            /* #14121a */
+  --c-on-background: 230 225 234;      /* #e6e1ea */
+
+  --c-bg-page: 15 14 19;               /* #0f0e13 */
+  --c-bg-card: 28 26 35;               /* #1c1a23 */
+  --c-text-primary: 230 225 234;       /* #e6e1ea */
+  --c-text-secondary: 200 196 215;     /* #c8c4d7 */
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: rgb(var(--c-background));
+  color: rgb(var(--c-on-background));
+}
+
+/* Material Symbols Outlined 图标字体（@fontsource 只提供 @font-face，需手动声明类） */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'liga';
+}
+
+/* 玻璃卡片（来自 Stitch DESIGN.md） */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease-in-out;
+}
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  border-color: rgb(var(--c-primary-fixed));
+}
+.dark .glass-card {
+  background: rgba(49, 47, 56, 0.6);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 搜索框聚焦高亮 */
+.search-focus:focus-within {
+  box-shadow: 0 0 0 2px rgb(var(--c-primary));
+}
+
+/* 侧边栏导航项 */
+.nav-item {
+  transition: all 0.3s ease;
+}
+.nav-item:hover {
+  transform: translateX(4px);
+  color: rgb(var(--c-brand));
+}
+.nav-item.active {
+  color: rgb(var(--c-brand));
+}
+
+/* 表单输入统一风格 */
+.zn-input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgb(var(--c-outline-variant));
+  background: rgb(var(--c-surface-container-lowest));
+  color: rgb(var(--c-on-background));
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.zn-input:focus {
+  border-color: rgb(var(--c-brand));
+  box-shadow: 0 0 0 2px rgb(var(--c-primary-fixed));
+}
+.dark .zn-input {
+  background: rgb(var(--c-surface-container));
+}

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+backend/instance/
+backend/uploads/*
+!backend/uploads/.gitkeep
+.venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# 废弃/调试构建产物（构建卡顿产生的 dist_stuck_*，非源码、不被服务）
+frontend/dist_stuck*/
+dist_stuck*/
+
+# npm 缓存与日志
+frontend/.npmcache/
+frontend/npm_install.log
+
+# Vite 临时配置缓存
+frontend/vite.config.js.timestamp-*.mjs
+
+# Editor
+.vscode/
+.idea/

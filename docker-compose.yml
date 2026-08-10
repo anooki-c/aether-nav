@@ -1,0 +1,14 @@
+services:
+  aether-nav:
+    build: .
+    container_name: aether-nav
+    ports:
+      - "5000:5000"
+    volumes:
+      - aether-db:/app/backend/instance
+      - aether-uploads:/app/backend/uploads
+    restart: unless-stopped
+
+volumes:
+  aether-db:
+  aether-uploads:
