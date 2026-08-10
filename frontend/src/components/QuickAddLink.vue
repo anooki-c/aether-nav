@@ -199,9 +199,10 @@ async function save() {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
-    <div class="relative bg-bg-card w-full max-w-[640px] max-h-[90vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+  <transition name="modal">
+    <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
+      <div class="modal-panel relative bg-bg-card w-full max-w-[640px] max-h-[90vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
       <!-- Header -->
       <div class="px-7 py-5 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">
@@ -410,5 +411,26 @@ async function save() {
     </div>
 
     <IconPicker :open="iconPickerOpen" title="选择链接图标" @update:open="iconPickerOpen = $event" @pick="onPickIcon" />
-  </div>
+      </div>
+  </transition>
 </template>
+
+<style scoped>
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-active .modal-panel,
+.modal-leave-active .modal-panel {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-enter-from .modal-panel,
+.modal-leave-to .modal-panel {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
+}
+</style>

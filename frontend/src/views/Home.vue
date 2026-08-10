@@ -143,11 +143,12 @@ watch(() => store.scrollNonce, async () => {
     </div>
 
     <section
-      v-for="g in orderedGroups"
+      v-for="(g, gi) in orderedGroups"
       :key="g.category.id"
       :id="'cat-section-' + g.category.id"
-      class="mb-10"
+      class="mb-10 home-group"
       :class="searchFixed ? 'scroll-mt-[168px]' : 'scroll-mt-20'"
+      :style="{ animationDelay: gi * 35 + 'ms' }"
     >
       <h3 class="font-headline-md text-headline-md text-on-background mb-6 flex items-center gap-2">
         <EntityIcon :icon="g.category.icon" fallback="folder_open" :size="20" :alt="g.category.name" class="text-brand" />
@@ -186,3 +187,15 @@ watch(() => store.scrollNonce, async () => {
     <PasswordModal v-model:open="showPwd" :link="pendingLink" />
   </div>
 </template>
+
+<style scoped>
+/* 首页分类区块入场：轻微上浮 + 淡入（弹簧曲线），按索引错峰，营造"内容抵达"的层次感。
+   全局 prefers-reduced-motion 会将其降级为瞬时出现。 */
+@keyframes homeGroupIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.home-group {
+  animation: homeGroupIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+</style>

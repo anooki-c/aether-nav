@@ -225,9 +225,10 @@ async function onUpload(e) {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
-    <div class="relative bg-bg-card w-full max-w-[880px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+  <transition name="modal">
+    <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
+      <div class="modal-panel relative bg-bg-card w-full max-w-[880px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
       <!-- Header -->
       <div class="px-8 py-5 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">
@@ -444,5 +445,28 @@ async function onUpload(e) {
 
     <!-- 图标库弹窗 -->
     <IconPicker :open="iconPickerOpen" title="选择链接图标" @update:open="iconPickerOpen = $event" @pick="onPickIcon" />
-  </div>
+      </div>
+  </transition>
 </template>
+
+<style scoped>
+/* 弹窗材质化入场：遮罩淡入 + 面板 scale 弹入（弹簧曲线，平滑无回弹）。
+   Apple：玻璃/模糊面板的入场应是"真实材质抵达"，而非单纯透明度淡入。 */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-active .modal-panel,
+.modal-leave-active .modal-panel {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-enter-from .modal-panel,
+.modal-leave-to .modal-panel {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
+}
+</style>

@@ -17,7 +17,7 @@ function pick(network) {
     <!-- 左侧：折叠侧边栏图标 + 城市天气 -->
     <div class="flex items-center gap-3 min-w-0">
       <button
-        class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors shrink-0"
+        class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:bg-surface-variant active:scale-95 active:bg-surface-variant rounded-lg transition-[transform,background-color] duration-200 ease-spring shrink-0"
         @click="toggleSidebar"
         :title="store.sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
       >
@@ -41,7 +41,7 @@ function pick(network) {
       <!-- 内外网切换（对齐原型 P1：pill 按钮 Internal/External） -->
       <div class="flex items-center bg-surface-container-highest rounded-full p-1 gap-1">
         <button
-          class="flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-label-sm transition-all"
+          class="flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-label-sm transition-[transform,background-color,color] duration-200 ease-spring active:scale-95"
           :class="store.network === 'internal' ? 'bg-brand text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
           @click="pick('internal')"
         >
@@ -49,7 +49,7 @@ function pick(network) {
           <span>内网</span>
         </button>
         <button
-          class="flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-label-sm transition-all"
+          class="flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-label-sm transition-[transform,background-color,color] duration-200 ease-spring active:scale-95"
           :class="store.network === 'external' ? 'bg-brand text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
           @click="pick('external')"
         >

@@ -9,6 +9,18 @@ export default {
   content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      // 弹簧式缓动曲线（来自 Apple「Designing Fluid Interfaces」：临界阻尼=平滑无回弹；
+      // spring-bounce=带轻微回弹，仅用于有动量/抛掷感的拖拽落点）。用 CSS 近似，无需弹簧库。
+      transitionTimingFunction: {
+        spring: 'cubic-bezier(0.32, 0.72, 0, 1)',
+        'spring-soft': 'cubic-bezier(0.16, 1, 0.3, 1)',
+        'spring-bounce': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+      },
+      transitionDuration: {
+        250: '250ms',
+        350: '350ms',
+        500: '500ms',
+      },
       colors: {
         surface: C('--c-surface'),
         'surface-dim': C('--c-surface-dim'),

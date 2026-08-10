@@ -24,7 +24,7 @@ const iconColor = computed(() =>
 <template>
   <!-- 移动端方形卡：1:1，仅图标 + 标题（对齐 square_cards 原型） -->
   <a
-    class="aspect-square rounded-xl glass-card flex flex-col items-center justify-center gap-2 p-2 relative cursor-pointer active:scale-95 transition-all overflow-hidden"
+    class="aspect-square rounded-xl glass-card flex flex-col items-center justify-center gap-2 p-2 relative cursor-pointer active:scale-95 transition-[transform,box-shadow] duration-200 ease-spring overflow-hidden"
     @click.prevent="emit('open', link)"
   >
     <!-- 网络标识：右上角小圆点（外网=绿 / 内网=蓝） -->

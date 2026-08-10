@@ -17,10 +17,13 @@ const isAdmin = computed(() => store.user && store.user.role === 'admin')
 // 折叠 = 桌面端 144px 图标轨道；展开 = 240px 全宽
 const collapsed = computed(() => store.sidebarCollapsed)
 
-// 显隐 + 宽度：移动端仅抽屉态显示（固定 280px / 最大 85vw，确保可见且可滚动）；
-// 桌面端展开 240 / 折叠 144
+// 显隐 + 宽度：移动端抽屉「常驻渲染、离屏平移」而非 display:none，
+// 这样开启/关闭时能真正滑动（Apple 抽屉应沿同一路径进出、可被手指抓取）。
+// 关闭态加 pointer-events-none 防止离屏时误触；桌面端始终显示（lg:translate-x-0）。
 const navClass = computed(() => {
-  const mobile = store.drawerOpen ? 'translate-x-0 flex w-[280px] max-w-[85vw]' : '-translate-x-full hidden'
+  const mobile = store.drawerOpen
+    ? 'translate-x-0 flex w-[280px] max-w-[85vw]'
+    : 'flex -translate-x-full w-[280px] max-w-[85vw] pointer-events-none lg:pointer-events-auto'
   const desktop = store.sidebarCollapsed
     ? 'lg:translate-x-0 lg:flex lg:w-[144px]'
     : 'lg:translate-x-0 lg:flex lg:w-[240px]'
@@ -198,14 +201,16 @@ function onLogin() {
 
 <template>
   <div>
-    <!-- 移动端抽屉遮罩 -->
-    <div
-      v-if="store.drawerOpen"
-      class="fixed inset-0 bg-black/40 z-20 lg:hidden"
-      @click="closeDrawer"
-    ></div>
+    <!-- 移动端抽屉遮罩（淡入淡出，与抽屉同步） -->
+    <transition name="fade">
+      <div
+        v-if="store.drawerOpen"
+        class="fixed inset-0 bg-black/40 z-20 lg:hidden"
+        @click="closeDrawer"
+      ></div>
+    </transition>
     <nav
-      class="bg-surface-container-low border-r border-outline-variant shadow-sm fixed left-0 top-0 h-full z-30 transition-all duration-200"
+      class="bg-surface-container-low border-r border-outline-variant shadow-sm fixed left-0 top-0 h-full z-30 transition-transform duration-300 ease-spring"
       :class="navClass"
     >
       <div class="flex flex-col h-full py-8 w-full">
@@ -356,8 +361,9 @@ function onLogin() {
 
 <style scoped>
 /* 子分类展开/折叠动画（Vue <transition name="child">）：
-   - 展开（进入）：位移线性匀速（childInMove）+ 透明度缓入（childFade，曲线已调柔）
-   - 折叠（离开）：位移线性归位 + 透明度缓出（childFadeOut），避免硬切 */
+   - 展开（进入）：位移 + 透明度，缓动用弹簧曲线（平滑无回弹），营造"内容被推出来"的层次感
+   - 折叠（离开）：位移归位 + 透明度缓出，避免硬切
+   遮罩淡入淡出（name="fade"）同步抽屉。 */
 @keyframes childInMove {
   from { transform: translateX(-40px) scale(0.96); }
   to { transform: translateX(0) scale(1); }
@@ -375,18 +381,31 @@ function onLogin() {
   to { opacity: 0; }
 }
 .child-enter-active {
-  animation: childInMove 0.35s linear, childFade 0.35s cubic-bezier(0.32, 0, 0.67, 0);
+  animation: childInMove 0.3s cubic-bezier(0.16, 1, 0.3, 1), childFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   animation-fill-mode: backwards;
 }
 .child-leave-active {
-  animation: childInMoveRev 0.2s linear, childFadeOut 0.2s ease-out;
+  animation: childInMoveRev 0.2s cubic-bezier(0.32, 0.72, 0, 1), childFadeOut 0.2s ease-out;
   animation-fill-mode: both;
 }
-/* 尊重系统"减少动效"偏好 */
+/* 遮罩淡入淡出 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+/* 尊重系统"减少动效"偏好（全局已降级为瞬时，这里直接关闭位移动画） */
 @media (prefers-reduced-motion: reduce) {
   .child-enter-active,
   .child-leave-active {
     animation: none;
+  }
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: none;
   }
 }
 </style>

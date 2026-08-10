@@ -38,12 +38,13 @@ async function submit() {
 </script>
 
 <template>
-  <div v-if="open && link" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-    <!-- Backdrop (对齐 _1 原型：模糊遮罩) -->
-    <div class="absolute inset-0 bg-black/30 backdrop-blur-md" @click="close"></div>
+  <transition name="modal">
+    <div v-if="open && link" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <!-- Backdrop (对齐 _1 原型：模糊遮罩) -->
+      <div class="absolute inset-0 bg-black/30 backdrop-blur-md" @click="close"></div>
 
-    <!-- Modal Card -->
-    <div class="relative w-full max-w-md bg-surface rounded-2xl shadow-[0_20px_40px_-15px_rgba(108,92,231,0.15)] border border-outline-variant/30 overflow-hidden flex flex-col">
+      <!-- Modal Card -->
+      <div class="modal-panel relative w-full max-w-md bg-surface rounded-2xl shadow-[0_20px_40px_-15px_rgba(108,92,231,0.15)] border border-outline-variant/30 overflow-hidden flex flex-col">
       <!-- Header with ambient glow -->
       <div class="relative pt-10 pb-6 px-8 flex flex-col items-center text-center bg-gradient-to-b from-surface-container-low to-surface">
         <div class="absolute top-8 w-24 h-24 bg-primary/10 rounded-full blur-xl mix-blend-multiply"></div>
@@ -105,11 +106,30 @@ async function submit() {
         </form>
       </div>
     </div>
-  </div>
+    </div>
+  </transition>
 </template>
 
 <style scoped>
 .zn-input-reset {
   border-radius: 0.75rem;
+}
+/* 密码弹窗材质化入场：遮罩淡入 + 面板 scale 弹入（与添加弹窗一致） */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-active .modal-panel,
+.modal-leave-active .modal-panel {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-enter-from .modal-panel,
+.modal-leave-to .modal-panel {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
 }
 </style>

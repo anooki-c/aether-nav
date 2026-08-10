@@ -63,16 +63,16 @@ onBeforeUnmount(() => {
 
     <!-- 下拉菜单 -->
     <transition
-      enter-active-class="transition ease-out duration-150"
-      enter-from-class="opacity-0 -translate-y-1"
-      enter-to-class="opacity-100 translate-y-0"
-      leave-active-class="transition ease-in duration-100"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
+      enter-active-class="transition ease-spring duration-200"
+      enter-from-class="opacity-0 -translate-y-1 scale-95"
+      enter-to-class="opacity-100 translate-y-0 scale-100"
+      leave-active-class="transition ease-spring duration-150"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-95"
     >
       <div
         v-if="open"
-        class="absolute right-0 mt-2 w-52 bg-surface rounded-xl shadow-glass border border-surface-variant/60 py-1.5 z-50"
+        class="absolute right-0 mt-2 w-52 origin-top-right bg-surface rounded-xl shadow-glass border border-surface-variant/60 py-1.5 z-50"
         @click.stop
       >
         <div class="px-4 py-2 border-b border-outline-variant/40 flex items-center gap-2">
