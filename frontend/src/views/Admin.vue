@@ -1058,8 +1058,8 @@ onMounted(async () => {
                       </td>
                       <td class="py-4 px-6 text-right">
                         <div class="flex justify-end gap-2">
-                          <button v-if="isAdmin" class="p-2 bg-primary-container text-primary rounded-md hover:bg-primary-fixed transition-colors" title="权限矩阵：查看哪些用户能看此链接" @click="openMatrix(l)">
-                            <span class="material-symbols-outlined text-[20px]">visibility</span>
+                          <button v-if="isAdmin" class="p-2 bg-success/10 text-success rounded-md hover:bg-success/20 transition-colors" title="权限矩阵：查看哪些用户能看此链接" @click="openMatrix(l)">
+                            <span class="material-symbols-outlined text-[20px]">grid_view</span>
                           </button>
                           <button class="p-2 bg-secondary-container text-primary rounded-md hover:bg-primary-fixed transition-colors" title="编辑" @click="openEdit(l)">
                             <span class="material-symbols-outlined text-[20px]">edit</span>
@@ -1747,13 +1747,9 @@ onMounted(async () => {
                       <div class="font-body-sm text-body-sm text-on-surface">默认配色方案</div>
                       <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">全站强调色（按钮 / 激活态），个人可在资料页覆盖</div>
                     </div>
-                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0 flex-wrap justify-end max-w-[280px]">
-                      <button v-for="s in COLOR_SCHEMES" :key="s.id" type="button" class="px-2.5 py-1 rounded-full text-xs font-medium transition-all inline-flex items-center gap-1" :class="siteColorScheme === s.id ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="siteColorScheme = s.id">
-                        <span class="inline-flex gap-0.5">
-                          <span v-for="(cc, ci) in s.colors.slice(0,2)" :key="ci" class="w-2.5 h-2.5 rounded-full" :style="{ background: cc }"></span>
-                        </span>{{ s.label }}
-                      </button>
-                    </div>
+                    <select v-model="siteColorScheme" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-container-highest text-on-surface border border-outline-variant/40 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-colors cursor-pointer">
+                      <option v-for="s in COLOR_SCHEMES" :key="s.id" :value="s.id">{{ s.label }}</option>
+                    </select>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
                     <div class="min-w-0">
