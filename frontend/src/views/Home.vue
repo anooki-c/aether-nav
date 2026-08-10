@@ -132,7 +132,7 @@ watch(() => store.scrollNonce, async () => {
   <div class="w-full px-4 lg:px-24 pb-24">
     <!-- 搜索框：fixed=在滚动容器内吸顶（带毛玻璃背景，向两侧扩展铺满）；吸顶位置在顶栏之下，不与顶栏头像菜单重叠 -->
     <div
-      :class="searchFixed ? 'sticky top-16 z-20 lg:-mx-24 lg:px-24 bg-background/85 backdrop-blur-md border-b border-outline-variant/30' : ''"
+      :class="searchFixed ? 'sticky top-0 z-20 lg:-mx-24 lg:px-24 bg-background/85 backdrop-blur-md border-b border-outline-variant/30' : ''"
     >
       <SearchHero :sticky="searchFixed" @search="onSearch" />
     </div>
