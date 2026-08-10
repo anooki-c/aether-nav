@@ -677,6 +677,7 @@ const showAdminConsole = ref(true)
 const showPasswordLock = ref(true)
 // 站点默认配色方案 + 分类颜色开关
 const siteColorScheme = ref('default')
+const colorSchemeOpen = ref(false)
 const showCategoryColors = ref(false)
 
 // 局域网网段（快速添加时用于识别内网地址，缺省走 RFC1918 私有段）
@@ -1538,7 +1539,7 @@ onMounted(async () => {
             <div class="bg-surface rounded-2xl p-6 shadow-sm border border-surface-variant">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-0 divide-y divide-outline-variant/50 md:divide-y-0 md:divide-x md:divide-outline-variant/50">
 
-              <!-- 左列：账号安全 + 局域网 -->
+              <!-- 左列：账号安全 + 局域网 + 搜索偏好 -->
               <div class="flex flex-col gap-6 md:pr-6">
 
                 <!-- 账号与安全 -->
@@ -1598,6 +1599,46 @@ onMounted(async () => {
                     class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
                     placeholder="每行一个，如 192.168.1.0/24&#10;10.0.0.0/8&#10;172.16.0.0/12（留空则使用 RFC1918 私有段 + 本机 + 链路本地）"></textarea>
                   <p class="font-label-xs text-[11px] text-on-surface-variant mt-1.5 leading-tight">用于快速添加时判断粘贴的地址属于局域网还是互联网；命中即识别为内网并填入内网 URL。</p>
+                </div>
+
+                <!-- 搜索偏好 -->
+                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
+                  <div class="flex items-center gap-2.5 pb-3">
+                    <span class="material-symbols-outlined text-primary text-[20px]">search_insights</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">搜索偏好</h3>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">默认主引擎</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">首页搜索框使用的搜索引擎</div>
+                    </div>
+                    <div class="relative w-36 shrink-0">
+                      <select v-model="defaultEngine" class="block w-full pl-3 pr-9 py-2 text-sm border border-outline-variant rounded-lg bg-surface appearance-none focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+                        <option>Google</option><option>DuckDuckGo</option><option>Bing</option><option>Brave</option><option>Baidu</option>
+                      </select>
+                      <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-outline"><span class="material-symbols-outlined">expand_more</span></div>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">在新标签页中打开</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">在后台标签页中加载结果</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="openNewTab" class="sr-only peer">
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">搜索框位置</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">固定顶部或随内容滚动</div>
+                    </div>
+                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="searchBoxPos === 'fixed' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="searchBoxPos = 'fixed'">固定</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="searchBoxPos === 'scrolling' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="searchBoxPos = 'scrolling'">滚动</button>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -1689,7 +1730,7 @@ onMounted(async () => {
 
               </div>
 
-              <!-- 右列：显示 / 外观 / 搜索 -->
+              <!-- 右列：显示 / 外观 -->
               <div class="flex flex-col gap-6 md:pl-6">
 
                 <!-- 显示设置 -->
@@ -1747,9 +1788,29 @@ onMounted(async () => {
                       <div class="font-body-sm text-body-sm text-on-surface">默认配色方案</div>
                       <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">全站强调色（按钮 / 激活态），个人可在资料页覆盖</div>
                     </div>
-                    <select v-model="siteColorScheme" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-container-highest text-on-surface border border-outline-variant/40 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-colors cursor-pointer">
-                      <option v-for="s in COLOR_SCHEMES" :key="s.id" :value="s.id">{{ s.label }}</option>
-                    </select>
+                    <div class="relative shrink-0 w-48">
+                      <button type="button" @click="colorSchemeOpen = !colorSchemeOpen" class="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-container-highest text-on-surface border border-outline-variant/40 hover:border-primary/60 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-colors cursor-pointer">
+                        <span class="inline-flex items-center gap-1.5 min-w-0">
+                          <span class="inline-flex gap-0.5 shrink-0">
+                            <span v-for="(cc, ci) in (COLOR_SCHEMES.find(s => s.id === siteColorScheme)?.colors || ['#6C5CE7']).slice(0, 2)" :key="ci" class="w-2.5 h-2.5 rounded-full" :style="{ background: cc }"></span>
+                          </span>
+                          <span class="truncate">{{ COLOR_SCHEMES.find(s => s.id === siteColorScheme)?.label || '默认紫' }}</span>
+                        </span>
+                        <span class="material-symbols-outlined text-[16px] text-on-surface-variant shrink-0">expand_more</span>
+                      </button>
+                      <template v-if="colorSchemeOpen">
+                        <div class="fixed inset-0 z-40" @click="colorSchemeOpen = false"></div>
+                        <div class="absolute right-0 z-50 mt-1 w-52 rounded-xl border border-outline-variant/60 bg-surface shadow-lg p-1 max-h-72 overflow-auto">
+                          <button v-for="s in COLOR_SCHEMES" :key="s.id" type="button" @click="siteColorScheme = s.id; colorSchemeOpen = false" class="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors" :class="siteColorScheme === s.id ? 'bg-primary-container text-on-primary-container' : 'text-on-surface hover:bg-surface-container'">
+                            <span class="inline-flex gap-0.5 shrink-0">
+                              <span v-for="(cc, ci) in s.colors.slice(0, 2)" :key="ci" class="w-3 h-3 rounded-full" :style="{ background: cc }"></span>
+                            </span>
+                            <span class="truncate">{{ s.label }}</span>
+                            <span v-if="siteColorScheme === s.id" class="material-symbols-outlined text-[16px] ml-auto">check</span>
+                          </button>
+                        </div>
+                      </template>
+                    </div>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
                     <div class="min-w-0">
@@ -1760,46 +1821,6 @@ onMounted(async () => {
                       <input type="checkbox" v-model="showCategoryColors" class="sr-only peer">
                       <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                     </label>
-                  </div>
-                </div>
-
-                <!-- 搜索偏好 -->
-                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
-                  <div class="flex items-center gap-2.5 pb-3">
-                    <span class="material-symbols-outlined text-primary text-[20px]">search_insights</span>
-                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">搜索偏好</h3>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">默认主引擎</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">首页搜索框使用的搜索引擎</div>
-                    </div>
-                    <div class="relative w-36 shrink-0">
-                      <select v-model="defaultEngine" class="block w-full pl-3 pr-9 py-2 text-sm border border-outline-variant rounded-lg bg-surface appearance-none focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
-                        <option>Google</option><option>DuckDuckGo</option><option>Bing</option><option>Brave</option><option>Baidu</option>
-                      </select>
-                      <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-outline"><span class="material-symbols-outlined">expand_more</span></div>
-                    </div>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">在新标签页中打开</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">在后台标签页中加载结果</div>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input type="checkbox" v-model="openNewTab" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                    </label>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">搜索框位置</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">固定顶部或随内容滚动</div>
-                    </div>
-                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="searchBoxPos === 'fixed' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="searchBoxPos = 'fixed'">固定</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="searchBoxPos === 'scrolling' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="searchBoxPos = 'scrolling'">滚动</button>
-                    </div>
                   </div>
                 </div>
 
