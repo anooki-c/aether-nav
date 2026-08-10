@@ -138,7 +138,7 @@ watch(() => store.scrollNonce, async () => {
     </div>
 
     <!-- 吸顶模式下搜索条下方补一段留白，避免首个分类紧贴 -->
-    <div :class="searchFixed ? 'pt-8' : ''">
+    <div :class="searchFixed ? 'pt-4' : ''">
     <Transition name="fade">
       <div v-if="loading" key="loading" class="text-center text-on-surface-variant py-12 font-body-md text-body-md">加载中…</div>
 
