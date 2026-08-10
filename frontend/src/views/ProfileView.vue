@@ -342,7 +342,7 @@ async function savePassword() {
 
     <!-- 右下角：返回前台（移动端也始终可见） -->
     <button
-      class="fixed bottom-20 lg:bottom-8 right-6 lg:right-8 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-on-primary shadow-[0_10px_25px_-5px_rgba(108,92,231,0.5)] hover:scale-105 hover:bg-primary/90 transition-all active:scale-95"
+      class="fixed bottom-20 lg:bottom-8 right-6 lg:right-8 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-on-primary shadow-[0_10px_25px_-5px_rgba(108,92,231,0.5)] hover:scale-105 hover:bg-primary/90 transition-[transform,background-color] active:scale-95"
       @click="goFront"
       aria-label="返回前台"
     >

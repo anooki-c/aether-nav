@@ -86,7 +86,7 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
     <!-- 回到顶部 FAB（桌面端显示） -->
     <button
       v-if="!isLogin && !isAdmin && !isSettings"
-      class="fixed bottom-20 lg:bottom-8 right-8 w-14 h-14 bg-[#002FA7] text-white rounded-full flex items-center justify-center shadow-[0_10px_25px_-5px_rgba(0,47,167,0.45)] hover:scale-105 hover:bg-[#00238a] transition-all z-40 active:scale-95 hidden lg:flex"
+      class="fixed bottom-20 lg:bottom-8 right-8 w-14 h-14 bg-[#002FA7] text-white rounded-full flex items-center justify-center shadow-[0_10px_25px_-5px_rgba(0,47,167,0.45)] hover:scale-105 hover:bg-[#00238a] transition-[transform,background-color] z-40 active:scale-95 hidden lg:flex"
       @click="backToTop"
       aria-label="回到顶部"
     >
@@ -113,7 +113,7 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
 <style scoped>
 .toast-fade-enter-active,
 .toast-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.2s cubic-bezier(0.23, 1, 0.32, 1), transform 0.2s cubic-bezier(0.23, 1, 0.32, 1);
 }
 .toast-fade-enter-from,
 .toast-fade-leave-to {

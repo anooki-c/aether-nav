@@ -404,7 +404,7 @@ async function save() {
       <!-- Footer -->
       <div class="px-7 py-5 border-t border-outline-variant/20 bg-surface-container-lowest flex justify-end gap-3 shrink-0">
         <button class="px-7 py-2.5 rounded-full text-secondary hover:bg-surface-container transition-colors font-headline-sm" @click="close">取消</button>
-        <button class="px-7 py-2.5 rounded-full bg-primary text-on-primary shadow-md hover:shadow-lg hover:-translate-y-[1px] active:translate-y-0 transition-all font-headline-sm font-semibold disabled:opacity-50" :disabled="saving" @click="save">
+        <button class="px-7 py-2.5 rounded-full bg-primary text-on-primary shadow-md hover:shadow-lg hover:-translate-y-[1px] active:translate-y-0 transition-[transform,background-color,box-shadow] font-headline-sm font-semibold disabled:opacity-50" :disabled="saving" @click="save">
           {{ saving ? '保存中…' : '保存' }}
         </button>
       </div>

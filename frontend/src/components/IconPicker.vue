@@ -94,9 +94,10 @@ function close() {
 </script>
 
 <template>
+  <transition name="modal">
   <div v-if="open" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
-    <div class="relative bg-bg-card w-full max-w-3xl max-h-[85vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+    <div class="relative bg-bg-card modal-panel w-full max-w-3xl max-h-[85vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
       <!-- Header -->
       <div class="px-6 py-4 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">
@@ -137,7 +138,7 @@ function close() {
           <button
             v-for="n in filtered"
             :key="n"
-            class="flex flex-col items-center justify-center gap-1 py-3 rounded-xl border border-transparent hover:border-primary/40 hover:bg-primary-fixed/30 transition-colors group"
+            class="flex flex-col items-center justify-center gap-1 py-3 rounded-xl border border-transparent hover:border-primary/40 hover:bg-primary-fixed/30 transition-[transform,background-color,border-color] active:scale-95 group"
             :title="`点击复制：${n}`"
             @click="onPick(n)"
           >
@@ -152,4 +153,25 @@ function close() {
       </div>
     </div>
   </div>
+  </transition>
 </template>
+
+<style scoped>
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-active .modal-panel,
+.modal-leave-active .modal-panel {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-enter-from .modal-panel,
+.modal-leave-to .modal-panel {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
+}
+</style>

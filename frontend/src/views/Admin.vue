@@ -1303,7 +1303,7 @@ onMounted(async () => {
                 <h2 class="font-headline-lg text-headline-lg text-on-surface mb-1">用户管理</h2>
                 <p class="font-body-sm text-body-sm text-text-secondary">管理平台用户及其访问权限。</p>
               </div>
-              <button class="bg-primary text-on-primary font-headline-sm text-headline-sm px-6 py-2.5 rounded-full shadow-sm hover:-translate-y-[1px] hover:shadow-md transition-all flex items-center gap-2" @click="openUserModal">
+              <button class="bg-primary text-on-primary font-headline-sm text-headline-sm px-6 py-2.5 rounded-full shadow-sm hover:-translate-y-[1px] hover:shadow-md transition-[transform,background-color,box-shadow] flex items-center gap-2" @click="openUserModal">
                 <span class="material-symbols-outlined text-[18px]">add</span>
                 添加用户
               </button>
@@ -1317,7 +1317,7 @@ onMounted(async () => {
             </div>
 
             <div v-if="pagedUsers.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
-              <div v-for="u in pagedUsers" :key="u.id" class="bg-bg-card rounded-card p-6 shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-all border border-transparent hover:border-primary-fixed-dim group flex flex-col relative overflow-hidden">
+              <div v-for="u in pagedUsers" :key="u.id" class="bg-bg-card rounded-card p-6 shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-[transform,background-color,box-shadow,border-color] border border-transparent hover:border-primary-fixed-dim group flex flex-col relative overflow-hidden">
                 <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-primary-fixed/20 to-transparent rounded-bl-full pointer-events-none"></div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                   <div class="flex items-center gap-4">
@@ -1812,7 +1812,7 @@ onMounted(async () => {
         </div>
         <div class="p-6 bg-surface-container-low flex justify-end gap-3">
           <button class="px-6 py-2 rounded-full text-secondary hover:bg-surface-container transition-colors font-headline-sm" @click="showUserModal = false">取消</button>
-          <button class="px-6 py-2 rounded-full bg-primary text-on-primary shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-all font-headline-sm" @click="saveUser">保存用户</button>
+          <button class="px-6 py-2 rounded-full bg-primary text-on-primary shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-[transform,background-color,box-shadow] font-headline-sm" @click="saveUser">保存用户</button>
         </div>
       </div>
     </div>
@@ -2094,7 +2094,7 @@ onMounted(async () => {
         <!-- Footer -->
         <div class="px-8 py-5 border-t border-outline-variant/20 bg-surface-container-lowest flex justify-end gap-3 shrink-0">
           <button class="px-7 py-2.5 rounded-full text-secondary hover:bg-surface-container transition-colors font-headline-sm" @click="showEdit = false">取消</button>
-          <button class="px-7 py-2.5 rounded-full bg-primary text-on-primary shadow-md hover:shadow-lg hover:-translate-y-[1px] active:translate-y-0 transition-all font-headline-sm font-semibold" @click="saveEdit">保存更改</button>
+          <button class="px-7 py-2.5 rounded-full bg-primary text-on-primary shadow-md hover:shadow-lg hover:-translate-y-[1px] active:translate-y-0 transition-[transform,background-color,box-shadow] font-headline-sm font-semibold" @click="saveEdit">保存更改</button>
         </div>
       </div>
     </div>

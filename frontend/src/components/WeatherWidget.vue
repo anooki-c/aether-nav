@@ -118,7 +118,7 @@ watch(() => store.weatherCity, fetchWeather)
 
       <button
         v-if="!loading && !error"
-        class="font-body-sm text-body-sm text-on-surface leading-none whitespace-nowrap"
+        class="font-body-sm text-body-sm text-on-surface leading-none whitespace-nowrap active:scale-95 transition-transform"
         @click="startEdit"
         :title="'点击修改城市：' + cityName"
       >

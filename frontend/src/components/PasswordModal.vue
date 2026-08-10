@@ -89,7 +89,7 @@ async function submit() {
           <div class="flex flex-col gap-3 mt-8">
             <button
               type="submit"
-              class="w-full bg-primary hover:bg-surface-tint text-on-primary font-headline-sm text-headline-sm rounded-xl py-3.5 flex items-center justify-center gap-2 transition-all shadow-[0_4px_12px_rgba(108,92,231,0.25)] hover:shadow-[0_6px_16px_rgba(108,92,231,0.35)] hover:-translate-y-[1px] active:scale-[0.98] disabled:opacity-50"
+              class="w-full bg-primary hover:bg-surface-tint text-on-primary font-headline-sm text-headline-sm rounded-xl py-3.5 flex items-center justify-center gap-2 transition-[transform,background-color,box-shadow] shadow-[0_4px_12px_rgba(108,92,231,0.25)] hover:shadow-[0_6px_16px_rgba(108,92,231,0.35)] hover:-translate-y-[1px] active:scale-[0.98] disabled:opacity-50"
               :disabled="checking"
             >
               <span>{{ checking ? '验证中…' : '验证并打开' }}</span>

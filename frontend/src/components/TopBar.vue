@@ -30,7 +30,7 @@ function pick(network) {
       <!-- 添加链接（登录且允许主页编辑时显示） -->
       <button
         v-if="store.token && store.allowHomeEdit"
-        class="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-brand text-white font-label-sm text-label-sm shadow-sm hover:bg-brand/90 transition-all active:scale-95 shrink-0"
+        class="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-brand text-white font-label-sm text-label-sm shadow-sm hover:bg-brand/90 transition-[transform,background-color] active:scale-95 shrink-0"
         @click="emit('add-link')"
         aria-label="添加链接"
       >

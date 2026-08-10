@@ -63,7 +63,7 @@ watch(
       <button
         v-for="e in engines"
         :key="e.id"
-        class="px-6 py-2 rounded-full font-headline-sm text-headline-sm transition-colors"
+        class="px-6 py-2 rounded-full font-headline-sm text-headline-sm transition-[transform,background-color,color] active:scale-95"
         :class="engine === e.id ? 'bg-brand text-white shadow-sm' : 'bg-surface-container text-on-surface-variant hover:bg-surface-variant'"
         @click="pickEngine(e.id)"
       >
