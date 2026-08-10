@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { store, bumpLinks, loadSettings, showToast } from '../store'
+import { store, bumpLinks, loadSettings, showToast, COLOR_SCHEMES } from '../store'
 import { api } from '../api/client'
 import AddLinkModal from '../components/AddLinkModal.vue'
 import PermissionEditModal from '../components/PermissionEditModal.vue'
@@ -404,7 +404,7 @@ function parseRoles(s) {
 const catParentOptions = computed(() =>
   store.tree.filter((p) => p.id !== selectedCat.value)
 )
-const catForm = ref({ id: null, name: '', parent_id: null, icon: '', visible: true, archived: false, description: '', allowed_roles: [] })
+const catForm = ref({ id: null, name: '', parent_id: null, icon: '', color: '#6C5CE7', visible: true, archived: false, description: '', allowed_roles: [] })
 
 // 当前用户能否编辑某个分类：仅管理员可编辑/删除；普通成员只能「添加」分类，不能修改（含自己创建的）
 function canEditCat(c) {
@@ -413,11 +413,11 @@ function canEditCat(c) {
 function selectCat(c) {
   if (!canEditCat(c)) return
   selectedCat.value = c.id
-  catForm.value = { id: c.id, name: c.name, parent_id: c.parent_id || null, icon: c.icon || '', visible: c.visible !== false, archived: c.archived === true, description: c.description || '', allowed_roles: parseRoles(c.allowed_roles) }
+  catForm.value = { id: c.id, name: c.name, parent_id: c.parent_id || null, icon: c.icon || '', color: c.color || '#6C5CE7', visible: c.visible !== false, archived: c.archived === true, description: c.description || '', allowed_roles: parseRoles(c.allowed_roles) }
 }
 function newCatMode() {
   selectedCat.value = null
-  catForm.value = { id: null, name: '', parent_id: null, icon: '', visible: true, archived: false, description: '', allowed_roles: [] }
+  catForm.value = { id: null, name: '', parent_id: null, icon: '', color: '#6C5CE7', visible: true, archived: false, description: '', allowed_roles: [] }
 }
 async function restoreCat(c) {
   if (!canEditCat(c)) return
@@ -441,6 +441,7 @@ async function saveCat() {
   const payload = {
     name: catForm.value.name,
     icon: catForm.value.icon,
+    color: catForm.value.color || '#6C5CE7',
     parent_id: catForm.value.parent_id || null,
     description: catForm.value.description,
     archived: catForm.value.archived === true,
@@ -674,6 +675,9 @@ const defaultNetwork = ref('external')
 const showPersonalSettings = ref(true)
 const showAdminConsole = ref(true)
 const showPasswordLock = ref(true)
+// 站点默认配色方案 + 分类颜色开关
+const siteColorScheme = ref('default')
+const showCategoryColors = ref(false)
 
 // 局域网网段（快速添加时用于识别内网地址，缺省走 RFC1918 私有段）
 const lanCidrs = ref('')
@@ -695,6 +699,8 @@ async function loadEditIconProviders() {
 // 图标选择弹窗（分类 / 链接）：点击图标后填入对应字段
 const catIconPickerOpen = ref(false)
 const editIconPickerOpen = ref(false)
+// 分类颜色预设色板
+const catColorPresets = ['#6C5CE7', '#E36D9A', '#F2762E', '#12A98A', '#5B5BE0', '#C13C8A', '#0EA5E9', '#F59E0B', '#22C55E', '#EF4444']
 function onPickCatIcon(name) {
   catForm.value.icon = name
 }
@@ -721,6 +727,8 @@ async function fetchSettings() {
     showPersonalSettings.value = data.show_personal_settings !== false
     showAdminConsole.value = data.show_admin_console !== false
     showPasswordLock.value = data.show_password_lock !== false
+    siteColorScheme.value = data.color_scheme || 'default'
+    showCategoryColors.value = data.show_category_colors === true
     lanCidrs.value = data.lan_cidrs || ''
   } catch (e) {
     // 读取失败时保留默认值
@@ -746,6 +754,8 @@ async function saveSettings() {
       show_personal_settings: showPersonalSettings.value,
       show_admin_console: showAdminConsole.value,
       show_password_lock: showPasswordLock.value,
+      color_scheme: siteColorScheme.value,
+      show_category_colors: showCategoryColors.value,
       lan_cidrs: lanCidrs.value,
     })
     // 同步到全局 store，前台无需刷新即可生效（如搜索框位置）
@@ -1184,6 +1194,17 @@ onMounted(async () => {
                         </button>
                         <span class="font-label-sm text-secondary opacity-70">（分类无 URL，无需抓取图标）</span>
                       </div>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                      <label class="font-label-sm text-secondary">分类颜色</label>
+                      <div class="flex items-center gap-3">
+                        <input type="color" v-model="catForm.color" class="w-10 h-10 rounded-lg border border-outline-variant bg-transparent cursor-pointer p-0.5" />
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <button v-for="c in catColorPresets" :key="c" type="button" class="w-6 h-6 rounded-full border border-outline-variant/60 transition-transform hover:scale-110" :class="catForm.color?.toLowerCase() === c.toLowerCase() ? 'ring-2 ring-offset-1 ring-primary' : ''" :style="{ background: c }" :title="c" @click="catForm.color = c"></button>
+                        </div>
+                        <span class="font-label-sm text-on-surface-variant">{{ catForm.color }}</span>
+                      </div>
+                      <span class="font-label-sm text-secondary opacity-70">开启「分类颜色」开关后，首页该分类图标及其下链接卡片图标将填充此颜色</span>
                     </div>
                     <div class="flex items-center justify-between rounded-xl bg-surface-container-low px-4 py-3">
                       <div class="flex flex-col">
@@ -1720,6 +1741,29 @@ onMounted(async () => {
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
                       <button v-for="t in [{k:'light',l:'浅色',i:'light_mode'},{k:'dark',l:'深色',i:'dark_mode'},{k:'system',l:'跟随系统',i:'auto_mode'}]" :key="t.k" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="store.theme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="store.theme = t.k"><span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">{{ t.i }}</span>{{ t.l }}</span></button>
                     </div>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">默认配色方案</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">全站强调色（按钮 / 激活态），个人可在资料页覆盖</div>
+                    </div>
+                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0 flex-wrap justify-end max-w-[280px]">
+                      <button v-for="s in COLOR_SCHEMES" :key="s.id" type="button" class="px-2.5 py-1 rounded-full text-xs font-medium transition-all inline-flex items-center gap-1" :class="siteColorScheme === s.id ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="siteColorScheme = s.id">
+                        <span class="inline-flex gap-0.5">
+                          <span v-for="(cc, ci) in s.colors.slice(0,2)" :key="ci" class="w-2.5 h-2.5 rounded-full" :style="{ background: cc }"></span>
+                        </span>{{ s.label }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">分类颜色</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">开启后，首页分类图标及其下链接卡片图标背景填充分类颜色</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="showCategoryColors" class="sr-only peer">
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
                   </div>
                 </div>
 

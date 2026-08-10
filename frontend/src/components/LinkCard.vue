@@ -2,12 +2,15 @@
 import { computed } from 'vue'
 import { store } from '../store'
 import { getLinkIcon, iconColorMap } from '../utils/linkIcon'
+import { hexToRgba } from '../utils/color'
 import EntityIcon from './EntityIcon.vue'
 
 const props = defineProps({
   link: { type: Object, required: true },
   draggable: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
+  // 所属分类颜色（系统「分类颜色」开关开启时用于图标背景/字形着色）
+  categoryColor: { type: String, default: '' },
 })
 const emit = defineEmits(['open'])
 
@@ -21,6 +24,14 @@ const symbolName = computed(() => {
 })
 const iconColor = computed(() =>
   symbolName.value ? iconColorMap[symbolName.value] || 'text-on-surface-variant' : ''
+)
+// 分类颜色是否生效：开关开启且链接携带分类颜色
+const catActive = computed(() => store.showCategoryColors && !!props.categoryColor)
+const catContainerStyle = computed(() =>
+  catActive.value ? { background: hexToRgba(props.categoryColor, 0.16) } : {}
+)
+const catIconStyle = computed(() =>
+  catActive.value ? { color: props.categoryColor } : {}
 )
 </script>
 
@@ -43,14 +54,17 @@ const iconColor = computed(() =>
 
     <!-- 图标区域（对齐原型：Material Symbols 小图标 + 彩色，非大号 emoji） -->
     <div
-      class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center flex-shrink-0 group-hover:bg-primary-fixed transition-colors overflow-hidden"
+      class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors overflow-hidden"
+      :class="catActive ? '' : 'bg-surface-container group-hover:bg-primary-fixed'"
+      :style="catContainerStyle"
     >
       <EntityIcon
         :icon="link.icon"
         :fallback="getLinkIcon(link.title)"
         :size="22"
         :alt="link.title"
-        :class="iconColor"
+        :class="catActive ? '' : iconColor"
+        :style="catIconStyle"
       />
     </div>
 

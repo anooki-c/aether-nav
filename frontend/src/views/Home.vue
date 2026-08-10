@@ -8,6 +8,7 @@ import SquareCard from '../components/SquareCard.vue'
 import EntityIcon from '../components/EntityIcon.vue'
 import PasswordModal from '../components/PasswordModal.vue'
 import draggable from 'vuedraggable'
+import { hexToRgba } from '../utils/color'
 
 const groups = ref([])
 const loading = ref(false)
@@ -19,6 +20,14 @@ const entranceDone = ref(false)
 
 // 仅登录用户、站点开启拖拽排序、且允许主页编辑时，才允许主页卡片拖拽
 const canDrag = computed(() => !!store.token && store.dragSortEnabled && store.allowHomeEdit)
+
+// 分类颜色：系统「分类颜色」开关开启时，分类图标与其下链接卡片图标按分类色着色
+function catBg(color) {
+  return store.showCategoryColors && color ? { background: hexToRgba(color, 0.16) } : {}
+}
+function catGlyph(color) {
+  return store.showCategoryColors && color ? { color } : {}
+}
 
 // 首页卡片布局（系统设置 → 显示设置）：列数 / 紧凑 / 密度
 // 列数动态类需以字面量存在，供 Tailwind JIT 扫描生成
@@ -157,7 +166,9 @@ watch(() => store.scrollNonce, async () => {
       :style="!entranceDone ? { animationDelay: gi * 35 + 'ms' } : null"
     >
       <h3 class="font-headline-md text-headline-md text-on-background mb-6 flex items-center gap-2">
-        <EntityIcon :icon="g.category.icon" fallback="folder_open" :size="20" :alt="g.category.name" class="text-brand" />
+        <span class="w-7 h-7 rounded-lg flex items-center justify-center" :class="store.showCategoryColors && g.category.color ? '' : 'bg-surface-container'" :style="catBg(g.category.color)">
+          <EntityIcon :icon="g.category.icon" fallback="folder_open" :size="20" :alt="g.category.name" :class="store.showCategoryColors && g.category.color ? '' : 'text-brand'" :style="catGlyph(g.category.color)" />
+        </span>
         {{ g.category.name }}
       </h3>
 
@@ -173,19 +184,19 @@ watch(() => store.scrollNonce, async () => {
           @end="onDragEnd(g)"
         >
           <template #item="{ element }">
-            <LinkCard :link="element" :draggable="true" :compact="cardCompact" @open="openLink" />
+            <LinkCard :link="element" :draggable="true" :compact="cardCompact" :category-color="g.category.color" @open="openLink" />
           </template>
         </draggable>
 
         <!-- 静态网格（访客 / 未开启拖拽） -->
         <TransitionGroup v-else :class="gridClass" name="card" tag="div">
-          <LinkCard v-for="l in g.links" :key="l.id" :link="l" :compact="cardCompact" @open="openLink" />
+          <LinkCard v-for="l in g.links" :key="l.id" :link="l" :compact="cardCompact" :category-color="g.category.color" @open="openLink" />
         </TransitionGroup>
       </div>
 
       <!-- 移动端：4 列 1:1 方形卡（仅 icon + 标题） -->
       <div class="md:hidden grid grid-cols-4 gap-3">
-        <SquareCard v-for="l in g.links" :key="l.id" :link="l" @open="openLink" />
+        <SquareCard v-for="l in g.links" :key="l.id" :link="l" :category-color="g.category.color" @open="openLink" />
       </div>
     </section>
       </div>

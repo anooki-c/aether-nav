@@ -182,7 +182,7 @@ def me(user):
 
 
 # 允许个人修改的偏好键（白名单，防越权写入未定义字段）
-_PROFILE_PREF_KEYS = ("network", "theme", "open_new_tab", "weather_city")
+_PROFILE_PREF_KEYS = ("network", "theme", "open_new_tab", "weather_city", "color_scheme")
 
 
 @app.route("/api/me", methods=["PUT"])
@@ -956,6 +956,10 @@ def get_settings():
         # 站点默认主题 / 网络（无个人偏好时的兜底默认值）
         "theme": Setting.get("theme", "light"),
         "network": Setting.get("network", "external"),
+        # 站点默认配色方案（accent palette）：default / macaron / sunset / mint / cosmic / berry
+        "color_scheme": Setting.get("color_scheme", "default"),
+        # 站点级开关：是否将分类颜色应用到首页图标
+        "show_category_colors": Setting.get("show_category_colors", "false") == "true",
         # 主页侧边栏是否显示「个人设置 / 管理后台」入口（点击头像菜单也会用到）
         "show_personal_settings": Setting.get("show_personal_settings", "true") == "true",
         "show_admin_console": Setting.get("show_admin_console", "true") == "true",
@@ -981,7 +985,7 @@ def update_settings(user):
         "allow_home_edit", "favicon_provider", "favicon_custom_url",
         "allow_register", "default_role", "token_max_age_hours",
         "log_retention_days", "show_personal_settings", "show_admin_console",
-        "lan_cidrs", "show_password_lock",
+        "lan_cidrs", "show_password_lock", "color_scheme", "show_category_colors",
     }
     saved = {}
     for k in whitelist:

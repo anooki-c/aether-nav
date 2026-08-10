@@ -237,3 +237,73 @@ body {
     background: rgb(var(--c-surface-container-low));
   }
 }
+
+/* ============ 可切换配色方案（accent palette） ============
+   通过 <html data-palette="xxx"> 覆写强调色令牌。
+   置于 .dark 块之后以保证优先级；default 不设置属性，沿用 :root 默认紫。
+   仅覆写「随外观主题变化的强调色」，中性表面/文字保持不变，确保可读性。 */
+[data-palette="macaron"] {
+  --c-brand: 227 109 154;
+  --c-primary: 227 109 154;
+  --c-on-primary: 255 255 255;
+  --c-primary-container: 255 227 232;
+  --c-on-primary-container: 179 58 102;
+  --c-primary-fixed: 255 227 232;
+  --c-primary-fixed-dim: 255 208 221;
+  --c-on-primary-fixed: 179 58 102;
+  --c-on-primary-fixed-variant: 179 58 102;
+  --c-inverse-primary: 255 184 210;
+  --c-surface-tint: 227 109 154;
+}
+[data-palette="sunset"] {
+  --c-brand: 242 118 46;
+  --c-primary: 242 118 46;
+  --c-on-primary: 255 255 255;
+  --c-primary-container: 255 230 224;
+  --c-on-primary-container: 181 67 26;
+  --c-primary-fixed: 255 230 224;
+  --c-primary-fixed-dim: 255 210 192;
+  --c-on-primary-fixed: 181 67 26;
+  --c-on-primary-fixed-variant: 181 67 26;
+  --c-inverse-primary: 255 185 138;
+  --c-surface-tint: 242 118 46;
+}
+[data-palette="mint"] {
+  --c-brand: 18 169 138;
+  --c-primary: 18 169 138;
+  --c-on-primary: 255 255 255;
+  --c-primary-container: 226 247 240;
+  --c-on-primary-container: 10 92 73;
+  --c-primary-fixed: 226 247 240;
+  --c-primary-fixed-dim: 194 236 221;
+  --c-on-primary-fixed: 10 92 73;
+  --c-on-primary-fixed-variant: 10 92 73;
+  --c-inverse-primary: 127 227 203;
+  --c-surface-tint: 18 169 138;
+}
+[data-palette="cosmic"] {
+  --c-brand: 91 91 224;
+  --c-primary: 91 91 224;
+  --c-on-primary: 255 255 255;
+  --c-primary-container: 236 235 254;
+  --c-on-primary-container: 43 43 158;
+  --c-primary-fixed: 236 235 254;
+  --c-primary-fixed-dim: 214 213 251;
+  --c-on-primary-fixed: 43 43 158;
+  --c-on-primary-fixed-variant: 43 43 158;
+  --c-inverse-primary: 176 176 255;
+  --c-surface-tint: 91 91 224;
+}
+[data-palette="berry"] {
+  --c-brand: 193 60 138;
+  --c-primary: 193 60 138;
+  --c-on-primary: 255 255 255;
+  --c-primary-container: 255 230 239;
+  --c-on-primary-container: 122 31 85;
+  --c-primary-fixed: 255 230 239;
+  --c-primary-fixed-dim: 255 208 228;
+  --c-on-primary-fixed: 122 31 85;
+  --c-on-primary-fixed-variant: 122 31 85;
+  --c-inverse-primary: 240 140 196;
+  --c-surface-tint: 193 60 138;
+}

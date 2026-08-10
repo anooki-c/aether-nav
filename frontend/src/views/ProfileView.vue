@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { store, showToast, applyUserPrefs } from '../store'
+import { store, showToast, applyUserPrefs, COLOR_SCHEMES } from '../store'
 import { api } from '../api/client'
 import EntityIcon from '../components/EntityIcon.vue'
 
@@ -15,6 +15,7 @@ const form = reactive({
   weather_city: '',
   network: 'external',
   theme: 'light',
+  color_scheme: 'default',
 })
 const pwd = reactive({ current: '', next: '', confirm: '' })
 const showEmoji = ref(false)
@@ -57,6 +58,7 @@ function resetForm() {
   form.weather_city = p.weather_city || store.weatherCity || ''
   form.network = p.network || store.network || 'external'
   form.theme = p.theme || store.theme || 'light'
+  form.color_scheme = p.color_scheme || store.siteColorScheme || 'default'
 }
 
 /* ── 头像上传 / emoji ─────────────────────────────── */
@@ -91,6 +93,7 @@ async function saveProfile() {
       preferences: {
         network: form.network,
         theme: form.theme,
+        color_scheme: form.color_scheme,
         weather_city: form.weather_city,
       },
     }
@@ -272,6 +275,21 @@ async function savePassword() {
                   :class="form.theme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
                   @click="form.theme = t.k">
                   <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">{{ t.i }}</span>{{ t.l }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 配色方案 -->
+            <div class="flex items-center justify-between py-3 border-b border-surface-variant/40">
+              <div>
+                <div class="text-body-md text-text-primary">配色方案</div>
+                <div class="text-label-sm text-text-secondary">全站强调色，覆盖系统默认</div>
+              </div>
+              <div class="flex items-center bg-surface-container-highest rounded-full p-1 gap-1 shrink-0 flex-wrap justify-end max-w-[300px]">
+                <button v-for="s in COLOR_SCHEMES" :key="s.id" type="button" class="px-2.5 py-1.5 rounded-full text-sm font-semibold transition-all inline-flex items-center gap-1" :class="form.color_scheme === s.id ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="form.color_scheme = s.id">
+                  <span class="inline-flex gap-0.5">
+                    <span v-for="(cc, ci) in s.colors.slice(0,2)" :key="ci" class="w-2.5 h-2.5 rounded-full" :style="{ background: cc }"></span>
+                  </span>{{ s.label }}
                 </button>
               </div>
             </div>

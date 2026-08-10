@@ -8,6 +8,18 @@ const LS = {
   network: 'zn_network',
 }
 
+// 可切换配色方案（accent palette）。default=沿用 :root 默认紫；
+// 其余 5 套来自设计稿配色库，仅改变强调色（按钮/激活态/聚焦环），中性表面保持不变。
+// colors 仅用于设置页色板预览。
+export const COLOR_SCHEMES = [
+  { id: 'default', label: '默认紫', colors: ['#6C5CE7'] },
+  { id: 'macaron', label: '棉花糖', colors: ['#E36D9A', '#FFC3A0'] },
+  { id: 'sunset', label: '落日', colors: ['#F2762E', '#FFB26B'] },
+  { id: 'mint', label: '薄荷海', colors: ['#12A98A', '#5FD0D6'] },
+  { id: 'cosmic', label: '星河', colors: ['#5B5BE0', '#C3B1E1'] },
+  { id: 'berry', label: '莓果', colors: ['#C13C8A', '#FF8FB1'] },
+]
+
 function readToken() {
   const token = localStorage.getItem(LS.token)
   if (!token) return ''
@@ -37,6 +49,12 @@ export const store = reactive({
   // 站点级默认值（系统设置中配置），作为无个人偏好的新用户/访客的兜底
   siteNetwork: 'external', // 默认网络：external | internal
   siteTheme: 'light', // 默认主题：light | dark | system
+  // 站点默认配色方案（accent palette）：default=当前紫，其余见 COLOR_SCHEMES
+  siteColorScheme: 'default',
+  // 当前生效的配色方案（个人覆盖 > 站点默认 > default）。initialize 时由 applyColorScheme 赋值
+  colorScheme: 'default',
+  // 站点级开关：是否将分类颜色应用到首页图标（分类图标 + 其下链接卡片图标背景）
+  showCategoryColors: false,
   allowHomeEdit: true, // 站点设置：是否允许用户自定义主页（添加/拖拽排序）
   lanCidrs: '', // 站点设置：管理员补充的自定义局域网网段（换行/逗号分隔）
   // 主页侧边栏 / 头像菜单是否显示「个人设置 / 管理后台」入口（系统设置开关）
@@ -95,11 +113,15 @@ export async function loadSettings() {
     // 站点级默认值（无个人偏好时使用）
     store.siteNetwork = data.network || 'external'
     store.siteTheme = data.theme || 'light'
+    store.siteColorScheme = data.color_scheme || 'default'
+    store.showCategoryColors = data.show_category_colors === true
     store.allowHomeEdit = data.allow_home_edit !== false
     store.showPersonalSettings = data.show_personal_settings !== false
     store.showAdminConsole = data.show_admin_console !== false
     store.showPasswordLock = data.show_password_lock !== false
     store.lanCidrs = data.lan_cidrs || ''
+    // 应用站点默认配色方案（登录用户若设置了个人配色，会在 loadMe→applyUserPrefs 中覆盖）
+    applyColorScheme(store.siteColorScheme, false)
   } catch (e) {
     store.dragSortEnabled = true
     store.searchBoxPos = 'fixed'
@@ -125,6 +147,8 @@ export function applyUserPrefs(prefs) {
   if (prefs.network) setNetwork(prefs.network, false)
   else if (store.siteNetwork) store.network = store.siteNetwork
   if (prefs.theme) applyTheme(prefs.theme, false)
+  if (prefs.color_scheme) applyColorScheme(prefs.color_scheme, false)
+  else applyColorScheme(store.siteColorScheme, false)
   if (prefs.weather_city) {
     store.weatherCity = prefs.weather_city
     localStorage.setItem('zn_weather_city', prefs.weather_city)
@@ -212,6 +236,23 @@ export function toggleTheme() {
   applyTheme(store.theme === 'dark' ? 'light' : 'dark', true)
 }
 
+// 配色方案（accent palette）：default 不设置属性，沿用 :root 默认紫；
+// 其余通过 <html data-palette="x"> 覆写强调色令牌（style.css 中定义）。
+export function applyColorScheme(scheme, persist = true) {
+  if (!scheme || scheme === 'default') {
+    document.documentElement.removeAttribute('data-palette')
+    store.colorScheme = 'default'
+  } else {
+    document.documentElement.setAttribute('data-palette', scheme)
+    store.colorScheme = scheme
+  }
+  if (persist) persistPref('color_scheme', store.colorScheme)
+}
+
+export function setColorScheme(scheme, persist = true) {
+  applyColorScheme(scheme, persist)
+}
+
 // 显示模式三态循环：浅色 → 深色 → 跟随系统 → 浅色
 const THEME_CYCLE = ['light', 'dark', 'system']
 export function cycleTheme() {
@@ -250,10 +291,17 @@ export function logout() {
 // 模块加载时根据已恢复的主题（含 system）立即应用，避免首屏闪烁
 if (typeof window !== 'undefined') {
   applyTheme(store.theme, false)
+  applyColorScheme(store.siteColorScheme || 'default', false)
 }
 
 // store.theme 变化时实时应用（深浅色/跟随系统），无需刷新
 watch(
   () => store.theme,
   (t) => applyTheme(t, false)
+)
+
+// store.colorScheme 变化时实时应用配色方案（如设置页直接修改 store）
+watch(
+  () => store.colorScheme,
+  (s) => applyColorScheme(s, false)
 )

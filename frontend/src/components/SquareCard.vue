@@ -2,10 +2,13 @@
 import { computed } from 'vue'
 import { store } from '../store'
 import { getLinkIcon, iconColorMap } from '../utils/linkIcon'
+import { hexToRgba } from '../utils/color'
 import EntityIcon from './EntityIcon.vue'
 
 const props = defineProps({
   link: { type: Object, required: true },
+  // 所属分类颜色（系统「分类颜色」开关开启时用于图标背景/字形着色）
+  categoryColor: { type: String, default: '' },
 })
 const emit = defineEmits(['open'])
 
@@ -18,6 +21,14 @@ const symbolName = computed(() => {
 })
 const iconColor = computed(() =>
   symbolName.value ? iconColorMap[symbolName.value] || 'text-on-surface-variant' : ''
+)
+// 分类颜色是否生效：开关开启且链接携带分类颜色
+const catActive = computed(() => store.showCategoryColors && !!props.categoryColor)
+const catContainerStyle = computed(() =>
+  catActive.value ? { background: hexToRgba(props.categoryColor, 0.16) } : {}
+)
+const catIconStyle = computed(() =>
+  catActive.value ? { color: props.categoryColor } : {}
 )
 </script>
 
@@ -42,13 +53,14 @@ const iconColor = computed(() =>
     </span>
 
     <!-- 图标 -->
-    <div class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center overflow-hidden">
+    <div class="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden" :class="catActive ? '' : 'bg-surface-container'" :style="catContainerStyle">
       <EntityIcon
         :icon="link.icon"
         :fallback="getLinkIcon(link.title)"
         :size="22"
         :alt="link.title"
-        :class="iconColor"
+        :class="catActive ? '' : iconColor"
+        :style="catIconStyle"
       />
     </div>
 
