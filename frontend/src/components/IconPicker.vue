@@ -94,7 +94,7 @@ function close() {
 </script>
 
 <template>
-  <transition name="modal">
+  <transition name="modal" appear>
   <div v-if="open" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
     <div class="relative bg-bg-card modal-panel w-full max-w-3xl max-h-[85vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
@@ -159,19 +159,21 @@ function close() {
 <style scoped>
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .modal-enter-from,
 .modal-leave-to {
   opacity: 0;
 }
-.modal-enter-active .modal-panel,
+.modal-enter-active .modal-panel {
+  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+}
 .modal-leave-active .modal-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .modal-enter-from .modal-panel,
 .modal-leave-to .modal-panel {
-  transform: scale(0.94) translateY(8px);
+  transform: scale(0.96) translateY(14px);
   opacity: 0;
 }
 </style>

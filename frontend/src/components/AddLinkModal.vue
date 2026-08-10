@@ -225,7 +225,7 @@ async function onUpload(e) {
 </script>
 
 <template>
-  <transition name="modal">
+  <transition name="modal" appear>
     <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
       <div class="modal-panel relative bg-bg-card w-full max-w-[880px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
@@ -454,22 +454,22 @@ async function onUpload(e) {
    Apple：玻璃/模糊面板的入场应是"真实材质抵达"，而非单纯透明度淡入。 */
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .modal-enter-from,
 .modal-leave-to {
   opacity: 0;
 }
 .modal-enter-active .modal-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.42s cubic-bezier(0.32, 0.72, 0, 1);
 }
 /* 出口比入口快：关闭是系统响应，应更利落 */
 .modal-leave-active .modal-panel {
-  transition: transform 0.2s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .modal-enter-from .modal-panel,
 .modal-leave-to .modal-panel {
-  transform: scale(0.94) translateY(8px);
+  transform: scale(0.96) translateY(14px);
   opacity: 0;
 }
 </style>
