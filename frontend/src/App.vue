@@ -71,7 +71,7 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
   <div class="flex h-screen overflow-hidden bg-background text-on-background">
     <Sidebar v-if="!isLogin && !isAdmin && !isSettings" />
     <div
-      class="flex-1 flex flex-col min-w-0 transition-all duration-200"
+      class="flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ease-spring"
       :class="!isLogin && !isAdmin && !isSettings ? (store.sidebarCollapsed ? 'lg:pl-[144px]' : 'lg:pl-[240px]') : ''"
     >
       <TopBar v-if="!isLogin && !isAdmin && !isSettings" @add-link="openQuick" />

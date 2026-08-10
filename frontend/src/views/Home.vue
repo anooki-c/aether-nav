@@ -13,6 +13,9 @@ const groups = ref([])
 const loading = ref(false)
 const pendingLink = ref(null)
 const showPwd = ref(false)
+// 首页区块入场仅首次挂载播放一次：切换内外网/搜索会经 loading 态卸载重建区块，
+// 若持续重放错峰入场会显得迟缓（Emil：高频操作应去除或大幅缩减动画）。
+const entranceDone = ref(false)
 
 // 仅登录用户、站点开启拖拽排序、且允许主页编辑时，才允许主页卡片拖拽
 const canDrag = computed(() => !!store.token && store.dragSortEnabled && store.allowHomeEdit)
@@ -74,6 +77,8 @@ async function load(query) {
     groups.value = []
   } finally {
     loading.value = false
+    // 首次数据就绪后，下一帧标记入场完成，后续加载不再重放动画
+    if (!entranceDone.value) await nextTick().then(() => (entranceDone.value = true))
   }
 }
 
@@ -146,9 +151,8 @@ watch(() => store.scrollNonce, async () => {
       v-for="(g, gi) in orderedGroups"
       :key="g.category.id"
       :id="'cat-section-' + g.category.id"
-      class="mb-10 home-group"
-      :class="searchFixed ? 'scroll-mt-[168px]' : 'scroll-mt-20'"
-      :style="{ animationDelay: gi * 35 + 'ms' }"
+      :class="['mb-10', !entranceDone ? 'home-group' : '', searchFixed ? 'scroll-mt-[168px]' : 'scroll-mt-20']"
+      :style="!entranceDone ? { animationDelay: gi * 35 + 'ms' } : null"
     >
       <h3 class="font-headline-md text-headline-md text-on-background mb-6 flex items-center gap-2">
         <EntityIcon :icon="g.category.icon" fallback="folder_open" :size="20" :alt="g.category.name" class="text-brand" />

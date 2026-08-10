@@ -460,9 +460,12 @@ async function onUpload(e) {
 .modal-leave-to {
   opacity: 0;
 }
-.modal-enter-active .modal-panel,
-.modal-leave-active .modal-panel {
+.modal-enter-active .modal-panel {
   transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* 出口比入口快：关闭是系统响应，应更利落 */
+.modal-leave-active .modal-panel {
+  transition: transform 0.2s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .modal-enter-from .modal-panel,
 .modal-leave-to .modal-panel {
