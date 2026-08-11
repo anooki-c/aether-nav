@@ -81,7 +81,10 @@ function onIconClick() {
     <!-- 图标（编辑模式下点击 = 调用默认接口获取/更新图标） -->
     <div
       class="relative w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden"
-      :class="catActive ? '' : 'bg-surface-container'"
+      :class="[
+        catActive ? '' : 'bg-surface-container',
+        editMode ? 'ring-2 ring-brand/60' : '',
+      ]"
       :style="catContainerStyle"
       @click.stop="onIconClick"
     >
@@ -100,6 +103,13 @@ function onIconClick() {
       >
         <span class="material-symbols-outlined text-[16px] text-white animate-spin">progress_activity</span>
       </div>
+      <!-- 编辑模式下（非刷新中）：右下角小角标，提示图标可点刷新（移动端无 hover，需常驻提示） -->
+      <span
+        v-else-if="editMode"
+        class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-brand text-white flex items-center justify-center shadow ring-2 ring-surface-container-low"
+      >
+        <span class="material-symbols-outlined text-[10px] leading-none">refresh</span>
+      </span>
     </div>
 
     <!-- 标题 -->

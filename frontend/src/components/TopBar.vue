@@ -59,7 +59,7 @@ function pick(network) {
           @click="pick('internal')"
         >
           <span class="material-symbols-outlined text-[16px]">home</span>
-          <span>内网</span>
+          <span class="hidden min-[400px]:inline">内网</span>
         </button>
         <button
           class="flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-label-sm transition-[transform,background-color,color] duration-200 ease-spring active:scale-95"
@@ -67,7 +67,7 @@ function pick(network) {
           @click="pick('external')"
         >
           <span class="material-symbols-outlined text-[16px]">public</span>
-          <span>外网</span>
+          <span class="hidden min-[400px]:inline">外网</span>
         </button>
       </div>
 
