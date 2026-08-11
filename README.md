@@ -151,3 +151,48 @@ docker compose up -d --build      # 构建并启动，监听 http://localhost:50
 
 **待迭代**：PWA、首次使用引导流程、密码验证强度/限次策略细化、分类拖拽（当前为上下移按钮）、
 更多角色权限粒度、图表 hover 交互。
+
+---
+
+## 版本管理与部署
+
+版本号以仓库根目录 `VERSION` 文件为唯一来源（语义化 `MAJOR.MINOR.PATCH`），git tag 与之一致。
+
+### 自动管理版本号
+
+`scripts/bump_version.sh` 依据**变更内容**自动决定升级级别（扫描自上次 tag 起到 HEAD 的提交，取最高级别）：
+
+| 级别 | 触发关键词（提交信息中） |
+|------|--------------------------|
+| `major` | `BREAKING` / 破坏性 / 重大变更 / `!: ` |
+| `minor` | `feat` / 新增 / 新功能 / 支持 / 增加 |
+| `patch` | `fix` / 修复 / `bug`（兜底默认） |
+
+```bash
+./scripts/bump_version.sh            # 自动推断并打 tag
+./scripts/bump_version.sh minor      # 强制 minor
+./scripts/bump_version.sh --push     # 推断 + 推送到 remote
+```
+
+脚本会更新 `VERSION`、提交 `chore: 发布 vX.Y.Z` 并打 `vX.Y.Z` tag。
+
+### 一键部署（在部署机/服务器上执行）
+
+`scripts/deploy.sh` 拉取最新代码 → 构建 Docker 镜像 → 重新部署：
+
+```bash
+./scripts/deploy.sh            # 拉取 master 最新并重新部署
+./scripts/deploy.sh --release  # 部署最新的正式 tag
+```
+
+### 接入 GitHub
+
+本仓库默认不含 remote。首次发布到 GitHub：
+
+1. 在 GitHub 新建一个**空仓库**（不要勾选 README/.gitignore）。
+2. 本地执行：
+   ```bash
+   git remote add origin https://github.com/<你的用户名>/<仓库名>.git
+   git push -u origin master --tags
+   ```
+3. 之后发版：`./scripts/bump_version.sh --push` 即可自动推版本与 tag。
