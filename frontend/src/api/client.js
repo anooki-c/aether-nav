@@ -53,6 +53,7 @@ export const api = {
   // ---------- 链接：排序 / 显隐 / 改删 ----------
   reorderLinks: (categoryId, orderedIds) => request('/links/reorder', json({ category_id: categoryId, ordered_ids: orderedIds })),
   setVisibility: (linkId, show) => request(`/links/${linkId}/visibility`, json({ show_on_home: show })),
+  getLink: (id) => request(`/links/${id}`),
   updateLink: (id, payload) => request(`/links/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
   deleteLink: (id) => request(`/links/${id}`, { method: 'DELETE' }),
 

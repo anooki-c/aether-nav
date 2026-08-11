@@ -526,6 +526,26 @@ def _can_edit_link(user, link):
     return user.role == "admin" or link.owner_id == user.id
 
 
+@app.route("/api/links/<int:link_id>", methods=["GET"])
+@auth_required
+def get_link(user, link_id):
+    # 编辑弹窗预填用：返回完整字段（含 url_external/url_internal 双 URL），
+    # 鉴权与 update_link 一致，仅链接可编辑者可见。
+    link = Link.query.get_or_404(link_id)
+    if not _can_edit_link(user, link):
+        return jsonify({"error": "无权限"}), 403
+    return jsonify({
+        "id": link.id,
+        "title": link.title,
+        "description": link.description,
+        "url_external": link.url_external or "",
+        "url_internal": link.url_internal or "",
+        "icon": link.icon or "",
+        "category_id": link.category_id,
+        "permission": link.permission or "all",
+    })
+
+
 @app.route("/api/links/<int:link_id>", methods=["PUT"])
 @auth_required
 def update_link(user, link_id):

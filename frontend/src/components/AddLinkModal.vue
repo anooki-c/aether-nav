@@ -86,29 +86,11 @@ watch([() => props.open, () => props.editLink], ([open]) => {
     selectedProvider.value = 'direct'
     faviconCustomUrl.value = ''
     if (isEdit.value) {
-      // 编辑模式：用现有链接预填表单（密码不预填，留空表示保持原密码）
-      const l = props.editLink
-      const e = parseUrlScheme(l.url_external || '')
-      const i = parseUrlScheme(l.url_internal || '')
-      form.value = {
-        title: l.title || '',
-        description: l.description || '',
-        url_external: l.url_external || '',
-        url_internal: l.url_internal || '',
-        category_id: l.category_id || null,
-        icon: l.icon || '',
-        permission: l.permission || 'admin',
-        enablePwd: false,
-        pwdNew: '',
-        pwdConfirm: '',
-      }
-      // 两级分类回填：找到所属父分类以正确展开子分类下拉
-      const pid = findParentCategoryId(l.category_id)
-      catParent.value = pid ? String(pid) : ''
-      sslExternal.value = e.ssl
-      extBody.value = e.body
-      sslInternal.value = i.ssl
-      intBody.value = i.body
+      // 编辑模式：卡片传入的 link 只含单一 url（按当前网络模式计算），
+      // 需向后台拉取完整详情（含 url_external / url_internal 双 URL）再预填。
+      // 先以卡片数据做即时回填，避免网络延迟时弹窗空白；随后用详情覆盖。
+      prefillFromObject(props.editLink)
+      fetchEditDetail(props.editLink.id)
     } else {
       // 新增模式：每次打开重置表单
       form.value = {
@@ -134,6 +116,61 @@ function findParentCategoryId(catId) {
     if (p.children && p.children.some((c) => c.id === catId)) return p.id
   }
   return ''
+}
+
+// 用已有的链接对象（卡片 / 接口）预填表单。
+// 卡片对象只含 url+network，按 network 映射到 external/internal（单 URL 场景足够）；
+// 完整双 URL 由 fetchEditDetail 覆盖。
+function prefillFromObject(l) {
+  const ext = l.network === 'internal' ? '' : (l.url || '')
+  const int = l.network === 'internal' ? (l.url || '') : ''
+  const e = parseUrlScheme(ext)
+  const i = parseUrlScheme(int)
+  form.value = {
+    title: l.title || '',
+    description: l.description || '',
+    url_external: ext,
+    url_internal: int,
+    category_id: l.category_id || null,
+    icon: l.icon || '',
+    permission: l.permission || 'admin',
+    enablePwd: false,
+    pwdNew: '',
+    pwdConfirm: '',
+  }
+  const pid = findParentCategoryId(l.category_id)
+  catParent.value = pid ? String(pid) : ''
+  sslExternal.value = e.ssl
+  extBody.value = e.body
+  sslInternal.value = i.ssl
+  intBody.value = i.body
+}
+
+// 编辑模式：拉取后台完整链接详情（含双 URL），覆盖预填，确保内外网地址都不丢
+async function fetchEditDetail(id) {
+  try {
+    const data = await api.getLink(id)
+    const e = parseUrlScheme(data.url_external || '')
+    const i = parseUrlScheme(data.url_internal || '')
+    form.value.title = data.title || ''
+    form.value.description = data.description || ''
+    form.value.url_external = data.url_external || ''
+    form.value.url_internal = data.url_internal || ''
+    form.value.icon = data.icon || ''
+    form.value.permission = data.permission || 'admin'
+    if (data.category_id) {
+      form.value.category_id = data.category_id
+      const pid = findParentCategoryId(data.category_id)
+      catParent.value = pid ? String(pid) : ''
+    }
+    sslExternal.value = e.ssl
+    extBody.value = e.body
+    sslInternal.value = i.ssl
+    intBody.value = i.body
+  } catch (err) {
+    // 拉取失败：保留卡片数据的即时预填，不阻断编辑
+    iconMsg.value = err.message || '链接详情拉取失败'
+  }
 }
 
 function close() {
