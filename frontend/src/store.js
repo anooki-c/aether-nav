@@ -57,6 +57,13 @@ export const store = reactive({
   showCategoryColors: false,
   allowHomeEdit: true, // 站点设置：是否允许用户自定义主页（添加/拖拽排序）
   lanCidrs: '', // 站点设置：管理员补充的自定义局域网网段（换行/逗号分隔）
+  // 首页「编辑模式」：登录且站点允许主页编辑时，可一键进入（显示拖拽手柄 + 卡片编辑/刷新图标按钮）
+  editMode: false,
+  // 全局链接弹窗（新增/编辑共用 AddLinkModal）：editLink 非空=编辑，null/空=新增
+  linkModalOpen: false,
+  linkModalEditLink: null,
+  // 卡片图标刷新中（按图标获取接口异步拉取时锁定单卡片，避免重复点击）
+  iconBusyId: null,
   // 主页侧边栏 / 头像菜单是否显示「个人设置 / 管理后台」入口（系统设置开关）
   showPersonalSettings: true,
   showAdminConsole: true,
@@ -286,6 +293,25 @@ export function setAuth(token, user, remember = false) {
 
 export function logout() {
   setAuth('', null)
+}
+
+// ---------- 首页编辑模式 + 全局链接弹窗 ----------
+export function toggleEditMode() {
+  store.editMode = !store.editMode
+}
+// 打开「新增链接」弹窗（清空编辑目标）
+export function openAddLink() {
+  store.linkModalEditLink = null
+  store.linkModalOpen = true
+}
+// 打开「编辑链接」弹窗，预填指定链接
+export function openEditLink(link) {
+  store.linkModalEditLink = link
+  store.linkModalOpen = true
+}
+export function closeLinkModal() {
+  store.linkModalOpen = false
+  store.linkModalEditLink = null
 }
 
 // 模块加载时根据已恢复的主题（含 system）立即应用，避免首屏闪烁

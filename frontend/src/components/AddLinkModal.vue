@@ -8,8 +8,15 @@ import IconPicker from './IconPicker.vue'
 import { getLinkIcon } from '../utils/linkIcon'
 import { parseUrlScheme, buildUrl } from '../utils/urlScheme'
 
-const props = defineProps({ open: { type: Boolean, default: false } })
+const props = defineProps({
+  open: { type: Boolean, default: false },
+  // 传入即「编辑模式」：预填该链接并走 updateLink；为空表示新增
+  editLink: { type: Object, default: null },
+})
 const emit = defineEmits(['update:open'])
+
+const isEdit = computed(() => !!props.editLink)
+const headerTitle = computed(() => (isEdit.value ? '编辑链接' : '快速添加链接'))
 
 const form = ref({
   title: '',
@@ -67,11 +74,7 @@ watch(catParent, () => {
 })
 watch(() => props.open, (v) => {
   if (v) {
-    // 每次打开重置表单
-    form.value = {
-      title: '', description: '', url_external: '', url_internal: '',
-      category_id: null, icon: '', permission: 'admin', enablePwd: false, pwdNew: '', pwdConfirm: '',
-    }
+    // 重置通用状态
     catParent.value = ''
     error.value = ''
     pwdError.value = ''
@@ -80,16 +83,56 @@ watch(() => props.open, (v) => {
     iconProviders.value = []
     selectedProvider.value = 'direct'
     faviconCustomUrl.value = ''
-    // 默认 http；把完整 URL 拆成 {ssl, body} 供输入框使用
-    const e = parseUrlScheme(form.value.url_external)
-    const i = parseUrlScheme(form.value.url_internal)
-    sslExternal.value = e.ssl
-    extBody.value = e.body
-    sslInternal.value = i.ssl
-    intBody.value = i.body
+    if (isEdit.value) {
+      // 编辑模式：用现有链接预填表单（密码不预填，留空表示保持原密码）
+      const l = props.editLink
+      const e = parseUrlScheme(l.url_external || '')
+      const i = parseUrlScheme(l.url_internal || '')
+      form.value = {
+        title: l.title || '',
+        description: l.description || '',
+        url_external: l.url_external || '',
+        url_internal: l.url_internal || '',
+        category_id: l.category_id || null,
+        icon: l.icon || '',
+        permission: l.permission || 'admin',
+        enablePwd: false,
+        pwdNew: '',
+        pwdConfirm: '',
+      }
+      // 两级分类回填：找到所属父分类以正确展开子分类下拉
+      const pid = findParentCategoryId(l.category_id)
+      catParent.value = pid ? String(pid) : ''
+      sslExternal.value = e.ssl
+      extBody.value = e.body
+      sslInternal.value = i.ssl
+      intBody.value = i.body
+    } else {
+      // 新增模式：每次打开重置表单
+      form.value = {
+        title: '', description: '', url_external: '', url_internal: '',
+        category_id: null, icon: '', permission: 'admin', enablePwd: false, pwdNew: '', pwdConfirm: '',
+      }
+      // 默认 http；把完整 URL 拆成 {ssl, body} 供输入框使用
+      const e = parseUrlScheme(form.value.url_external)
+      const i = parseUrlScheme(form.value.url_internal)
+      sslExternal.value = e.ssl
+      extBody.value = e.body
+      sslInternal.value = i.ssl
+      intBody.value = i.body
+    }
     loadIconProviders()
   }
 })
+
+// 在分类树中查找某分类的父分类 id（两级分类联动回填用）
+function findParentCategoryId(catId) {
+  if (!catId) return ''
+  for (const p of store.tree) {
+    if (p.children && p.children.some((c) => c.id === catId)) return p.id
+  }
+  return ''
+}
 
 function close() {
   emit('update:open', false)
@@ -156,11 +199,18 @@ async function save() {
       permission: form.value.permission,
     }
     if (form.value.enablePwd) payload.password = form.value.pwdNew
-    const res = await api.createLink(payload)
-    bumpLinks()
-    // 图标落地失败：链接已创建，仅图标回退为默认，提示用户
-    if (res && res.icon_error) showToast(res.icon_error, 'warn')
-    else showToast('链接已添加', 'success')
+    if (isEdit.value) {
+      const res = await api.updateLink(props.editLink.id, payload)
+      bumpLinks()
+      if (res && res.icon_error) showToast(res.icon_error, 'warn')
+      else showToast('链接已更新', 'success')
+    } else {
+      const res = await api.createLink(payload)
+      bumpLinks()
+      // 图标落地失败：链接已创建，仅图标回退为默认，提示用户
+      if (res && res.icon_error) showToast(res.icon_error, 'warn')
+      else showToast('链接已添加', 'success')
+    }
     close()
   } catch (e) {
     error.value = e.message || '保存失败'
@@ -233,9 +283,9 @@ async function onUpload(e) {
       <div class="px-8 py-5 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
-            <span class="material-symbols-outlined text-[20px]">add_link</span>
+            <span class="material-symbols-outlined text-[20px]">{{ isEdit ? 'edit' : 'add_link' }}</span>
           </div>
-          <h2 class="font-headline-md text-headline-md text-on-surface">快速添加链接</h2>
+          <h2 class="font-headline-md text-headline-md text-on-surface">{{ headerTitle }}</h2>
         </div>
         <button class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-on-surface-variant" @click="close">
           <span class="material-symbols-outlined">close</span>

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { store } from '../store'
+import { store, bumpLinks, showToast, openEditLink } from '../store'
 import { api } from '../api/client'
 import SearchHero from '../components/SearchHero.vue'
 import LinkCard from '../components/LinkCard.vue'
@@ -18,8 +18,8 @@ const showPwd = ref(false)
 // 若持续重放错峰入场会显得迟缓（Emil：高频操作应去除或大幅缩减动画）。
 const entranceDone = ref(false)
 
-// 仅登录用户、站点开启拖拽排序、且允许主页编辑时，才允许主页卡片拖拽
-const canDrag = computed(() => !!store.token && store.dragSortEnabled && store.allowHomeEdit)
+// 仅登录用户、站点开启拖拽排序、允许主页编辑，且处于「编辑模式」时，才允许主页卡片拖拽
+const canDrag = computed(() => !!store.token && store.dragSortEnabled && store.allowHomeEdit && store.editMode)
 
 // 分类颜色：系统「分类颜色」开关开启时，分类图标与其下链接卡片图标按分类色着色
 function catBg(color) {
@@ -93,6 +93,37 @@ async function load(query) {
 
 function onSearch({ q }) {
   load(q)
+}
+
+// 卡片右侧编辑按钮 → 打开编辑弹窗（与新增共用 AddLinkModal，样式一致）
+function onEdit(link) {
+  openEditLink(link)
+}
+
+// 点击卡片图标区域 → 调用默认图标接口自动获取/更新该链接图标
+async function onFetchIcon(link) {
+  if (store.iconBusyId) return // 防止重复点击
+  const url = (link.url_internal || link.url_external || '').trim()
+  if (!url) {
+    showToast('该链接暂无 URL，无法获取图标', 'warn')
+    return
+  }
+  store.iconBusyId = link.id
+  try {
+    const data = await api.fetchIcon(url)
+    if (!data || !data.path) {
+      showToast((data && data.error) || '图标获取失败', 'warn')
+      return
+    }
+    // 后端已下载落地为本地 /uploads 路径，localize_icon 对 /uploads 前缀原样保留，不会重复下载
+    await api.updateLink(link.id, { icon: data.path })
+    bumpLinks()
+    showToast('图标已更新', 'success')
+  } catch (e) {
+    showToast(e.message || '图标获取失败', 'error')
+  } finally {
+    store.iconBusyId = null
+  }
 }
 
 function openLink(link) {
@@ -184,19 +215,19 @@ watch(() => store.scrollNonce, async () => {
           @end="onDragEnd(g)"
         >
           <template #item="{ element }">
-            <LinkCard :link="element" :draggable="true" :compact="cardCompact" :category-color="g.category.color" @open="openLink" />
+            <LinkCard :link="element" :draggable="true" :compact="cardCompact" :edit-mode="store.editMode" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
           </template>
         </draggable>
 
         <!-- 静态网格（访客 / 未开启拖拽） -->
         <TransitionGroup v-else :class="gridClass" name="card" tag="div">
-          <LinkCard v-for="l in g.links" :key="l.id" :link="l" :compact="cardCompact" :category-color="g.category.color" @open="openLink" />
+          <LinkCard v-for="l in g.links" :key="l.id" :link="l" :compact="cardCompact" :edit-mode="store.editMode" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
         </TransitionGroup>
       </div>
 
       <!-- 移动端：4 列 1:1 方形卡（仅 icon + 标题） -->
       <div class="md:hidden grid grid-cols-4 gap-3">
-        <SquareCard v-for="l in g.links" :key="l.id" :link="l" :category-color="g.category.color" @open="openLink" />
+        <SquareCard v-for="l in g.links" :key="l.id" :link="l" :edit-mode="store.editMode" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
       </div>
     </section>
       </div>

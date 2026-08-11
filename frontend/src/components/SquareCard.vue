@@ -7,10 +7,15 @@ import EntityIcon from './EntityIcon.vue'
 
 const props = defineProps({
   link: { type: Object, required: true },
+  // 编辑模式：显示编辑按钮 + 图标区可点击刷新
+  editMode: { type: Boolean, default: false },
   // 所属分类颜色（系统「分类颜色」开关开启时用于图标背景/字形着色）
   categoryColor: { type: String, default: '' },
 })
-const emit = defineEmits(['open'])
+const emit = defineEmits(['open', 'edit', 'fetch-icon'])
+
+// 图标正在刷新中
+const iconBusy = computed(() => store.iconBusyId === props.link.id)
 
 // 优先用链接自身 icon，未设置时按标题推断（不使用 emoji 占位）
 const symbolName = computed(() => {
@@ -30,14 +35,35 @@ const catContainerStyle = computed(() =>
 const catIconStyle = computed(() =>
   catActive.value ? { color: props.categoryColor } : {}
 )
+
+function onCardClick() {
+  if (props.editMode) emit('edit', props.link)
+  else emit('open', props.link)
+}
+// 点击图标区域（编辑模式）：调用默认接口自动获取/更新图标
+function onIconClick() {
+  if (props.editMode) emit('fetch-icon', props.link)
+}
 </script>
 
 <template>
   <!-- 移动端方形卡：1:1，仅图标 + 标题（对齐 square_cards 原型） -->
   <a
     class="aspect-square rounded-xl glass-card flex flex-col items-center justify-center gap-2 p-2 relative cursor-pointer active:scale-95 transition-[transform,box-shadow] duration-200 ease-spring overflow-hidden"
-    @click.prevent="emit('open', link)"
+    :class="editMode ? 'ring-1 ring-brand/40' : ''"
+    @click.prevent="onCardClick"
   >
+    <!-- 编辑模式：编辑按钮（移动端无 hover，常驻显示） -->
+    <button
+      v-if="editMode"
+      type="button"
+      class="absolute top-1.5 left-1.5 z-20 w-7 h-7 rounded-full bg-brand text-white flex items-center justify-center shadow-md active:scale-90"
+      title="编辑链接"
+      @click.stop="emit('edit', link)"
+    >
+      <span class="material-symbols-outlined text-[16px]">edit</span>
+    </button>
+
     <!-- 网络标识：右上角小圆点（外网=绿 / 内网=蓝） -->
     <span
       class="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full"
@@ -52,8 +78,13 @@ const catIconStyle = computed(() =>
       <span class="material-symbols-outlined text-[6px]">lock</span>
     </span>
 
-    <!-- 图标 -->
-    <div class="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden" :class="catActive ? '' : 'bg-surface-container'" :style="catContainerStyle">
+    <!-- 图标（编辑模式下点击 = 调用默认接口获取/更新图标） -->
+    <div
+      class="relative w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden"
+      :class="catActive ? '' : 'bg-surface-container'"
+      :style="catContainerStyle"
+      @click.stop="onIconClick"
+    >
       <EntityIcon
         :icon="link.icon"
         :fallback="getLinkIcon(link.title)"
@@ -62,6 +93,13 @@ const catIconStyle = computed(() =>
         :class="catActive ? '' : iconColor"
         :style="catIconStyle"
       />
+      <!-- 编辑模式下：图标刷新中显示转圈遮罩 -->
+      <div
+        v-if="iconBusy"
+        class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center"
+      >
+        <span class="material-symbols-outlined text-[16px] text-white animate-spin">progress_activity</span>
+      </div>
     </div>
 
     <!-- 标题 -->

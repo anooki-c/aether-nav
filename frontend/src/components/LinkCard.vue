@@ -9,10 +9,15 @@ const props = defineProps({
   link: { type: Object, required: true },
   draggable: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
+  // 编辑模式：显示悬浮编辑按钮 + 图标区可点击刷新，卡片点击改为触发编辑
+  editMode: { type: Boolean, default: false },
   // 所属分类颜色（系统「分类颜色」开关开启时用于图标背景/字形着色）
   categoryColor: { type: String, default: '' },
 })
-const emit = defineEmits(['open'])
+const emit = defineEmits(['open', 'edit', 'fetch-icon'])
+
+// 图标正在刷新中（按图标获取接口异步拉取该卡片图标）
+const iconBusy = computed(() => store.iconBusyId === props.link.id)
 
 // 实际生效的 Material Symbols 名称：优先取链接自身 icon，
 // 为空/为图片时回落到按标题推断（图片场景不需要着色）
@@ -33,6 +38,16 @@ const catContainerStyle = computed(() =>
 const catIconStyle = computed(() =>
   catActive.value ? { color: props.categoryColor } : {}
 )
+
+// 编辑模式下点击卡片整体 = 打开编辑；浏览模式下 = 打开链接
+function onCardClick() {
+  if (props.editMode) emit('edit', props.link)
+  else emit('open', props.link)
+}
+// 点击图标区域（编辑模式）：调用默认接口自动获取/更新图标
+function onIconClick() {
+  if (props.editMode) emit('fetch-icon', props.link)
+}
 </script>
 
 <template>
@@ -41,8 +56,9 @@ const catIconStyle = computed(() =>
     :class="[
       draggable ? 'cursor-grab active:cursor-grabbing' : '',
       compact ? 'p-3 h-20 gap-3' : 'p-4 h-24 gap-4',
+      editMode ? 'ring-1 ring-brand/30' : '',
     ]"
-    @click.prevent="emit('open', link)"
+    @click.prevent="onCardClick"
   >
     <!-- 拖拽手柄 -->
     <div
@@ -52,11 +68,23 @@ const catIconStyle = computed(() =>
       <span class="material-symbols-outlined text-[18px] text-on-surface-variant">drag_indicator</span>
     </div>
 
+    <!-- 编辑模式：悬浮在右侧中间的编辑按钮（hover 可见） -->
+    <button
+      v-if="editMode"
+      type="button"
+      class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100 transition-[opacity,transform] duration-200 ease-spring hover:scale-105 active:scale-95"
+      title="编辑链接"
+      @click.stop="emit('edit', link)"
+    >
+      <span class="material-symbols-outlined text-[18px]">edit</span>
+    </button>
+
     <!-- 图标区域（对齐原型：Material Symbols 小图标 + 彩色，非大号 emoji） -->
     <div
-      class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors overflow-hidden"
+      class="relative w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors overflow-hidden"
       :class="catActive ? '' : 'bg-surface-container group-hover:bg-primary-fixed'"
       :style="catContainerStyle"
+      @click.stop="onIconClick"
     >
       <EntityIcon
         :icon="link.icon"
@@ -66,6 +94,13 @@ const catIconStyle = computed(() =>
         :class="catActive ? '' : iconColor"
         :style="catIconStyle"
       />
+      <!-- 编辑模式下：图标刷新中显示转圈遮罩 -->
+      <div
+        v-if="iconBusy"
+        class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center"
+      >
+        <span class="material-symbols-outlined text-[18px] text-white animate-spin">progress_activity</span>
+      </div>
     </div>
 
     <!-- 文字信息 -->

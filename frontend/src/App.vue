@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { store, loadTree, loadMe, loadSettings, focusSearch, openDrawer } from './store'
+import { store, loadTree, loadMe, loadSettings, focusSearch, openDrawer, openAddLink } from './store'
 import Sidebar from './components/Sidebar.vue'
 import TopBar from './components/TopBar.vue'
 import MobileNav from './components/MobileNav.vue'
@@ -13,7 +13,6 @@ const isLogin = computed(() => route.name === 'login')
 // 后台管理 / 个人设置均为独立控制台（自有侧边栏+顶栏），不再套用主应用导航
 const isAdmin = computed(() => route.name === 'admin')
 const isSettings = computed(() => route.name === 'settings')
-const showAdd = ref(false)
 const showQuick = ref(false)
 // 书签小工具从外部网页带来的预填（当前页 URL/标题）
 const quickPrefill = ref({ url: '', title: '' })
@@ -41,10 +40,10 @@ function openQuick() {
   quickPrefill.value = { url: '', title: '' }
   showQuick.value = true
 }
-// 快速添加里「切换到完整表单」→ 打开完整弹窗
+// 快速添加里「切换到完整表单」→ 打开完整弹窗（新增模式）
 function toFullForm() {
   showQuick.value = false
-  showAdd.value = true
+  openAddLink()
 }
 function backToTop() {
   const el = document.getElementById('main-scroll')
@@ -97,7 +96,7 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
       <span class="material-symbols-outlined text-[28px]">arrow_upward</span>
     </button>
 
-    <AddLinkModal v-model:open="showAdd" />
+    <AddLinkModal :open="store.linkModalOpen" :edit-link="store.linkModalEditLink" @update:open="store.linkModalOpen = $event" />
     <QuickAddLink :open="showQuick" :prefill-url="quickPrefill.url" :prefill-title="quickPrefill.title" @update:open="showQuick = $event" @full-form="toFullForm" />
 
     <!-- 全局轻提示 -->

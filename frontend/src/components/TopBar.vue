@@ -1,5 +1,5 @@
 <script setup>
-import { store, setNetwork, toggleSidebar } from '../store'
+import { store, setNetwork, toggleSidebar, toggleEditMode } from '../store'
 import WeatherWidget from './WeatherWidget.vue'
 import UserMenu from './UserMenu.vue'
 
@@ -27,6 +27,19 @@ function pick(network) {
     </div>
 
     <div class="flex items-center gap-4">
+      <!-- 编辑模式开关（登录且允许主页编辑时显示）：开启后首页卡片显示拖拽手柄 + 编辑/刷新图标按钮 -->
+      <button
+        v-if="store.token && store.allowHomeEdit"
+        class="flex items-center gap-1.5 px-3.5 py-2 rounded-full font-label-sm text-label-sm shadow-sm transition-[transform,background-color,color] active:scale-95 shrink-0"
+        :class="store.editMode ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant hover:bg-surface-variant'"
+        @click="toggleEditMode"
+        :aria-pressed="store.editMode"
+        :title="store.editMode ? '退出编辑模式' : '进入编辑模式'"
+      >
+        <span class="material-symbols-outlined text-[18px]">{{ store.editMode ? 'check' : 'edit' }}</span>
+        <span class="hidden sm:inline">{{ store.editMode ? '完成' : '编辑' }}</span>
+      </button>
+
       <!-- 添加链接（登录且允许主页编辑时显示） -->
       <button
         v-if="store.token && store.allowHomeEdit"
