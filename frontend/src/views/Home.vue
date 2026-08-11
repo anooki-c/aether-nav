@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { store, bumpLinks, showToast, openEditLink } from '../store'
+import { store, bumpLinks, showToast, openEditLink, canEditHome } from '../store'
 import { api } from '../api/client'
 import SearchHero from '../components/SearchHero.vue'
 import LinkCard from '../components/LinkCard.vue'
@@ -18,8 +18,8 @@ const showPwd = ref(false)
 // 若持续重放错峰入场会显得迟缓（Emil：高频操作应去除或大幅缩减动画）。
 const entranceDone = ref(false)
 
-// 仅登录用户、站点开启拖拽排序、允许主页编辑，且处于「编辑模式」时，才允许主页卡片拖拽
-const canDrag = computed(() => !!store.token && store.dragSortEnabled && store.allowHomeEdit && store.editMode)
+// 登录、站点允许主页编辑（canEditHome）且开启拖拽排序时，主页卡片可拖拽（拖拽手柄触发，不干扰点击打开链接）
+const canDrag = computed(() => canEditHome.value && store.dragSortEnabled)
 
 // 分类颜色：系统「分类颜色」开关开启时，分类图标与其下链接卡片图标按分类色着色
 function catBg(color) {
@@ -211,23 +211,24 @@ watch(() => store.scrollNonce, async () => {
           item-key="id"
           :group="{ name: 'cat-' + g.category.id }"
           :animation="200"
+          handle=".drag-handle"
           :class="gridClass"
           @end="onDragEnd(g)"
         >
           <template #item="{ element }">
-            <LinkCard :link="element" :draggable="true" :compact="cardCompact" :edit-mode="store.editMode" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
+            <LinkCard :link="element" :draggable="true" :compact="cardCompact" :editable="canEditHome" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
           </template>
         </draggable>
 
         <!-- 静态网格（访客 / 未开启拖拽） -->
         <TransitionGroup v-else :class="gridClass" name="card" tag="div">
-          <LinkCard v-for="l in g.links" :key="l.id" :link="l" :compact="cardCompact" :edit-mode="store.editMode" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
+          <LinkCard v-for="l in g.links" :key="l.id" :link="l" :compact="cardCompact" :editable="canEditHome" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
         </TransitionGroup>
       </div>
 
       <!-- 移动端：4 列 1:1 方形卡（仅 icon + 标题） -->
       <div class="md:hidden grid grid-cols-4 gap-3">
-        <SquareCard v-for="l in g.links" :key="l.id" :link="l" :edit-mode="store.editMode" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
+        <SquareCard v-for="l in g.links" :key="l.id" :link="l" :editable="canEditHome" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
       </div>
     </section>
       </div>

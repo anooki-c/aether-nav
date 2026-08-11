@@ -72,8 +72,10 @@ watch(catParent, () => {
   // 切换父分类后清空已选子分类，避免选到不存在的归属
   if (catChildren.value.length > 0) form.value.category_id = null
 })
-watch(() => props.open, (v) => {
-  if (v) {
+// 打开或切换编辑目标时预填：编辑模式用现有链接，新增模式清空。
+// 同时监听 open 与 editLink，保证「已在打开状态下切换编辑另一链接」也能正确回填。
+watch([() => props.open, () => props.editLink], ([open]) => {
+  if (open) {
     // 重置通用状态
     catParent.value = ''
     error.value = ''

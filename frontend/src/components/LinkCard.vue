@@ -9,8 +9,9 @@ const props = defineProps({
   link: { type: Object, required: true },
   draggable: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
-  // 编辑模式：显示悬浮编辑按钮 + 图标区可点击刷新，卡片点击改为触发编辑
-  editMode: { type: Boolean, default: false },
+  // 可编辑：登录且站点允许主页编辑（后台「主页是否可以编辑」）时为真，
+  // 显示悬浮编辑按钮 + 图标区可点击刷新；卡片点击仍打开链接，编辑由编辑按钮触发
+  editable: { type: Boolean, default: false },
   // 所属分类颜色（系统「分类颜色」开关开启时用于图标背景/字形着色）
   categoryColor: { type: String, default: '' },
 })
@@ -39,14 +40,13 @@ const catIconStyle = computed(() =>
   catActive.value ? { color: props.categoryColor } : {}
 )
 
-// 编辑模式下点击卡片整体 = 打开编辑；浏览模式下 = 打开链接
+// 卡片点击始终打开链接（编辑由右侧悬浮的编辑按钮触发，互不干扰）
 function onCardClick() {
-  if (props.editMode) emit('edit', props.link)
-  else emit('open', props.link)
+  emit('open', props.link)
 }
-// 点击图标区域（编辑模式）：调用默认接口自动获取/更新图标
+// 点击图标区域（可编辑时）：调用默认接口自动获取/更新图标
 function onIconClick() {
-  if (props.editMode) emit('fetch-icon', props.link)
+  if (props.editable) emit('fetch-icon', props.link)
 }
 </script>
 
@@ -56,21 +56,21 @@ function onIconClick() {
     :class="[
       draggable ? 'cursor-grab active:cursor-grabbing' : '',
       compact ? 'p-3 h-20 gap-3' : 'p-4 h-24 gap-4',
-      editMode ? 'ring-1 ring-brand/30' : '',
+      editable ? 'ring-1 ring-brand/30' : '',
     ]"
     @click.prevent="onCardClick"
   >
-    <!-- 拖拽手柄 -->
+    <!-- 拖拽手柄（仅拖拽时显示；vuedraggable 以 .drag-handle 为拖拽触发区，避免与卡片点击打开链接冲突） -->
     <div
       v-if="draggable"
-      class="absolute top-2 left-2 opacity-0 group-hover:opacity-40 transition-opacity hidden md:block"
+      class="drag-handle absolute top-2 left-2 opacity-0 group-hover:opacity-40 transition-opacity hidden md:block"
     >
       <span class="material-symbols-outlined text-[18px] text-on-surface-variant">drag_indicator</span>
     </div>
 
-    <!-- 编辑模式：悬浮在右侧中间的编辑按钮（hover 可见） -->
+    <!-- 可编辑：悬浮在右侧中间的编辑按钮（hover 可见） -->
     <button
-      v-if="editMode"
+      v-if="editable"
       type="button"
       class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100 transition-[opacity,transform] duration-200 ease-spring hover:scale-105 active:scale-95"
       title="编辑链接"

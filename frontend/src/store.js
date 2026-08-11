@@ -1,4 +1,4 @@
-import { reactive, watch } from 'vue'
+import { reactive, computed, watch } from 'vue'
 import { api } from './api/client'
 
 const LS = {
@@ -57,8 +57,8 @@ export const store = reactive({
   showCategoryColors: false,
   allowHomeEdit: true, // 站点设置：是否允许用户自定义主页（添加/拖拽排序）
   lanCidrs: '', // 站点设置：管理员补充的自定义局域网网段（换行/逗号分隔）
-  // 首页「编辑模式」：登录且站点允许主页编辑时，可一键进入（显示拖拽手柄 + 卡片编辑/刷新图标按钮）
-  editMode: false,
+  // 首页是否可编辑：派生自「登录 + 站点允许主页编辑(allowHomeEdit)」，见 canEditHome，不再单独维护编辑模式开关
+
   // 全局链接弹窗（新增/编辑共用 AddLinkModal）：editLink 非空=编辑，null/空=新增
   linkModalOpen: false,
   linkModalEditLink: null,
@@ -295,10 +295,10 @@ export function logout() {
   setAuth('', null)
 }
 
-// ---------- 首页编辑模式 + 全局链接弹窗 ----------
-export function toggleEditMode() {
-  store.editMode = !store.editMode
-}
+// ---------- 首页可编辑状态 + 全局链接弹窗 ----------
+// 首页是否可编辑：登录且站点允许主页编辑（后台系统设置「主页是否可以编辑」）时为真。
+// 编辑按钮 / 图标刷新 / 拖拽排序均以此为门控，与后台设置合并，不再有独立的编辑模式开关。
+export const canEditHome = computed(() => !!store.token && store.allowHomeEdit)
 // 打开「新增链接」弹窗（清空编辑目标）
 export function openAddLink() {
   store.linkModalEditLink = null

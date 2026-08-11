@@ -7,8 +7,9 @@ import EntityIcon from './EntityIcon.vue'
 
 const props = defineProps({
   link: { type: Object, required: true },
-  // 编辑模式：显示编辑按钮 + 图标区可点击刷新
-  editMode: { type: Boolean, default: false },
+  // 可编辑：登录且站点允许主页编辑（后台「主页是否可以编辑」）时为真，
+  // 显示编辑按钮 + 图标区可点击刷新；卡片点击仍打开链接
+  editable: { type: Boolean, default: false },
   // 所属分类颜色（系统「分类颜色」开关开启时用于图标背景/字形着色）
   categoryColor: { type: String, default: '' },
 })
@@ -37,12 +38,11 @@ const catIconStyle = computed(() =>
 )
 
 function onCardClick() {
-  if (props.editMode) emit('edit', props.link)
-  else emit('open', props.link)
+  emit('open', props.link)
 }
-// 点击图标区域（编辑模式）：调用默认接口自动获取/更新图标
+// 点击图标区域（可编辑时）：调用默认接口自动获取/更新图标
 function onIconClick() {
-  if (props.editMode) emit('fetch-icon', props.link)
+  if (props.editable) emit('fetch-icon', props.link)
 }
 </script>
 
@@ -50,12 +50,12 @@ function onIconClick() {
   <!-- 移动端方形卡：1:1，仅图标 + 标题（对齐 square_cards 原型） -->
   <a
     class="aspect-square rounded-xl glass-card flex flex-col items-center justify-center gap-2 p-2 relative cursor-pointer active:scale-95 transition-[transform,box-shadow] duration-200 ease-spring overflow-hidden"
-    :class="editMode ? 'ring-1 ring-brand/40' : ''"
+    :class="editable ? 'ring-1 ring-brand/40' : ''"
     @click.prevent="onCardClick"
   >
-    <!-- 编辑模式：编辑按钮（移动端无 hover，常驻显示） -->
+    <!-- 可编辑：编辑按钮（移动端无 hover，常驻显示） -->
     <button
-      v-if="editMode"
+      v-if="editable"
       type="button"
       class="absolute top-1.5 left-1.5 z-20 w-7 h-7 rounded-full bg-brand text-white flex items-center justify-center shadow-md active:scale-90"
       title="编辑链接"
@@ -83,7 +83,7 @@ function onIconClick() {
       class="relative w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden"
       :class="[
         catActive ? '' : 'bg-surface-container',
-        editMode ? 'ring-2 ring-brand/60' : '',
+        editable ? 'ring-2 ring-brand/60' : '',
       ]"
       :style="catContainerStyle"
       @click.stop="onIconClick"
@@ -103,9 +103,9 @@ function onIconClick() {
       >
         <span class="material-symbols-outlined text-[16px] text-white animate-spin">progress_activity</span>
       </div>
-      <!-- 编辑模式下（非刷新中）：右下角小角标，提示图标可点刷新（移动端无 hover，需常驻提示） -->
+      <!-- 可编辑（非刷新中）：右下角小角标，提示图标可点刷新（移动端无 hover，需常驻提示） -->
       <span
-        v-else-if="editMode"
+        v-else-if="editable"
         class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-brand text-white flex items-center justify-center shadow ring-2 ring-surface-container-low"
       >
         <span class="material-symbols-outlined text-[10px] leading-none">refresh</span>
