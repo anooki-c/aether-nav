@@ -220,10 +220,13 @@ function onLogin() {
           :class="collapsed ? 'flex-col px-0 pt-1 mx-auto' : 'px-6'"
           @click="goFront"
         >
-          <div class="w-10 h-10 rounded-lg bg-brand flex items-center justify-center text-white text-xl font-bold shadow-fab">云</div>
+          <div class="w-10 h-10 rounded-lg bg-brand flex items-center justify-center text-white text-xl font-bold shadow-fab overflow-hidden">
+            <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
+            <span v-else>云</span>
+          </div>
           <div :class="collapsed ? 'hidden' : ''">
-            <h1 class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed">云航导航</h1>
-            <p class="font-label-sm text-label-sm text-on-surface-variant">个人导航主页</p>
+            <h1 class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed">{{ store.siteName }}</h1>
+            <p class="font-label-sm text-label-sm text-on-surface-variant">{{ store.siteSubtitle || '个人导航主页' }}</p>
           </div>
         </button>
 

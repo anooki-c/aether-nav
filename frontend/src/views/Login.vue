@@ -49,11 +49,12 @@ function enterAsGuest() {
     <main class="w-full max-w-[420px] bg-surface/70 backdrop-blur-xl rounded-[1.25rem] shadow-[0_8px_32px_rgba(83,65,205,0.06)] border border-outline-variant/40 p-8 relative z-10 flex flex-col gap-unit-24">
       <!-- Header -->
       <div class="flex flex-col items-center text-center">
-        <div class="w-16 h-16 bg-primary-container text-on-primary-container rounded-[1rem] flex items-center justify-center shadow-sm mb-4">
-          <span class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+        <div class="w-16 h-16 bg-primary-container text-on-primary-container rounded-[1rem] flex items-center justify-center shadow-sm mb-4 overflow-hidden">
+          <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
+          <span v-else class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'FILL' 1;">dashboard</span>
         </div>
-        <h1 class="font-headline-lg text-headline-lg text-primary tracking-tight mb-1">云航导航</h1>
-        <p class="font-body-md text-body-md text-secondary">你的个人导航主页</p>
+        <h1 class="font-headline-lg text-headline-lg text-primary tracking-tight mb-1">{{ store.siteName }}</h1>
+        <p class="font-body-md text-body-md text-secondary">{{ store.siteSubtitle || '你的个人导航主页' }}</p>
       </div>
 
       <!-- Form -->

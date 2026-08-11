@@ -1030,6 +1030,10 @@ def get_settings():
         "show_password_lock": Setting.get("show_password_lock", "true") == "true",
         # 局域网网段（自定义，用于快速添加时识别内网地址）
         "lan_cidrs": Setting.get("lan_cidrs", "") or "",
+        # 站点品牌（自定义 logo / 名称 / 副标题，系统设置第三列「站点品牌」）
+        "site_name": Setting.get("site_name", "云航导航") or "云航导航",
+        "site_subtitle": Setting.get("site_subtitle", "") or "",
+        "site_logo": Setting.get("site_logo", "") or "",
         "token_max_age_hours": int(Setting.get("token_max_age_hours", "168") or 168),
         # 访问日志保留天数（用于统计页数据清理）
         "log_retention_days": int(Setting.get("log_retention_days", "90") or 90),
@@ -1049,6 +1053,7 @@ def update_settings(user):
         "allow_register", "default_role", "token_max_age_hours",
         "log_retention_days", "show_personal_settings", "show_admin_console",
         "lan_cidrs", "show_password_lock", "color_scheme", "show_category_colors",
+        "site_name", "site_subtitle", "site_logo",
     }
     saved = {}
     for k in whitelist:

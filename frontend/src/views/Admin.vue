@@ -737,6 +737,11 @@ const showCategoryColors = ref(false)
 
 // 局域网网段（快速添加时用于识别内网地址，缺省走 RFC1918 私有段）
 const lanCidrs = ref('')
+// 站点品牌（第三列「站点品牌」分组）：logo / 名称 / 副标题
+const siteName = ref('云航导航')
+const siteSubtitle = ref('')
+const siteLogo = ref('')
+const logoUploading = ref(false)
 
 // ---------- 编辑链接弹窗：图标接口选择（下拉 + 获取） ----------
 const editIconProviders = ref([])        // /api/icon/providers 返回的清单
@@ -786,6 +791,9 @@ async function fetchSettings() {
     siteColorScheme.value = data.color_scheme || 'default'
     showCategoryColors.value = data.show_category_colors === true
     lanCidrs.value = data.lan_cidrs || ''
+    siteName.value = data.site_name || '云航导航'
+    siteSubtitle.value = data.site_subtitle || ''
+    siteLogo.value = data.site_logo || ''
   } catch (e) {
     // 读取失败时保留默认值
   }
@@ -813,11 +821,31 @@ async function saveSettings() {
       color_scheme: siteColorScheme.value,
       show_category_colors: showCategoryColors.value,
       lan_cidrs: lanCidrs.value,
+      site_name: siteName.value,
+      site_subtitle: siteSubtitle.value,
+      site_logo: siteLogo.value,
     })
     // 同步到全局 store，前台无需刷新即可生效（如搜索框位置）
     await loadSettings()
     msg.value = '设置已保存'
   } catch (e) { msg.value = e.message }
+}
+
+// 站点 logo 上传：复用 /api/upload/icon，返回本地路径写回 site_logo
+async function onLogoUpload(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  logoUploading.value = true
+  try {
+    const data = await api.uploadIcon(file)
+    siteLogo.value = data.path
+    msg.value = 'Logo 已上传，记得点「保存更改」生效'
+  } catch (err) {
+    msg.value = err.message || 'Logo 上传失败'
+  } finally {
+    logoUploading.value = false
+    e.target.value = ''
+  }
 }
 
 // ---------- 权限审计日志 ----------
@@ -927,7 +955,7 @@ onMounted(async () => {
       <button class="px-6 pt-6 pb-6 border-b border-outline-variant/30 flex items-center gap-3 text-left hover:opacity-80 transition-opacity" @click="router.push('/')">
         <div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg shadow-sm">云</div>
         <div>
-          <div class="font-headline-sm text-headline-sm font-bold text-primary">云航导航</div>
+          <div class="font-headline-sm text-headline-sm font-bold text-primary">{{ siteName }}</div>
           <div class="font-label-sm text-label-sm text-secondary">管理控制台</div>
         </div>
       </button>
@@ -958,9 +986,12 @@ onMounted(async () => {
     <transition name="drawer">
       <aside v-if="adminNavOpen" class="fixed left-0 top-0 h-full w-[260px] max-w-[85vw] bg-surface shadow-xl z-50 flex flex-col md:hidden">
         <div class="px-6 pt-6 pb-6 border-b border-outline-variant/30 flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg shadow-sm">云</div>
+          <div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden">
+            <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
+            <span v-else>云</span>
+          </div>
           <div>
-            <div class="font-headline-sm text-headline-sm font-bold text-primary">云航导航</div>
+            <div class="font-headline-sm text-headline-sm font-bold text-primary">{{ siteName }}</div>
             <div class="font-label-sm text-label-sm text-secondary">管理控制台</div>
           </div>
         </div>
@@ -994,8 +1025,9 @@ onMounted(async () => {
             <span class="material-symbols-outlined">menu</span>
           </button>
           <button class="flex items-center gap-2 font-headline-md text-headline-md font-bold text-primary hidden md:block hover:opacity-80 transition-opacity" @click="router.push('/')">
-            <span class="material-symbols-outlined text-primary">cloud</span>
-            云航导航
+            <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-6 h-6 object-contain" />
+            <span v-else class="material-symbols-outlined text-primary">cloud</span>
+            {{ siteName }}
           </button>
         </div>
         <div class="flex items-center gap-2">
@@ -1847,6 +1879,52 @@ onMounted(async () => {
 
               <!-- 右列：显示 / 外观 -->
               <div class="flex flex-col gap-6 md:pl-6">
+
+                <!-- 站点品牌 -->
+                <div class="flex flex-col">
+                  <div class="flex items-center gap-2.5 pb-3">
+                    <span class="material-symbols-outlined text-primary text-[20px]">badge</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">站点品牌</h3>
+                  </div>
+                  <!-- logo -->
+                  <div class="flex items-center gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="w-14 h-14 rounded-xl bg-surface-container-high border border-outline-variant/50 flex items-center justify-center shrink-0 overflow-hidden">
+                      <img v-if="siteLogo" :src="siteLogo" alt="logo" class="w-full h-full object-contain" />
+                      <span v-else class="material-symbols-outlined text-[26px] text-on-surface-variant">image</span>
+                    </div>
+                    <div class="flex flex-col gap-2 min-w-0">
+                      <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high text-on-surface-variant hover:bg-surface-variant text-sm cursor-pointer transition-colors w-fit">
+                        <span class="material-symbols-outlined text-[18px]">upload</span>
+                        {{ logoUploading ? '上传中…' : '上传 Logo' }}
+                        <input type="file" accept="image/*" class="hidden" :disabled="logoUploading" @change="onLogoUpload" />
+                      </label>
+                      <button type="button" v-if="siteLogo" class="text-xs text-error text-left hover:underline w-fit" @click="siteLogo = ''">移除 Logo</button>
+                    </div>
+                  </div>
+                  <!-- logo 链接 / emoji -->
+                  <div class="flex flex-col gap-1.5 pt-3">
+                    <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">Logo 地址或 Emoji</label>
+                    <input v-model="siteLogo" type="text"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      placeholder="留空则用默认；可填 /uploads/xxx.png 或 🚀 这类 emoji" />
+                    <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">上传会自动填入此处；也可手动粘贴图片 URL 或 emoji 作为站点图标。</p>
+                  </div>
+                  <!-- 名称 -->
+                  <div class="flex flex-col gap-1.5 pt-4">
+                    <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">网站名称</label>
+                    <input v-model="siteName" type="text"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      placeholder="云航导航" />
+                  </div>
+                  <!-- 副标题 -->
+                  <div class="flex flex-col gap-1.5 pt-4">
+                    <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">副标题</label>
+                    <input v-model="siteSubtitle" type="text"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      placeholder="个人导航主页" />
+                    <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">显示在名称下方；留空则不显示。</p>
+                  </div>
+                </div>
 
                 <!-- 显示设置 -->
                 <div class="flex flex-col">

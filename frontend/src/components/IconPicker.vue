@@ -8,6 +8,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:open', 'pick'])
 
+// 图标来源切换：系统图标（Material Symbols）/ 表情符号（emoji）
+const activeTab = ref('symbol')
+
 // 常用 Material Symbols 图标（可按需继续扩充）；点击即复制其代码
 const ICONS = [
   // 通用 / 界面
@@ -57,6 +60,54 @@ const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return ICONS
   return ICONS.filter((n) => n.includes(q))
+})
+
+// 表情符号（新增图标源）：每项 [emoji, 关键字(中/英，用于搜索)]
+const EMOJI = [
+  ['🚀', 'rocket 火箭 发射 启动'], ['🌐', 'globe 地球 网络 全球'], ['💡', 'idea 灯泡 点子 灵感'],
+  ['🔧', 'wrench 扳手 工具 设置'], ['⚙️', 'gear 齿轮 设置 配置'], ['📊', 'chart 图表 统计 数据'],
+  ['📈', 'trend 上涨 增长 曲线'], ['📉', 'down 下跌 下降'], ['📁', 'folder 文件夹 文件'],
+  ['📂', 'folder 打开 文件夹'], ['📄', 'doc 文档 文件'], ['📝', 'edit 笔记 编辑 记录'],
+  ['📌', 'pin 图钉 置顶 标记'], ['🔖', 'bookmark 书签 收藏'], ['🏠', 'home 家 主页 首页'],
+  ['🏢', 'building 公司 企业 办公'], ['🏬', 'shop 商场 门店'], ['🏭', 'factory 工厂 生产'],
+  ['💻', 'computer 电脑 笔记本'], ['🖥️', 'desktop 台式机 显示器'], ['💾', 'save 保存 软盘 存储'],
+  ['💽', 'disk 磁盘 存储'], ['🖱️', 'mouse 鼠标'], ['⌨️', 'keyboard 键盘'],
+  ['📱', 'phone 手机 移动'], ['📞', 'call 电话 联系'], ['📧', 'mail 邮件 邮箱'],
+  ['✉️', 'envelope 信 邮件'], ['📨', 'inbox 收件 消息'], ['🔔', 'bell 铃铛 通知 提醒'],
+  ['🔍', 'search 搜索 查找'], ['🔎', 'search 放大镜 查找'], ['🌟', 'star 星 收藏 推荐'],
+  ['⭐', 'star 星标 收藏'], ['✨', 'sparkle 闪光 亮点'], ['🎯', 'target 目标 靶心'],
+  ['🔒', 'lock 锁 安全 加密'], ['🔓', 'unlock 解锁 打开'], ['🔑', 'key 钥匙 权限 密码'],
+  ['🛡️', 'shield 盾 安全 保护'], ['🔐', 'secure 安全 锁'], ['👤', 'user 用户 人 账户'],
+  ['👥', 'users 团队 群组 多用户'], ['👑', 'crown 皇冠 管理员 特权'], ['🧑‍💻', 'developer 开发 程序员'],
+  ['🧠', 'brain 大脑 智能 ai'], ['🤖', 'robot 机器人 ai 自动化'], ['⚡', 'bolt 闪电 快 能量'],
+  ['🔥', 'fire 火 热门 活跃'], ['❄️', 'snow 雪 冷 冰冻'], ['🌈', 'rainbow 彩虹 色彩'],
+  ['🌙', 'moon 月亮 夜间 暗'], ['☀️', 'sun 太阳 白天 亮'], ['🌤️', 'weather 天气 晴'],
+  ['☁️', 'cloud 云 天气'], ['🌧️', 'rain 雨 天气'], ['⛅', 'partly 多云 天气'],
+  ['💧', 'water 水 水滴'], ['🌊', 'wave 海浪 水'], ['🌱', 'plant 植物 成长 绿'],
+  ['🌳', 'tree 树 森林'], ['🌸', 'flower 花 樱花'], ['🍀', 'clover 幸运 四叶草'],
+  ['🐱', 'cat 猫 宠物'], ['🐶', 'dog 狗 宠物'], ['🦊', 'fox 狐狸'],
+  ['🐳', 'whale 鲸鱼'], ['🐝', 'bee 蜜蜂'], ['🦋', 'butterfly 蝴蝶'],
+  ['🍎', 'apple 苹果 水果'], ['☕', 'coffee 咖啡 饮品'], ['🍵', 'tea 茶'],
+  ['🍔', 'burger 汉堡 食物'], ['🍕', 'pizza 披萨'], ['🎮', 'game 游戏 手柄'],
+  ['🎲', 'dice 骰子 随机'], ['🎨', 'art 画 艺术 设计'], ['🎵', 'music 音乐 音符'],
+  ['🎬', 'movie 电影 视频'], ['📺', 'tv 电视'], ['📷', 'camera 相机 拍照'],
+  ['💰', 'money 钱 财富 金币'], ['💎', 'gem 钻石 宝石 珍贵'], ['🏆', 'trophy 奖杯 冠军 成就'],
+  ['🥇', 'gold 金牌 第一'], ['❤️', 'heart 心 喜欢 爱'], ['💬', 'chat 聊天 对话 评论'],
+  ['💡', 'bulb 灯泡 提示'], ['🧩', 'puzzle 拼图 模块'], ['🔗', 'link 链接 连接 链'],
+  ['📦', 'box 包裹 容器 部署'], ['🚚', 'truck 货车 物流'], ['🛒', 'cart 购物车 购物'],
+  ['🔭', 'telescope 望远镜 观察'], ['🧭', 'compass 指南针 导航 方向'], ['🗺️', 'map 地图 导航'],
+  ['📍', 'pin 定位 位置'], ['🏷️', 'tag 标签 价格'], ['🧱', 'brick 砖 模块 组件'],
+  ['🔌', 'plug 插头 电源 连接'], ['📡', 'satellite 信号 天线 网络'], ['🛰️', 'satellite 卫星'],
+  ['⏰', 'clock 时钟 时间 提醒'], ['📅', 'calendar 日历 日期'], ['🗓️', 'calendar 日程'],
+  ['✅', 'check 完成 对勾 通过'], ['❌', 'cross 错误 关闭'], ['⚠️', 'warning 警告 注意'],
+  ['🚨', 'alert 警报 紧急'], ['🆘', 'help 求助 急救'], ['📢', 'megaphone 广播 通知 公告'],
+  ['🧪', 'test 实验 测试 试管'], ['🔬', 'microscope 显微镜 研究'], ['🧬', 'dna 基因 生物'],
+  ['💊', 'pill 药 医疗'], ['🏥', 'hospital 医院 医疗'], ['🚑', 'ambulance 救护车'],
+]
+const filteredEmoji = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return EMOJI
+  return EMOJI.filter(([e, k]) => k.toLowerCase().includes(q) || e.includes(q))
 })
 
 async function copyText(text) {
@@ -114,6 +165,22 @@ function close() {
         </button>
       </div>
 
+      <!-- 图标来源切换 -->
+      <div class="px-6 py-3 border-b border-outline-variant/20 shrink-0">
+        <div class="flex items-center bg-surface-container-highest rounded-full p-1 gap-1">
+          <button type="button" class="flex-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-1.5"
+            :class="activeTab === 'symbol' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
+            @click="activeTab = 'symbol'">
+            <span class="material-symbols-outlined text-[18px]">text_decorated</span>系统图标
+          </button>
+          <button type="button" class="flex-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-1.5"
+            :class="activeTab === 'emoji' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
+            @click="activeTab = 'emoji'">
+            <span class="material-symbols-outlined text-[18px]">mood</span>表情符号
+          </button>
+        </div>
+      </div>
+
       <!-- 搜索 -->
       <div class="px-6 py-3 border-b border-outline-variant/20 shrink-0">
         <div class="relative">
@@ -130,26 +197,46 @@ function close() {
 
       <!-- 图标网格 -->
       <div class="flex-1 overflow-y-auto p-4">
-        <div v-if="!filtered.length" class="text-center py-16 text-on-surface-variant">
-          <span class="material-symbols-outlined text-4xl">search_off</span>
-          <p class="mt-2 font-body-sm text-body-sm">没有匹配的图标</p>
-        </div>
-        <div v-else class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-          <button
-            v-for="n in filtered"
-            :key="n"
-            class="flex flex-col items-center justify-center gap-1 py-3 rounded-xl border border-transparent hover:border-primary/40 hover:bg-primary-fixed/30 transition-[transform,background-color,border-color] active:scale-95 group"
-            :title="`点击复制：${n}`"
-            @click="onPick(n)"
-          >
-            <span class="material-symbols-outlined text-[26px] text-on-surface group-hover:text-primary">{{ n }}</span>
-            <span class="font-label-sm text-label-sm text-on-surface-variant truncate max-w-full px-1 group-hover:text-primary">{{ n }}</span>
-          </button>
-        </div>
+        <!-- 系统图标（Material Symbols） -->
+        <template v-if="activeTab === 'symbol'">
+          <div v-if="!filtered.length" class="text-center py-16 text-on-surface-variant">
+            <span class="material-symbols-outlined text-4xl">search_off</span>
+            <p class="mt-2 font-body-sm text-body-sm">没有匹配的图标</p>
+          </div>
+          <div v-else class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+            <button
+              v-for="n in filtered"
+              :key="n"
+              class="flex flex-col items-center justify-center gap-1 py-3 rounded-xl border border-transparent hover:border-primary/40 hover:bg-primary-fixed/30 transition-[transform,background-color,border-color] active:scale-95 group"
+              :title="`点击复制：${n}`"
+              @click="onPick(n)"
+            >
+              <span class="material-symbols-outlined text-[26px] text-on-surface group-hover:text-primary">{{ n }}</span>
+              <span class="font-label-sm text-label-sm text-on-surface-variant truncate max-w-full px-1 group-hover:text-primary">{{ n }}</span>
+            </button>
+          </div>
+        </template>
+        <!-- 表情符号（emoji） -->
+        <template v-else>
+          <div v-if="!filteredEmoji.length" class="text-center py-16 text-on-surface-variant">
+            <span class="material-symbols-outlined text-4xl">search_off</span>
+            <p class="mt-2 font-body-sm text-body-sm">没有匹配的符号</p>
+          </div>
+          <div v-else class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+            <button
+              v-for="[e] in filteredEmoji"
+              :key="e"
+              class="flex items-center justify-center py-2.5 rounded-xl border border-transparent hover:border-primary/40 hover:bg-primary-fixed/30 transition-[transform,background-color,border-color] active:scale-95 text-[26px] leading-none"
+              :title="`点击选用：${e}`"
+              @click="onPick(e)"
+            >{{ e }}</button>
+          </div>
+        </template>
       </div>
 
       <div class="px-6 py-2.5 border-t border-outline-variant/20 text-center shrink-0">
-        <span class="font-label-sm text-label-sm text-on-surface-variant">共 {{ filtered.length }} 个图标 · 点击下方任意图标即可选用</span>
+        <span class="font-label-sm text-label-sm text-on-surface-variant" v-if="activeTab === 'symbol'">共 {{ filtered.length }} 个图标 · 点击下方任意图标即可选用</span>
+        <span class="font-label-sm text-label-sm text-on-surface-variant" v-else>共 {{ filteredEmoji.length }} 个表情符号 · 点击下方任意表情即可选用</span>
       </div>
     </div>
   </div>

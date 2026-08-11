@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { setAuth, loadMe, loadTree } from '../store'
+import { setAuth, loadMe, loadTree, store } from '../store'
 import { api } from '../api/client'
 
 const router = useRouter()
@@ -51,7 +51,7 @@ async function submit() {
           <div class="w-12 h-12 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary mb-2">
             <span class="material-symbols-outlined" style="font-size: 28px;">explore</span>
           </div>
-          <h1 class="font-headline-lg text-headline-lg text-on-surface">云航导航</h1>
+          <h1 class="font-headline-lg text-headline-lg text-on-surface">{{ store.siteName }}</h1>
           <p class="font-body-sm text-body-sm text-on-surface-variant">创建你的个人导航主页</p>
         </div>
 

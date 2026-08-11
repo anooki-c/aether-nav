@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api/client'
+import { store } from '../store'
 
 const router = useRouter()
 const username = ref('')
@@ -48,7 +49,7 @@ async function submit() {
           <div class="w-12 h-12 bg-primary-container rounded-xl flex items-center justify-center mb-4 shadow-sm">
             <span class="material-symbols-outlined text-on-primary-container" style="font-size: 24px;">ac_unit</span>
           </div>
-          <h1 class="font-headline-lg text-headline-lg text-text-primary text-center">云航导航</h1>
+          <h1 class="font-headline-lg text-headline-lg text-text-primary text-center">{{ store.siteName }}</h1>
           <p class="font-body-md text-body-md text-text-secondary mt-2 text-center">请在下方输入你的新密码</p>
         </div>
 

@@ -68,6 +68,10 @@ export const store = reactive({
   showPersonalSettings: true,
   showAdminConsole: true,
   showPasswordLock: true, // 站点设置：是否显示密码锁标识（仅影响显示）
+  // 站点品牌（系统设置「站点品牌」自定义）：logo 图片路径 / 名称 / 副标题
+  siteName: '云航导航',
+  siteSubtitle: '',
+  siteLogo: '',
   sidebarCollapsed: false, // 桌面端侧边栏是否折叠
   activeCategoryId: null, // 侧边栏高亮（点击分类跳转后）
   scrollTargetId: null, // 需要滚动到的分类 id
@@ -127,8 +131,14 @@ export async function loadSettings() {
     store.showAdminConsole = data.show_admin_console !== false
     store.showPasswordLock = data.show_password_lock !== false
     store.lanCidrs = data.lan_cidrs || ''
+    // 站点品牌（自定义 logo / 名称 / 副标题）
+    store.siteName = data.site_name || '云航导航'
+    store.siteSubtitle = data.site_subtitle || ''
+    store.siteLogo = data.site_logo || ''
     // 应用站点默认配色方案（登录用户若设置了个人配色，会在 loadMe→applyUserPrefs 中覆盖）
     applyColorScheme(store.siteColorScheme, false)
+    // 同步浏览器标签标题为站点名称
+    if (typeof document !== 'undefined') document.title = store.siteName
   } catch (e) {
     store.dragSortEnabled = true
     store.searchBoxPos = 'fixed'
