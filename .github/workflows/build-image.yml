@@ -15,7 +15,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 首次构建拉两个基础镜像 + npm/pip 安装较慢，给 30 分钟保护，避免长时间空转
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -33,13 +32,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # tag 规则：tag 推送时生成 semver 标签；所有触发方式都生成 latest
           tags: |
-            # 由 tag 名推导：v0.5.0 -> 0.5.0 / 0.5 / 0（仅 tag 触发时生效）
-            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{major}},enable=${{ startsWith(github.ref, 'refs/tags/') }}
-            # 手动触发或 tag 推送都打 latest
-            type=raw,value=latest,enable=${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+            type=sha,prefix=
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -49,10 +48,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          # fallback：如果 metadata-action 未产出任何 tag（极端情况），使用 latest 兜底
+          tags: ${{ steps.meta.outputs.tags != '' && steps.meta.outputs.tags || format('ghcr.io/{0}:latest', github.repository) }}
           labels: ${{ steps.meta.outputs.labels }}
-          # 仅缓存最终导出层（min），避免首次把全部中间层上传为缓存而拖慢 push
           cache-from: type=gha
           cache-to: type=gha
-          # 关闭 SLSA 构建证明生成，减少 push 阶段耗时与偶发卡顿
           provenance: false
