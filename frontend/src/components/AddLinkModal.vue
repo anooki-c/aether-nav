@@ -18,7 +18,7 @@ const form = ref({
   url_internal: '',
   category_id: null,
   icon: '',
-  permission: 'all',
+  permission: 'admin',
   enablePwd: false,
   pwdNew: '',
   pwdConfirm: '',
@@ -70,7 +70,7 @@ watch(() => props.open, (v) => {
     // 每次打开重置表单
     form.value = {
       title: '', description: '', url_external: '', url_internal: '',
-      category_id: null, icon: '', permission: 'all', enablePwd: false, pwdNew: '', pwdConfirm: '',
+      category_id: null, icon: '', permission: 'admin', enablePwd: false, pwdNew: '', pwdConfirm: '',
     }
     catParent.value = ''
     error.value = ''

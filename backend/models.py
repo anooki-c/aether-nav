@@ -74,8 +74,11 @@ class Category(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     # 是否已移入回收站（归档）：归档后前台不再显示，但保留数据可恢复
     archived = db.Column(db.Boolean, default=False)
-    # 分类按角色可见的「白名单」（L1b）：逗号分隔 "admin,member"；NULL/空 = 所有角色可见
+    # 分类按角色可见的「白名单」（L1b，旧模型，已废弃）：逗号分隔 "admin,member"；NULL/空 = 所有角色可见
     allowed_roles = db.Column(db.String(64), nullable=True)
+    # 分类可见权限（与链接权限一致）：all=所有人；registered=登录用户；admin=仅管理员与所有者；self=仅所有者
+    # 新建分类默认 registered；新建子分类继承父分类权限（见 create_category）。
+    permission = db.Column(db.String(16), default="all")
     color = db.Column(db.String(16), default="#6C5CE7")
     description = db.Column(db.String(256))
     position = db.Column(db.Integer, default=0)
@@ -96,6 +99,7 @@ class Category(db.Model):
             "owner_id": self.owner_id,
             "archived": bool(self.archived),
             "allowed_roles": self.allowed_roles or "",
+            "permission": self.permission or "all",
             "color": self.color,
             "description": self.description,
             "position": self.position,
@@ -343,11 +347,20 @@ def visible_links_for(user):
         # L1a 分类全局隐藏：对所有人生效，含管理员；即使有 grant 也无法复活
         if l.category_id in hidden_cat:
             continue
-        # L1b 分类角色白名单
+        # L1b 分类权限门禁（与链接权限同构：all/registered/admin/self）
         cat = cat_cache.get(l.category_id)
-        if cat is not None and cat.allowed_roles:
-            allowed = [r.strip() for r in cat.allowed_roles.split(",") if r.strip()]
-            if allowed and role not in allowed:
+        if cat is not None:
+            cp = (cat.permission or "all").strip()
+            cat_ok = True
+            if cp == "registered":
+                cat_ok = uid is not None
+            elif cp == "admin":
+                cat_ok = (role == "admin") or (cat.owner_id == uid)
+            elif cp == "self":
+                cat_ok = cat.owner_id == uid
+            elif cp != "all":
+                cat_ok = True
+            if not cat_ok:
                 continue
         # L2 链接基础权限
         perm = (l.permission or "all").strip()

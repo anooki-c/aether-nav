@@ -20,7 +20,7 @@ const title = ref('')
 const description = ref('')
 const category_id = ref(null)
 const icon = ref('')           // 自动识别填入，也可手动/图标库修改
-const permission = ref('all')
+const permission = ref('admin')
 const enablePwd = ref(false)
 const pwdNew = ref('')
 const pwdConfirm = ref('')
@@ -96,7 +96,7 @@ watch(() => props.open, (v) => {
     description.value = ''
     category_id.value = null
     icon.value = ''
-    permission.value = 'all'
+    permission.value = 'admin'
     enablePwd.value = false
     pwdNew.value = ''
     pwdConfirm.value = ''

@@ -17,6 +17,12 @@ import { parseUrlScheme, buildUrl } from '../utils/urlScheme'
 const router = useRouter()
 const tab = ref('links') // links | categories | users | settings
 const msg = ref('')
+// 移动端后台侧边导航抽屉（md 以下 aside 隐藏，改用抽屉）
+const adminNavOpen = ref(false)
+function switchTab(k) {
+  tab.value = k
+  adminNavOpen.value = false
+}
 
 const isAdmin = computed(() => store.user && store.user.role === 'admin')
 // 鉴权是否已出结果：有 token 但 user 还没拉回来时视为「加载中」，
@@ -259,7 +265,7 @@ function openEdit(l) {
     category_id: l.category_id,
     icon: l.icon || '',
     description: l.description || '',
-    permission: l.permission || 'public',
+    permission: l.permission || 'admin',
     enablePwd: !!l.has_password,
     pwdNew: '',
     pwdConfirm: '',
@@ -397,14 +403,25 @@ const roleOptions = [
   { value: 'member', label: '成员' },
   { value: 'guest', label: '访客' },
 ]
+// 分类权限（与链接权限一致：all/registered/admin/self）
+const PERM_OPTIONS = [
+  { value: 'all', label: '🌐 所有人 — 所有访客均可访问' },
+  { value: 'registered', label: '👤 注册用户 — 登录后可见' },
+  { value: 'admin', label: '🛡️ 管理员 — 仅管理员与所有者可见' },
+  { value: 'self', label: '🔒 仅自己 — 只有你能看到' },
+]
 function parseRoles(s) {
   return (s || '').split(',').map((x) => x.trim()).filter(Boolean)
 }
+// 父分类权限变更级联确认（item 8）
+const showPermCascade = ref(false)
+const permCascadeCount = ref(0)
+const catFormOrigPerm = ref(null)
 
 const catParentOptions = computed(() =>
   store.tree.filter((p) => p.id !== selectedCat.value)
 )
-const catForm = ref({ id: null, name: '', parent_id: null, icon: '', color: '#6C5CE7', visible: true, archived: false, description: '', allowed_roles: [] })
+const catForm = ref({ id: null, name: '', parent_id: null, icon: '', color: '#6C5CE7', visible: true, archived: false, description: '', permission: 'registered', allowed_roles: [] })
 
 // 当前用户能否编辑某个分类：仅管理员可编辑/删除；普通成员只能「添加」分类，不能修改（含自己创建的）
 function canEditCat(c) {
@@ -413,12 +430,24 @@ function canEditCat(c) {
 function selectCat(c) {
   if (!canEditCat(c)) return
   selectedCat.value = c.id
-  catForm.value = { id: c.id, name: c.name, parent_id: c.parent_id || null, icon: c.icon || '', color: c.color || '#6C5CE7', visible: c.visible !== false, archived: c.archived === true, description: c.description || '', allowed_roles: parseRoles(c.allowed_roles) }
+  catForm.value = { id: c.id, name: c.name, parent_id: c.parent_id || null, icon: c.icon || '', color: c.color || '#6C5CE7', visible: c.visible !== false, archived: c.archived === true, description: c.description || '', permission: c.permission || 'all', allowed_roles: parseRoles(c.allowed_roles) }
+  catFormOrigPerm.value = c.permission || 'all'
 }
 function newCatMode() {
   selectedCat.value = null
-  catForm.value = { id: null, name: '', parent_id: null, icon: '', color: '#6C5CE7', visible: true, archived: false, description: '', allowed_roles: [] }
+  catForm.value = { id: null, name: '', parent_id: null, icon: '', color: '#6C5CE7', visible: true, archived: false, description: '', permission: 'registered', allowed_roles: [] }
+  catFormOrigPerm.value = null
 }
+// 新建子分类时，若未手动改过权限，则继承父分类权限（item 8：子分类没有设置则继承父分类）
+watch(
+  () => catForm.value.parent_id,
+  (pid) => {
+    if (!selectedCat.value && pid) {
+      const p = store.tree.find((x) => x.id === Number(pid))
+      if (p && p.permission) catForm.value.permission = p.permission
+    }
+  }
+)
 async function restoreCat(c) {
   if (!canEditCat(c)) return
   try {
@@ -438,6 +467,25 @@ async function restoreCurrent() {
 }
 async function saveCat() {
   if (!catForm.value.name.trim()) { msg.value = '请填写分类名称'; return }
+  // 编辑态 + 管理员 + 父分类存在子分类：若权限被改动且子分类权限与拟设值不同，
+  // 需用户确认「保持子分类现状」还是「同时应用到所有子分类」（item 8）
+  if (selectedCat.value && isAdmin.value) {
+    const node = selectedCatNode.value
+    const children = (node && node.children) || []
+    const newPerm = catForm.value.permission || 'registered'
+    const permChanged = (catFormOrigPerm.value || 'all') !== newPerm
+    const childDiffers = children.some((c) => (c.permission || 'all') !== newPerm)
+    if (children.length && permChanged && childDiffers) {
+      permCascadeCount.value = children.length
+      showPermCascade.value = true
+      return
+    }
+  }
+  await doSaveCat(false)
+}
+
+// cascade=true 时，父分类权限变更同步应用到全部子分类
+async function doSaveCat(cascade) {
   const payload = {
     name: catForm.value.name,
     icon: catForm.value.icon,
@@ -446,13 +494,20 @@ async function saveCat() {
     description: catForm.value.description,
     archived: catForm.value.archived === true,
   }
-  // 「主页显示」与「可见角色」仅管理员可设置；非管理员不提交（后端也强制忽略）
+  // 「主页显示」与「分类权限」仅管理员可设置；非管理员不提交（后端也强制忽略）
   if (isAdmin.value) {
     payload.visible = catForm.value.visible !== false
-    payload.allowed_roles = catForm.value.allowed_roles || []
+    payload.permission = catForm.value.permission || 'registered'
   }
   if (selectedCat.value) {
     await api.updateCategory(catForm.value.id, payload)
+    if (cascade) {
+      const node = selectedCatNode.value
+      const children = (node && node.children) || []
+      for (const c of children) {
+        await api.updateCategory(c.id, { permission: catForm.value.permission || 'registered' })
+      }
+    }
     msg.value = '分类已保存'
   } else {
     await api.createCategory(payload)
@@ -896,14 +951,53 @@ onMounted(async () => {
       </div>
     </aside>
 
+    <!-- 移动端后台侧边导航抽屉（md 以下显示） -->
+    <transition name="fade">
+      <div v-if="adminNavOpen" class="fixed inset-0 bg-black/40 z-40 md:hidden" @click="adminNavOpen = false"></div>
+    </transition>
+    <transition name="drawer">
+      <aside v-if="adminNavOpen" class="fixed left-0 top-0 h-full w-[260px] max-w-[85vw] bg-surface shadow-xl z-50 flex flex-col md:hidden">
+        <div class="px-6 pt-6 pb-6 border-b border-outline-variant/30 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg shadow-sm">云</div>
+          <div>
+            <div class="font-headline-sm text-headline-sm font-bold text-primary">云航导航</div>
+            <div class="font-label-sm text-label-sm text-secondary">管理控制台</div>
+          </div>
+        </div>
+        <nav class="flex-1 px-4 py-4 flex flex-col gap-1 overflow-y-auto">
+          <button
+            v-for="n in visibleNav"
+            :key="n.k"
+            class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-all"
+            :class="tab === n.k ? 'bg-primary-fixed text-primary font-bold' : 'text-secondary hover:bg-surface-container'"
+            @click="switchTab(n.k)"
+          >
+            <span class="material-symbols-outlined">{{ n.icon }}</span>
+            {{ n.label }}
+          </button>
+        </nav>
+        <div class="p-4 border-t border-outline-variant/30">
+          <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-all" @click="router.push('/'); adminNavOpen = false">
+            <span class="material-symbols-outlined">arrow_back</span>
+            <span class="font-body-md">返回前台</span>
+          </button>
+        </div>
+      </aside>
+    </transition>
+
     <!-- Main column -->
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Top bar -->
       <header class="flex justify-between items-center px-grid-gutter py-3 bg-surface shadow-sm z-30">
-        <button class="flex items-center gap-2 font-headline-md text-headline-md font-bold text-primary hidden md:block hover:opacity-80 transition-opacity" @click="router.push('/')">
-          <span class="material-symbols-outlined text-primary">cloud</span>
-          云航导航
-        </button>
+        <div class="flex items-center gap-2">
+          <button class="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-primary hover:bg-surface-container transition-colors" @click="adminNavOpen = true" title="菜单">
+            <span class="material-symbols-outlined">menu</span>
+          </button>
+          <button class="flex items-center gap-2 font-headline-md text-headline-md font-bold text-primary hidden md:block hover:opacity-80 transition-opacity" @click="router.push('/')">
+            <span class="material-symbols-outlined text-primary">cloud</span>
+            云航导航
+          </button>
+        </div>
         <div class="flex items-center gap-2">
           <UserMenu />
         </div>
@@ -1225,19 +1319,19 @@ onMounted(async () => {
                         <span>{{ catForm.visible !== false ? '显示中（仅管理员可改）' : '已隐藏（仅管理员可改）' }}</span>
                       </div>
                     </div>
-                    <!-- 可见角色白名单（L1b）：仅管理员可设置 -->
+                    <!-- 分类权限（与链接权限一致：all/registered/admin/self），仅管理员可设置 -->
                     <div class="flex items-center justify-between rounded-xl bg-surface-container-low px-4 py-3">
                       <div class="flex flex-col">
-                        <span class="font-body-md text-on-surface">可见角色（白名单）</span>
-                        <span class="font-label-sm text-on-surface-variant">仅所选角色可见该分类；不选则所有角色均可见</span>
+                        <span class="font-body-md text-on-surface">分类权限</span>
+                        <span class="font-label-sm text-on-surface-variant">控制谁能在前台看到该分类及其下的链接</span>
                       </div>
-                      <div v-if="isAdmin" class="flex items-center gap-3 flex-wrap justify-end">
-                        <label v-for="r in roleOptions" :key="r.value" class="flex items-center gap-1 text-label-sm cursor-pointer select-none">
-                          <input type="checkbox" :value="r.value" v-model="catForm.allowed_roles" class="accent-primary" />
-                          {{ r.label }}
-                        </label>
+                      <div v-if="isAdmin" class="flex items-center gap-3 flex-wrap justify-end w-[55%]">
+                        <select v-model="catForm.permission"
+                          class="w-full px-3 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer">
+                          <option v-for="p in PERM_OPTIONS" :key="p.value" :value="p.value">{{ p.label }}</option>
+                        </select>
                       </div>
-                      <div v-else class="flex items-center gap-1 text-label-sm text-on-surface-variant opacity-70" title="仅管理员可设置可见角色">
+                      <div v-else class="flex items-center gap-1 text-label-sm text-on-surface-variant opacity-70" title="仅管理员可设置分类权限">
                         <span class="material-symbols-outlined text-[16px]">lock</span>
                         <span>仅管理员可设置</span>
                       </div>
@@ -1314,6 +1408,27 @@ onMounted(async () => {
               <div class="px-6 py-4 border-t border-surface-variant flex items-center justify-end gap-3 bg-surface-container-lowest">
                 <button class="px-4 py-2 rounded-lg font-body-sm text-secondary hover:bg-surface-container transition-colors" @click="showCatDel = false">取消</button>
                 <button class="px-4 py-2 rounded-lg font-body-sm bg-error text-on-error hover:opacity-90 transition-colors" @click="confirmCatDel">确认删除</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 父分类权限变更 → 子分类级联确认（item 8） -->
+          <div v-if="showPermCascade" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="showPermCascade = false">
+            <div class="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+              <div class="px-6 py-4 border-b border-surface-variant flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">account_tree</span>
+                <h3 class="font-headline-sm text-on-surface">同步子分类权限</h3>
+              </div>
+              <div class="p-6 flex flex-col gap-4">
+                <p class="font-body-sm text-on-surface-variant">
+                  该父分类下共有 <b>{{ permCascadeCount }}</b> 个子分类，且权限与拟设值不同。是否同时将新权限应用到这些子分类？
+                </p>
+                <p class="font-label-sm text-on-surface-variant opacity-80">选择「保持现状」则仅修改父分类，子分类权限不变。</p>
+                <div class="flex justify-end gap-3 pt-2">
+                  <button class="px-4 py-2 rounded-lg font-body-sm text-secondary hover:bg-surface-container transition-colors" @click="showPermCascade = false">取消</button>
+                  <button class="px-4 py-2 rounded-lg font-body-sm bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors" @click="showPermCascade = false; doSaveCat(false)">保持现状（仅父分类）</button>
+                  <button class="px-4 py-2 rounded-lg font-body-sm bg-primary text-on-primary hover:opacity-90 transition-colors" @click="showPermCascade = false; doSaveCat(true)">同时应用到子分类</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2165,3 +2280,23 @@ onMounted(async () => {
     <IconPicker :open="editIconPickerOpen" title="选择链接图标" @update:open="editIconPickerOpen = $event" @pick="onPickEditIcon" />
   </div>
 </template>
+
+<style scoped>
+/* 移动端后台抽屉 / 遮罩淡入淡出 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s cubic-bezier(0.32, 0.72, 1);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.drawer-enter-from,
+.drawer-leave-to {
+  transform: translateX(-100%);
+}
+</style>

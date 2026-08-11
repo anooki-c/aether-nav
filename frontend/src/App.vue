@@ -54,7 +54,9 @@ function onSearchNav() {
   focusSearch()
 }
 function onProfileNav() {
-  openDrawer()
+  // 移动端「我的」：已登录 → 个人设置；未登录 → 登录页（不再打开侧边栏抽屉）
+  if (store.user) router.push('/settings')
+  else router.push('/login')
 }
 
 const TOAST_STYLE = {

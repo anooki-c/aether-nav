@@ -294,8 +294,8 @@ function onLogin() {
           </ul>
         </div>
 
-        <!-- Bottom fixed items（折叠态仅图标居中） -->
-        <div class="mt-auto" :class="collapsed ? 'px-2' : 'px-4'">
+        <!-- Bottom fixed items（折叠态仅图标居中）。移动端抽屉底部加留白，避免被底部导航栏遮挡 -->
+        <div class="mt-auto pb-20 lg:pb-0" :class="collapsed ? 'px-2' : 'px-4'">
           <ul class="space-y-1" :class="collapsed ? 'border-t-0 pt-2' : 'border-t border-outline-variant pt-4'">
             <li>
               <button

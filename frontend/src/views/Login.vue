@@ -1,9 +1,10 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { store, setAuth, loadMe, loadTree } from '../store'
 import { api } from '../api/client'
 
+const route = useRoute()
 const router = useRouter()
 const username = ref('admin')
 const password = ref('admin123')
@@ -19,12 +20,20 @@ async function submit() {
     setAuth(data.token, data.user, remember.value)
     await loadMe()
     await loadTree()
-    router.push('/')
+    // 登录后优先回跳到访问前被拦截的页面（带 redirect 时）；否则回前台首页
+    const redirect = route.query.redirect
+    router.push(typeof redirect === 'string' && redirect ? redirect : '/')
   } catch (e) {
     error.value = e.message || '登录失败'
   } finally {
     loading.value = false
   }
+}
+
+// 游客访问：不登录，直接进入前台首页浏览公开内容（后端按 guest 角色走权限）
+function enterAsGuest() {
+  setAuth('', null)
+  router.push('/')
 }
 </script>
 
@@ -93,6 +102,16 @@ async function submit() {
         >
           <span>{{ loading ? '登录中…' : '登录' }}</span>
           <span class="material-symbols-outlined text-[18px]">login</span>
+        </button>
+
+        <button
+          type="button"
+          class="w-full mt-3 py-2.5 rounded-lg border border-outline-variant/70 text-on-surface-variant font-body-md hover:bg-surface-container transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+          :disabled="loading"
+          @click="enterAsGuest"
+        >
+          <span class="material-symbols-outlined text-[18px]">travel_explore</span>
+          <span>游客访问（仅浏览公开内容）</span>
         </button>
       </form>
 

@@ -54,6 +54,10 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 CORS(app, supports_credentials=True, origins="*")
 db.init_app(app)
 
+# 启动时幂等迁移（新增列等），确保 gunicorn 直启实例也能补齐 schema
+from backend.migrate import run_migrations
+run_migrations(app)
+
 serializer = URLSafeTimedSerializer(Config.TOKEN_SECRET)
 
 
@@ -63,6 +67,28 @@ def token_max_age_seconds():
         return int(Setting.get("token_max_age_hours", "168") or 168) * 3600
     except (TypeError, ValueError):
         return Config.TOKEN_MAX_AGE
+
+
+def _cat_perm_ok(cat, role, uid):
+    """L1b 分类权限门禁（与链接权限同构：all/registered/admin/self）。
+
+    all         : 所有人（含游客）可见
+    registered  : 登录用户可见
+    admin       : 仅管理员与分类所有者可见
+    self        : 仅分类所有者可见
+    """
+    if cat is None:
+        return True
+    cp = (getattr(cat, "permission", None) or "all").strip()
+    if cp == "all":
+        return True
+    if cp == "registered":
+        return uid is not None
+    if cp == "admin":
+        return role == "admin" or cat.owner_id == uid
+    if cp == "self":
+        return cat.owner_id == uid
+    return True
 
 
 # ---------- 鉴权辅助 ----------
@@ -581,6 +607,7 @@ def create_category(user):
     if not name:
         return jsonify({"error": "名称必填"}), 400
     parent_id = data.get("parent_id")
+    parent = None
     if parent_id:
         parent = Category.query.get(parent_id)
         if not parent:
@@ -591,6 +618,13 @@ def create_category(user):
     allowed_roles = data.get("allowed_roles")
     if isinstance(allowed_roles, list):
         allowed_roles = ",".join([str(r) for r in allowed_roles])
+    # 分类权限（与链接一致）：新建子分类继承父分类权限；否则默认 registered（item 9）
+    raw_perm = data.get("permission")
+    if not raw_perm and parent is not None:
+        raw_perm = parent.permission or "registered"
+    perm = (raw_perm or "registered").strip()
+    if perm not in ("all", "registered", "admin", "self"):
+        perm = "registered"
     cat = Category(
         name=name,
         parent_id=parent_id,
@@ -599,6 +633,7 @@ def create_category(user):
         owner_id=user.id,
         archived=False,
         allowed_roles=allowed_roles or None,
+        permission=perm,
         color=data.get("color", "#6C5CE7"),
         description=data.get("description", ""),
         position=base_pos,
@@ -634,12 +669,18 @@ def update_category(user, cat_id):
     old_archived = cat.archived
     if "visible" in data and user.role == "admin":
         cat.visible = bool(data["visible"])
-    # 分类角色白名单（L1b）：仅管理员可设置
+    # 分类角色白名单（L1b，旧模型，已废弃）：仅管理员可设置
     if "allowed_roles" in data and user.role == "admin":
         ar = data["allowed_roles"]
         if isinstance(ar, list):
             ar = ",".join([str(r) for r in ar])
         cat.allowed_roles = ar or None
+    # 分类权限（与链接一致：all/registered/admin/self）：仅管理员可设置
+    old_perm = cat.permission
+    if "permission" in data and user.role == "admin":
+        p = (data["permission"] or "all").strip()
+        if p in ("all", "registered", "admin", "self"):
+            cat.permission = p
     # 回收站（归档）状态：编辑者本人或管理员可改
     if "archived" in data:
         cat.archived = bool(data["archived"])
@@ -664,6 +705,8 @@ def update_category(user, cat_id):
         parts.append("主页显示 %s→%s" % (old_visible, cat.visible))
     if "allowed_roles" in data and user.role == "admin" and cat.allowed_roles != old_ar:
         parts.append("角色白名单 %s→%s" % (old_ar or "全员", cat.allowed_roles or "全员"))
+    if "permission" in data and user.role == "admin" and cat.permission != old_perm:
+        parts.append("分类权限 %s→%s" % (old_perm or "all", cat.permission or "all"))
     if "archived" in data and cat.archived != old_archived:
         parts.append("归档 %s→%s" % (old_archived, cat.archived))
     if parts:
@@ -1700,10 +1743,8 @@ def admin_user_permissions(user, uid):
             return (False, "L0", "账号已禁用（L0 账号墙）")
         if cat is None or cat.id in hidden_cat:
             return (False, "L1a", "所属分类已隐藏或归档（L1a 分类墙）")
-        if cat.allowed_roles:
-            allowed = [r.strip() for r in cat.allowed_roles.split(",") if r.strip()]
-            if allowed and target.role not in allowed:
-                return (False, "L1b", "分类角色白名单不含「%s」（L1b 分类角色）" % target.role)
+        if not _cat_perm_ok(cat, target.role, target.id):
+            return (False, "L1b", "分类权限不足（L1b 分类权限：%s）" % (cat.permission or "all"))
         base = _base_access(l)
         has_grant = l.id in exp_grant
         has_deny = l.id in exp_deny
@@ -1787,10 +1828,8 @@ def admin_set_user_permissions(user, uid):
             return True
         if cat.id in hidden_cat:
             return False
-        if cat.allowed_roles:
-            allowed = [r.strip() for r in cat.allowed_roles.split(",") if r.strip()]
-            if allowed and target.role not in allowed:
-                return False
+        if not _cat_perm_ok(cat, target.role, target.id):
+            return False
         return True
 
     def _base_access(link):
@@ -1891,10 +1930,8 @@ def admin_link_permissions(user, lid):
             return (False, "L0", "账号已禁用（L0 账号墙）")
         if cat is None or cat.id in hidden_cat:
             return (False, "L1a", "所属分类已隐藏或归档（L1a 分类墙）")
-        if cat.allowed_roles:
-            allowed = [r.strip() for r in cat.allowed_roles.split(",") if r.strip()]
-            if allowed and u.role not in allowed:
-                return (False, "L1b", "分类角色白名单不含「%s」（L1b 分类角色）" % u.role)
+        if not _cat_perm_ok(cat, u.role, u.id):
+            return (False, "L1b", "分类权限不足（L1b 分类权限：%s）" % (cat.permission or "all"))
         perm = (link.permission or "all").strip()
         if perm == "all":
             base = True

@@ -10,6 +10,14 @@
 >
 > 完整功能需求见 **[docs/需求文档.md](docs/需求文档.md)**；权限模型设计见 **[docs/权限模型设计.md](docs/权限模型设计.md)**。
 
+## 版本变更
+
+- **v0.3**（本次）：分类权限与链接权限统一为 `all / registered / admin / self` 四档（新增「仅自己」）；
+  路由守卫——未登录访问 `/admin`、`/settings` 自动跳登录并在登录后回跳；登录页新增「游客访问」；
+  移动端「我的」改为进入个人设置/登录、侧边栏底部避让底栏、后台管理页移动端可用抽屉导航；
+  父分类权限变更可级联到子分类（带确认）；新建分类默认 `registered`、新建链接默认 `admin`。
+  **升级时 `backend/migrate.py` 会自动给 `categories` 表加 `permission` 列并回填，无需手动操作。**
+
 ## 目录结构
 
 ```
@@ -112,6 +120,9 @@ docker compose up -d --build      # 构建并启动，监听 http://localhost:50
 
 - `categories`：`parent_id` 为 `NULL` 表示父分类；子分类填父分类的 `id`。`visible`(1/0)、
   `archived`(0)、`color`(如 `#6C5CE7`)、`position`(排序)、`owner_id`(填管理员 `id`，通常 1)。
+  **`permission`**（v0.3 新增）：分类可见权限，取值 `all`(所有人) / `registered`(登录用户) /
+  `admin`(仅管理员与所有者) / `self`(仅所有者)，与链接权限一致；新建分类默认 `registered`，
+  新建子分类继承父分类权限。旧 `allowed_roles` 列已废弃（忽略即可）。
 - `links`：`category_id` 关联 `categories.id`；`url_internal` / `url_external` 至少填一个；
   `title` 必填；`permission` 填 `all`（所有人可见）；`owner_id` 填管理员 `id`；
   `is_active` 填 1；`icon` 可填 `link`。`has_password` 默认 0。

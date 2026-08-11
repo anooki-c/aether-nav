@@ -31,7 +31,9 @@ def seed():
 
 if __name__ == "__main__":
     from backend.app import app
+    from backend.migrate import run_migrations
     with app.app_context():
         db.create_all()
+        run_migrations(app)
         seed()
         print("✅ 初始化完成")
