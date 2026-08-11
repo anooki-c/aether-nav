@@ -897,6 +897,18 @@ def upload_icon(user):
     if not f or not f.filename:
         return jsonify({"error": "未找到文件"}), 400
     ext = os.path.splitext(f.filename)[1].lower()
+    # 裁剪后上传的是 Blob（无文件名/扩展名），按 MIME 兜底推断
+    if ext not in ALLOWED_ICON_EXT:
+        mime = (f.mimetype or "").lower()
+        ext = {
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/webp": ".webp",
+            "image/svg+xml": ".svg",
+            "image/x-icon": ".ico",
+            "image/vnd.microsoft.icon": ".ico",
+        }.get(mime, "")
     if ext not in ALLOWED_ICON_EXT:
         return jsonify({"error": "不支持的图片格式"}), 400
     fname = f"icon_{user.id}_{int(time.time() * 1000)}{ext}"

@@ -67,9 +67,9 @@ export const api = {
   reorderCategories: (ordered) => request('/categories/reorder', json({ ordered })),
 
   // ---------- 图标：上传 / 自动抓取 ----------
-  uploadIcon: (file) => {
+  uploadIcon: (file, filename) => {
     const fd = new FormData()
-    fd.append('file', file)
+    fd.append('file', file, filename || (file && file.name) || 'image.png')
     return request('/upload/icon', { method: 'POST', body: fd })
   },
   // 只解析图标地址填入输入框（不下载），真正落地在提交表单时由后端完成

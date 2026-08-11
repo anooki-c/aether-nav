@@ -3,11 +3,12 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { store, setAuth, loadMe, loadTree } from '../store'
 import { api } from '../api/client'
+import PasswordField from '../components/PasswordField.vue'
 
 const route = useRoute()
 const router = useRouter()
-const username = ref('admin')
-const password = ref('admin123')
+const username = ref('')
+const password = ref('')
 const remember = ref(false)
 const error = ref('')
 const loading = ref(false)
@@ -60,33 +61,29 @@ function enterAsGuest() {
       <!-- Form -->
       <form class="flex flex-col gap-5 mt-2" @submit.prevent="submit">
         <div class="flex flex-col gap-1.5">
-          <label class="font-label-sm text-label-sm text-on-surface-variant ml-1" for="username">用户名</label>
           <div class="relative">
-            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">person</span>
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px] pointer-events-none">person</span>
             <input
               id="username"
               v-model="username"
               type="text"
               class="w-full bg-surface-container-lowest border border-outline-variant/60 rounded-lg pl-10 pr-4 py-3 font-body-md text-body-md text-on-surface placeholder:text-outline/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-sm"
-              placeholder="请输入用户名"
+              placeholder="用户名"
               @keyup.enter="submit"
             />
           </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="font-label-sm text-label-sm text-on-surface-variant ml-1" for="password">密码</label>
-          <div class="relative">
-            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">lock</span>
-            <input
-              id="password"
-              v-model="password"
-              type="password"
-              class="w-full bg-surface-container-lowest border border-outline-variant/60 rounded-lg pl-10 pr-4 py-3 font-body-md text-body-md text-on-surface placeholder:text-outline/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-sm"
-              placeholder="••••••••"
-              @keyup.enter="submit"
-            />
-          </div>
+          <PasswordField
+            id="password"
+            v-model="password"
+            icon="lock"
+            placeholder="密码"
+            autocomplete="current-password"
+            input-class="w-full bg-surface-container-lowest border border-outline-variant/60 rounded-lg py-3 font-body-md text-body-md text-on-surface placeholder:text-outline/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-sm"
+            @enter="submit"
+          />
         </div>
 
         <div class="flex items-center gap-2 ml-1 mt-1">

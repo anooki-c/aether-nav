@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import { store } from '../store'
+import PasswordField from '../components/PasswordField.vue'
 
 const router = useRouter()
 const username = ref('')
@@ -66,21 +67,11 @@ async function submit() {
           </div>
           <div>
             <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1" for="new-password">新密码</label>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span class="material-symbols-outlined text-outline" style="font-size: 18px;">lock</span>
-              </div>
-              <input id="new-password" v-model="newPassword" type="password" class="block w-full pl-10 pr-3 py-2 border border-outline-variant/50 rounded-lg bg-surface-container-lowest font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-colors shadow-sm placeholder:text-outline/50" placeholder="••••••••" />
-            </div>
+            <PasswordField id="new-password" v-model="newPassword" icon="lock" placeholder="••••••••" autocomplete="new-password" input-class="block w-full py-2 border border-outline-variant/50 rounded-lg bg-surface-container-lowest font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-colors shadow-sm placeholder:text-outline/50" />
           </div>
           <div>
             <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1" for="confirm-password">确认新密码</label>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span class="material-symbols-outlined text-outline" style="font-size: 18px;">swipe_left_alt</span>
-              </div>
-              <input id="confirm-password" v-model="confirm" type="password" class="block w-full pl-10 pr-3 py-2 border border-outline-variant/50 rounded-lg bg-surface-container-lowest font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-colors shadow-sm placeholder:text-outline/50" placeholder="••••••••" />
-            </div>
+            <PasswordField id="confirm-password" v-model="confirm" icon="swipe_left_alt" placeholder="••••••••" autocomplete="new-password" input-class="block w-full py-2 border border-outline-variant/50 rounded-lg bg-surface-container-lowest font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-colors shadow-sm placeholder:text-outline/50" />
           </div>
           <p v-if="error" class="text-error font-body-sm text-body-sm">{{ error }}</p>
           <button type="submit" :disabled="loading" class="w-full bg-primary-container hover:bg-primary text-on-primary-container font-headline-sm text-headline-sm py-2.5 px-4 rounded-lg shadow-sm transition-all duration-200 active:scale-[0.98] mt-6 flex items-center justify-center gap-2 group disabled:opacity-50">

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { setAuth, loadMe, loadTree, store } from '../store'
 import { api } from '../api/client'
+import PasswordField from '../components/PasswordField.vue'
 
 const router = useRouter()
 const fullName = ref('')
@@ -71,11 +72,11 @@ async function submit() {
           </div>
           <div class="flex flex-col gap-unit-4">
             <label class="font-label-sm text-label-sm text-on-surface-variant" for="password">密码</label>
-            <input id="password" v-model="password" type="password" class="w-full bg-surface rounded-lg border border-outline-variant px-unit-16 py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" placeholder="••••••••" />
+            <PasswordField id="password" v-model="password" placeholder="••••••••" autocomplete="new-password" input-class="w-full bg-surface rounded-lg border border-outline-variant py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" />
           </div>
           <div class="flex flex-col gap-unit-4">
             <label class="font-label-sm text-label-sm text-on-surface-variant" for="confirmPassword">确认密码</label>
-            <input id="confirmPassword" v-model="confirm" type="password" class="w-full bg-surface rounded-lg border border-outline-variant px-unit-16 py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" placeholder="••••••••" />
+            <PasswordField id="confirmPassword" v-model="confirm" placeholder="••••••••" autocomplete="new-password" input-class="w-full bg-surface rounded-lg border border-outline-variant py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" />
           </div>
           <p v-if="error" class="text-error font-body-sm text-body-sm">{{ error }}</p>
           <div class="pt-unit-8">

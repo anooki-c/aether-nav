@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { store, showToast, applyUserPrefs, COLOR_SCHEMES } from '../store'
 import { api } from '../api/client'
 import EntityIcon from '../components/EntityIcon.vue'
+import PasswordField from '../components/PasswordField.vue'
+import AvatarCropperModal from '../components/AvatarCropperModal.vue'
 
 const router = useRouter()
 
@@ -61,21 +63,43 @@ function resetForm() {
   form.color_scheme = p.color_scheme || store.siteColorScheme || 'default'
 }
 
-/* ── 头像上传 / emoji ─────────────────────────────── */
+/* ── 头像上传 / 裁剪 / emoji ───────────────────── */
+const cropperOpen = ref(false)
+const cropperImage = ref('') // 待裁剪图片的 object URL
+
 function triggerAvatar() {
   avatarInput.value?.click()
 }
-async function onAvatarFile(e) {
+function onAvatarFile(e) {
   const f = e.target.files && e.target.files[0]
+  e.target.value = '' // 立即清空，保证再次选同一文件也能触发 change
   if (!f) return
+  if (cropperImage.value) URL.revokeObjectURL(cropperImage.value)
+  cropperImage.value = URL.createObjectURL(f)
+  cropperOpen.value = true
+}
+function onCropperCancel() {
+  cropperOpen.value = false
+  if (cropperImage.value) {
+    URL.revokeObjectURL(cropperImage.value)
+    cropperImage.value = ''
+  }
+}
+async function onCropperConfirm(blob) {
+  cropperOpen.value = false
+  if (cropperImage.value) {
+    URL.revokeObjectURL(cropperImage.value)
+    cropperImage.value = ''
+  }
+  await uploadAvatarBlob(blob)
+}
+async function uploadAvatarBlob(blob) {
   try {
-    const res = await api.uploadIcon(f)
+    const res = await api.uploadIcon(blob, 'avatar.png')
     form.avatar = res.path
     showToast('头像已上传', 'success')
   } catch (err) {
     showToast(err.message || '头像上传失败', 'error')
-  } finally {
-    e.target.value = ''
   }
 }
 function pickEmoji(em) {
@@ -183,7 +207,7 @@ async function savePassword() {
             <span class="material-symbols-outlined text-[20px]">settings</span>
           </button>
           <div class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-surface-container-highest">
-            <EntityIcon v-if="avatarPreview" :icon="avatarPreview" fallback="person" :size="28" alt="头像" />
+            <EntityIcon v-if="avatarPreview" :icon="avatarPreview" fallback="person" :size="28" alt="头像" :cover="true" />
             <span v-else class="material-symbols-outlined text-[20px] text-on-surface-variant">person</span>
           </div>
         </div>
@@ -198,18 +222,19 @@ async function savePassword() {
 
             <!-- 头像 -->
             <div class="flex items-center gap-5 mb-6">
-              <div class="w-20 h-20 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border-2 border-surface-container-highest shrink-0">
-                <EntityIcon v-if="avatarPreview" :icon="avatarPreview" fallback="person" :size="56" alt="头像" />
-                <span v-else class="material-symbols-outlined text-[40px] text-on-surface-variant">person</span>
-              </div>
+            <div class="w-20 h-20 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border-2 border-surface-container-highest shrink-0">
+              <EntityIcon v-if="avatarPreview" :icon="avatarPreview" fallback="person" :size="56" alt="头像" :cover="true" />
+              <span v-else class="material-symbols-outlined text-[40px] text-on-surface-variant">person</span>
+            </div>
               <div class="space-y-2">
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
                   <button @click="triggerAvatar" class="px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold hover:bg-primary/90 transition-colors">上传图片</button>
                   <button @click="form.avatar = ''" class="px-4 py-2 rounded-xl bg-surface-container text-on-surface-variant text-sm font-semibold hover:bg-surface-container-high transition-colors">清除头像</button>
                   <button @click="showEmoji = !showEmoji" class="px-4 py-2 rounded-xl bg-surface-container text-on-surface-variant text-sm font-semibold hover:bg-surface-container-high transition-colors">
                     {{ showEmoji ? '收起 emoji' : '选择 emoji' }}
                   </button>
                 </div>
+                <p class="text-label-sm text-on-surface-variant/70">上传后会进入裁剪界面，圆形区域即为头像在各页面的显示效果</p>
                 <input ref="avatarInput" type="file" accept="image/*" class="hidden" @change="onAvatarFile" />
               </div>
             </div>
@@ -320,15 +345,15 @@ async function savePassword() {
             <div class="space-y-4 max-w-sm">
               <div>
                 <label class="block text-label-sm text-text-secondary mb-1.5">当前密码</label>
-                <input v-model="pwd.current" type="password" class="w-full px-4 py-2.5 rounded-xl bg-surface-container border border-outline-variant/60 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                <PasswordField v-model="pwd.current" placeholder="请输入当前密码" autocomplete="current-password" input-class="w-full px-4 py-2.5 rounded-xl bg-surface-container border border-outline-variant/60 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
               </div>
               <div>
                 <label class="block text-label-sm text-text-secondary mb-1.5">新密码</label>
-                <input v-model="pwd.next" type="password" class="w-full px-4 py-2.5 rounded-xl bg-surface-container border border-outline-variant/60 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" placeholder="至少 6 位" />
+                <PasswordField v-model="pwd.next" placeholder="至少 6 位" autocomplete="new-password" input-class="w-full px-4 py-2.5 rounded-xl bg-surface-container border border-outline-variant/60 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
               </div>
               <div>
                 <label class="block text-label-sm text-text-secondary mb-1.5">确认新密码</label>
-                <input v-model="pwd.confirm" type="password" class="w-full px-4 py-2.5 rounded-xl bg-surface-container border border-outline-variant/60 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                <PasswordField v-model="pwd.confirm" placeholder="再次输入新密码" autocomplete="new-password" input-class="w-full px-4 py-2.5 rounded-xl bg-surface-container border border-outline-variant/60 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
               </div>
             </div>
             <div class="flex justify-end mt-5">
@@ -370,5 +395,14 @@ async function savePassword() {
       <span class="material-symbols-outlined text-[20px]">arrow_back</span>
       <span class="font-body-sm font-semibold">返回前台</span>
     </button>
+
+    <!-- 头像裁剪弹窗 -->
+    <AvatarCropperModal
+      :open="cropperOpen"
+      :image="cropperImage"
+      @update:open="cropperOpen = $event"
+      @cancel="onCropperCancel"
+      @confirm="onCropperConfirm"
+    />
   </div>
 </template>

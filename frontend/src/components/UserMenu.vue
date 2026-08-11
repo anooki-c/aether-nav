@@ -58,7 +58,7 @@ onBeforeUnmount(() => {
       :title="displayName"
       @click="toggle"
     >
-      <EntityIcon :icon="store.user.avatar" fallback="person" :size="28" alt="头像" />
+      <EntityIcon :icon="store.user.avatar" fallback="person" :size="28" alt="头像" :cover="true" />
     </button>
 
     <!-- 下拉菜单 -->
@@ -77,7 +77,7 @@ onBeforeUnmount(() => {
       >
         <div class="px-4 py-2 border-b border-outline-variant/40 flex items-center gap-2">
           <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden shrink-0">
-            <EntityIcon :icon="store.user.avatar" fallback="person" :size="22" alt="头像" />
+            <EntityIcon :icon="store.user.avatar" fallback="person" :size="22" alt="头像" :cover="true" />
           </div>
           <div class="min-w-0">
             <div class="text-body-sm font-semibold text-on-surface truncate">{{ displayName }}</div>
