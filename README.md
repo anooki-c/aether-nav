@@ -185,6 +185,26 @@ docker compose up -d --build      # 构建并启动，监听 http://localhost:50
 ./scripts/deploy.sh --release  # 部署最新的正式 tag
 ```
 
+### GitHub 镜像自动构建（ghcr.io）
+
+仓库已配置 `.github/workflows/build-image.yml`：推送 `v*` 标签（如 `v0.5.0`）时，GitHub 云端会自动执行 `docker build` 并把镜像推送到 **GitHub Container Registry**（`ghcr.io`），无需本机安装 Docker。
+
+- 镜像地址：`ghcr.io/anooki-c/aether-nav`
+- 自动标签：`0.5.0`、`0.5`、`0`，以及每次发版附带的 `latest`
+
+推送 tag 后，在仓库 **Actions** 页面可查看构建进度；完成后在 **Packages** 中可见镜像。
+
+```bash
+# 拉取并运行（数据落到宿主机 ./data）
+docker pull ghcr.io/anooki-c/aether-nav:latest
+docker run -d -p 5000:5000 \
+  -v $(pwd)/data/instance:/app/backend/instance \
+  -v $(pwd)/data/uploads:/app/backend/uploads \
+  ghcr.io/anooki-c/aether-nav:latest
+```
+
+> 首次使用需在仓库 **Settings → Actions → General** 中确认「Workflow permissions」为 `Read and write`（默认允许写 packages），否则推送镜像会报 403。
+
 ### 接入 GitHub
 
 本仓库默认不含 remote。首次发布到 GitHub：
