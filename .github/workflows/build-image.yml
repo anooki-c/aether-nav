@@ -15,6 +15,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 首次构建拉两个基础镜像 + npm/pip 安装较慢，给 30 分钟保护，避免长时间空转
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,5 +51,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # 仅缓存最终导出层（min），避免首次把全部中间层上传为缓存而拖慢 push
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha
+          # 关闭 SLSA 构建证明生成，减少 push 阶段耗时与偶发卡顿
+          provenance: false
