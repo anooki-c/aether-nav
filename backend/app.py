@@ -2181,6 +2181,84 @@ def admin_ping_links(user):
         return jsonify({"error": str(e)}), 500
 
 
+# ---------- 群晖监控（DSM API） ----------
+from backend.syno import SynoClient, load_config, SynoError
+
+
+@app.route("/api/monitor/config")
+@auth_required
+def monitor_config(user):
+    if user.role != "admin":
+        return jsonify({"error": "无权限"}), 403
+    cfg = load_config()
+    return jsonify({
+        "host": cfg["host"],
+        "port": cfg["port"],
+        "user": cfg["user"],
+        "https": cfg["https"],
+        "configured": bool(cfg["host"] and cfg["user"]),
+        "has_password": bool(cfg["password"]),
+    })
+
+
+@app.route("/api/monitor/config", methods=["POST"])
+@auth_required
+def monitor_config_save(user):
+    if user.role != "admin":
+        return jsonify({"error": "无权限"}), 403
+    data = request.get_json(silent=True) or {}
+    host = (data.get("host") or "").strip()
+    port = data.get("port")
+    suser = (data.get("user") or "").strip()
+    password = data.get("password") or ""  # 留空表示不修改已有密码
+    https = bool(data.get("https"))
+    if not host or not suser:
+        return jsonify({"error": "主机地址和账号不能为空"}), 400
+    Setting.set("syno_host", host)
+    Setting.set("syno_port", str(port) if port else "")
+    Setting.set("syno_user", suser)
+    if password:
+        Setting.set("syno_pass", password)
+    Setting.set("syno_https", "1" if https else "0")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/monitor")
+@auth_required
+def monitor_snapshot(user):
+    if user.role != "admin":
+        return jsonify({"error": "无权限"}), 403
+    cfg = load_config()
+    if not cfg["host"] or not cfg["user"]:
+        return jsonify({"error": "尚未配置群晖连接", "need_config": True}), 400
+    if not cfg["password"]:
+        return jsonify({"error": "群晖密码未配置", "need_config": True}), 400
+    try:
+        client = SynoClient(cfg)
+        snap = client.snapshot()
+    except SynoError as e:
+        return jsonify({"error": str(e)}), 502
+    return jsonify(snap)
+
+
+@app.route("/api/monitor/container/action", methods=["POST"])
+@auth_required
+def monitor_container_action(user):
+    if user.role != "admin":
+        return jsonify({"error": "无权限"}), 403
+    data = request.get_json(silent=True) or {}
+    cid = data.get("id")
+    action = data.get("action")
+    if not cid or action not in ("start", "stop", "restart"):
+        return jsonify({"error": "参数无效"}), 400
+    try:
+        client = SynoClient()
+        client.container_action(cid, action)
+    except SynoError as e:
+        return jsonify({"error": str(e)}), 502
+    return jsonify({"ok": True, "action": action})
+
+
 def create_app():
     with app.app_context():
         db.create_all()

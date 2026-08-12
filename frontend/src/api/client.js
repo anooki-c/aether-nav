@@ -138,4 +138,10 @@ export const api = {
   statsDayDetail: (date) => request(`/admin/stats/day-detail?date=${encodeURIComponent(date)}`),
   // 手动触发链接可达性探测（系统也会定时自动 ping）
   pingLinks: () => request('/admin/links/ping', { method: 'POST' }),
+
+  // ---------- 群晖监控（DSM API） ----------
+  monitorConfig: () => request('/monitor/config'),
+  monitorConfigSave: (payload) => request('/monitor/config', json(payload)),
+  monitorSnapshot: () => request('/monitor'),
+  monitorContainerAction: (id, action) => request('/monitor/container/action', json({ id, action })),
 }

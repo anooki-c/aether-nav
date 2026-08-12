@@ -1,6 +1,10 @@
 services:
   aether-nav:
-    build: .
+    # 方式一（推荐，国内加速）：拉取 GitHub Actions 构建好的镜像，走南京大学 ghcr 代理
+    # 注意：代理前缀是 ghcr.nju.edu.cn，与 ghcr.io 对应；latest 对应最新发版
+    image: ghcr.nju.edu.cn/anooki-c/aether-nav:latest
+    # 方式二（本机构建）：把上面 image 两行注释掉，取消下面这行注释即可
+    # build: .
     container_name: aether-nav
     ports:
       - "5000:5000"
