@@ -58,9 +58,11 @@ async function loadSnapshot() {
   try {
     const d = await api.monitorSnapshot()
     snap.value = d
-    if (d.errors && d.errors.length) {
-      error.value = '部分数据获取失败：' + d.errors.join('；')
-    }
+    const diags = d.diagnostics || {}
+    const failed = Object.entries(diags)
+      .filter(([, v]) => v && !v.ok)
+      .map(([k, v]) => `${k}: ${v.error || '未知错误'}`)
+    if (failed.length) error.value = '以下模块获取数据失败：' + failed.join('；')
   } catch (e) {
     error.value = e.message || '加载失败'
     if (e.message && e.message.includes('配置')) needConfig.value = true
@@ -207,6 +209,10 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
       <!-- 错误提示（部分失败） -->
       <div v-if="error" class="mb-4 px-4 py-3 rounded-xl bg-warning/10 text-warning text-sm">
         ⚠️ {{ error }}
+        <details class="mt-2 text-text-secondary">
+          <summary class="cursor-pointer select-none">查看诊断详情</summary>
+          <pre class="mt-2 text-xs whitespace-pre-wrap break-all">{{ JSON.stringify(snap && snap.diagnostics, null, 2) }}</pre>
+        </details>
       </div>
 
       <!-- 系统概览卡片 -->
