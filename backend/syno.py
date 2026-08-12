@@ -224,6 +224,31 @@ class SynoClient:
             })
         return {"volumes": volumes}
 
+    def _extract_container_ip(self, c):
+        """容错提取容器网络 IP（不同 DSM 版本字段名不同）。"""
+        ip = c.get("ip")
+        if isinstance(ip, str) and ip:
+            return ip
+
+        def _dig(o):
+            if isinstance(o, dict):
+                for k in ("ip", "ip_address", "addr", "IPv4Address"):
+                    v = o.get(k)
+                    if isinstance(v, str) and v:
+                        return v
+                for v in o.values():
+                    r = _dig(v)
+                    if r:
+                        return r
+            elif isinstance(o, list):
+                for v in o:
+                    r = _dig(v)
+                    if r:
+                        return r
+            return None
+
+        return _dig(c.get("network"))
+
     def get_containers(self):
         try:
             d = self._api("SYNO.Docker.Container.Container", 1, "list", {"limit": -1})
@@ -239,6 +264,7 @@ class SynoClient:
                 "image": c.get("image"),
                 "cpu_pct": c.get("cpu"),
                 "mem_bytes": c.get("mem"),
+                "container_ip": self._extract_container_ip(c),
                 "ports": c.get("ports"),
             })
         return {"containers": out}

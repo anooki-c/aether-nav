@@ -100,7 +100,13 @@ function fmtUptime(s) {
 function fmtPorts(ports) {
   if (!ports) return '—'
   if (Array.isArray(ports)) {
-    return ports.map((p) => (p.host && p.container) ? `${p.host}:${p.container}` : (p.container || p)).join('，')
+    const s = ports.map((p) => {
+      if (p.host && p.container) return `${p.host}:${p.container}`
+      if (p.container) return String(p.container)
+      if (p.port) return `${p.bind ? p.bind + ':' : ''}${p.port}`
+      return String(p)
+    }).join('，')
+    return s || '—'
   }
   return String(ports)
 }
@@ -303,6 +309,7 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
                 <th class="text-right py-2 pr-2 font-medium">CPU</th>
                 <th class="text-right py-2 pr-2 font-medium">内存</th>
                 <th class="text-left py-2 pr-2 font-medium">镜像</th>
+                <th class="text-left py-2 pr-2 font-medium">IP</th>
                 <th class="text-left py-2 pr-2 font-medium">端口</th>
                 <th class="text-right py-2 font-medium">操作</th>
               </tr>
@@ -319,6 +326,7 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
                 <td class="py-2 pr-2 text-right text-text-primary">{{ c.cpu_pct != null ? c.cpu_pct + '%' : '—' }}</td>
                 <td class="py-2 pr-2 text-right text-text-primary">{{ fmtBytes(c.mem_bytes) }}</td>
                 <td class="py-2 pr-2 text-text-secondary max-w-[200px] truncate">{{ c.image || '—' }}</td>
+                <td class="py-2 pr-2 text-text-primary font-mono text-xs">{{ c.container_ip || '—' }}</td>
                 <td class="py-2 pr-2 text-text-secondary">{{ fmtPorts(c.ports) }}</td>
                 <td class="py-2 text-right whitespace-nowrap">
                   <button v-if="c.state !== 'running'" @click="act(c.id, 'start')" :disabled="actingId === c.id + ':start'"
