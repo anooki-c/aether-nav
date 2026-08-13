@@ -1,9 +1,13 @@
 name: Build and Push Image
 
-# 触发：推送 v* 标签（如 v0.5.0）时自动构建并推送到 GitHub Container Registry；
-# 也可在 Actions 页面手动触发（workflow_dispatch）。
+# 触发：
+#  - 推送到 master 分支：自动构建并推送镜像（latest + 分支名 + sha）
+#  - 推送 v* 标签（如 v0.5.0）：自动构建并推送 semver 版本标签
+#  - 也可在 Actions 页面手动触发（workflow_dispatch）
 on:
   push:
+    branches:
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
@@ -32,11 +36,15 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
-          # tag 规则：tag 推送时生成 semver 标签；所有触发方式都生成 latest
+          # tag 规则：
+          #  - tag 推送：生成 semver 标签（x.y.z / x.y / x）
+          #  - 分支推送（master）：生成分支名标签（master）
+          #  - 所有触发方式都生成 latest 与 sha（定位具体提交）
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            type=ref,event=branch
             type=raw,value=latest
             type=sha,prefix=
 
