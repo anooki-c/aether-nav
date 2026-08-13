@@ -144,4 +144,5 @@ export const api = {
   monitorConfigSave: (payload) => request('/monitor/config', json(payload)),
   monitorSnapshot: () => request('/monitor'),
   monitorContainerAction: (id, action) => request('/monitor/container/action', json({ id, action })),
+  monitorContainerDetail: (params) => request('/monitor/container/detail?' + new URLSearchParams(params).toString()),
 }

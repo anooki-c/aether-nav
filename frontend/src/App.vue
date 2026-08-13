@@ -1,7 +1,7 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { store, loadTree, loadMe, loadSettings, focusSearch, openDrawer, openAddLink } from './store'
+import { store, loadTree, loadMe, loadSettings, focusSearch, openDrawer, openAddLink, applyFavicon } from './store'
 import Sidebar from './components/Sidebar.vue'
 import TopBar from './components/TopBar.vue'
 import MobileNav from './components/MobileNav.vue'
@@ -33,6 +33,9 @@ onMounted(async () => {
   await loadMe()
   await loadTree()
 })
+
+// 站点 Logo 变更（后台保存后无需刷新）→ 实时同步标签页图标
+watch(() => store.siteLogo, (v) => applyFavicon(v))
 
 // 顶栏「添加」→ 快速添加（自动识别网络/标题/图标）
 function openQuick() {

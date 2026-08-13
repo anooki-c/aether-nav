@@ -40,10 +40,6 @@ const catIconStyle = computed(() =>
 function onCardClick() {
   emit('open', props.link)
 }
-// 点击图标区域（可编辑时）：调用默认接口自动获取/更新图标
-function onIconClick() {
-  if (props.editable) emit('fetch-icon', props.link)
-}
 </script>
 
 <template>
@@ -53,21 +49,21 @@ function onIconClick() {
     :class="editable ? 'ring-1 ring-brand/40' : ''"
     @click.prevent="onCardClick"
   >
-    <!-- 可编辑：编辑按钮（移动端无 hover，常驻显示） -->
+    <!-- 可编辑：编辑按钮（纯图标，移动端无 hover 常驻显示） -->
     <button
       v-if="editable"
       type="button"
-      class="absolute top-1.5 left-1.5 z-20 w-7 h-7 rounded-full bg-brand text-white flex items-center justify-center shadow-md active:scale-90"
+      class="absolute top-1.5 left-1.5 z-20 flex items-center justify-center text-on-surface-variant hover:text-brand active:scale-90"
       title="编辑链接"
       @click.stop="emit('edit', link)"
     >
-      <span class="material-symbols-outlined text-[16px]">edit</span>
+      <span class="material-symbols-outlined text-[18px]">edit</span>
     </button>
 
-    <!-- 网络标识：右上角小圆点（外网=绿 / 内网=蓝） -->
+    <!-- 网络标识：右上角小圆点（外网=绿 / 内网=橙） -->
     <span
       class="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full"
-      :class="link.network === 'external' ? 'bg-success' : 'bg-info'"
+      :class="link.network === 'external' ? 'bg-success' : 'bg-warning'"
     ></span>
 
     <!-- 加密标识：右下角（移动端缩小至 50%） -->
@@ -78,38 +74,40 @@ function onIconClick() {
       <span class="material-symbols-outlined text-[6px]">lock</span>
     </span>
 
-    <!-- 图标（编辑模式下点击 = 调用默认接口获取/更新图标） -->
+    <!-- 图标（点击 = 打开链接；刷新图标由右上角小按钮触发） -->
     <div
-      class="relative w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden"
+      class="relative w-10 h-10 rounded-xl flex items-center justify-center"
       :class="[
         catActive ? '' : 'bg-surface-container',
         editable ? 'ring-2 ring-brand/60' : '',
       ]"
       :style="catContainerStyle"
-      @click.stop="onIconClick"
     >
       <EntityIcon
         :icon="link.icon"
         :fallback="getLinkIcon(link.title)"
-        :size="22"
+        :size="26"
         :alt="link.title"
         :class="catActive ? '' : iconColor"
         :style="catIconStyle"
       />
-      <!-- 编辑模式下：图标刷新中显示转圈遮罩 -->
+      <!-- 刷新中：转圈遮罩 -->
       <div
         v-if="iconBusy"
-        class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center"
+        class="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center"
       >
         <span class="material-symbols-outlined text-[16px] text-white animate-spin">progress_activity</span>
       </div>
-      <!-- 可编辑（非刷新中）：右下角小角标，提示图标可点刷新（移动端无 hover，需常驻提示） -->
-      <span
-        v-else-if="editable"
-        class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-brand text-white flex items-center justify-center shadow ring-2 ring-surface-container-low"
+      <!-- 可编辑：图标右上角小刷新按钮（纯图标，无背景，与编辑按钮同系列） -->
+      <button
+        v-if="editable"
+        type="button"
+        class="absolute -top-1.5 -right-1.5 z-20 flex items-center justify-center text-on-surface-variant hover:text-brand active:scale-90"
+        title="刷新图标"
+        @click.stop="emit('fetch-icon', link)"
       >
-        <span class="material-symbols-outlined text-[10px] leading-none">refresh</span>
-      </span>
+        <span class="material-symbols-outlined text-[18px]">refresh</span>
+      </button>
     </div>
 
     <!-- 标题 -->

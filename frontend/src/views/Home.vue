@@ -7,6 +7,7 @@ import LinkCard from '../components/LinkCard.vue'
 import SquareCard from '../components/SquareCard.vue'
 import EntityIcon from '../components/EntityIcon.vue'
 import PasswordModal from '../components/PasswordModal.vue'
+import NetworkCheckModal from '../components/NetworkCheckModal.vue'
 import draggable from 'vuedraggable'
 import { hexToRgba } from '../utils/color'
 
@@ -14,6 +15,7 @@ const groups = ref([])
 const loading = ref(false)
 const pendingLink = ref(null)
 const showPwd = ref(false)
+const showNetCheck = ref(false)
 // 首页区块入场仅首次挂载播放一次：切换内外网/搜索会经 loading 态卸载重建区块，
 // 若持续重放错峰入场会显得迟缓（Emil：高频操作应去除或大幅缩减动画）。
 const entranceDone = ref(false)
@@ -236,6 +238,16 @@ watch(() => store.scrollNonce, async () => {
     </div>
 
     <PasswordModal v-model:open="showPwd" :link="pendingLink" />
+
+    <!-- 左下角悬浮：网络检测（端口 / IP 重复检测），仅管理员可见 -->
+    <button v-if="store.user && store.user.role === 'admin'" @click="showNetCheck = true"
+      class="fixed left-5 bottom-5 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg bg-primary text-on-primary hover:opacity-90 transition-all"
+      title="端口 / IP 重复检测">
+      <span class="material-symbols-outlined text-[20px]">hub</span>
+      <span class="text-sm font-semibold">网络检测</span>
+    </button>
+
+    <NetworkCheckModal v-model:open="showNetCheck" />
   </div>
 </template>
 

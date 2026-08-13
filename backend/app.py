@@ -2259,6 +2259,26 @@ def monitor_container_action(user):
     return jsonify({"ok": True, "action": action})
 
 
+@app.route("/api/monitor/container/detail")
+@auth_required
+def monitor_container_detail(user):
+    """按需返回单个容器的端口映射（列表接口不含端口，需逐个 get 详情）。"""
+    if user.role != "admin":
+        return jsonify({"error": "无权限"}), 403
+    name = (request.args.get("name") or "").strip()
+    cid = (request.args.get("id") or "").strip()
+    if not name and not cid:
+        return jsonify({"error": "缺少 name 或 id 参数"}), 400
+    try:
+        client = SynoClient()
+        detail = client.get_container_detail(name=name or None, cid=cid or None)
+    except SynoError as e:
+        return jsonify({"error": str(e)}), 502
+    if not detail:
+        return jsonify({"error": "未找到该容器（请确认名称/ID）"}), 404
+    return jsonify(detail)
+
+
 def create_app():
     with app.app_context():
         db.create_all()
@@ -2296,4 +2316,4 @@ if __name__ == "__main__":
         db.create_all()
     # use_reloader=False: 在 PyCharm 里调试时避免重加载子进程堆积、抢占 5000 端口。
     # 如想用 flask 自带热重载，可改回 True（但别和 PyCharm Debug 同时使用）。
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=5001, debug=True, use_reloader=False)

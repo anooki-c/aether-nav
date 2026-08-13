@@ -1,19 +1,22 @@
 """Synology DSM 监控客户端（基于 SYNO.API）。
 
-通过 DSM WebAPI 拉取 NAS 系统状态（CPU/内存/磁盘/网络/温度/型号）与
-Docker 容器运行状态，并提供容器启停操作。
+通过 DSM WebAPI 拉取 NAS 利用率（CPU/内存/磁盘/网络/存储）与 Docker 容器
+运行状态、网络 IP、端口映射，并提供容器启停操作。
 
 凭据来源优先级：
   1. 环境变量 SYNO_HOST / SYNO_PORT / SYNO_USER / SYNO_PASS / SYNO_HTTPS
   2. 数据库 Setting 表（syno_* 键）
 
-设计要点：
-  - 密码仅在内存中使用，不写入日志。
+关键实现要点（已在 DSM 7.2.2 Container Manager 上实测验证）：
+  - 登录必须带 enable_syno_token=yes 以获取 DSM 7 CSRF 令牌 synotoken；
+    调用 SYNO.Docker.Container 时若不带 SynoToken 会返回 114。
+  - 容器列表：SYNO.Docker.Container v1 method=list（session=Docker）。
+    网络 IP / 网关在 NetworkSettings.Networks（多网络即多 key）。
+  - 端口映射不在 list 接口里，需对每个容器 SYNO.Docker.Container v1 method=get
+    （参数先 name 后 id），从 data.details.NetworkSettings.Ports 取。
+  - 利用率：SYNO.Core.System.Utilization v1（session=Core），不强制 SynoToken。
   - 群晖默认自签证书，故关闭 TLS 校验并屏蔽告警。
-  - 登录用 Core 会话（管理员 sid 跨套件通用）；System/Storage/Docker API 均能访问。
-  - 调用前通过 query.cgi 动态发现各 API 的真实 path / 版本，避免硬编码版本不匹配。
-  - snapshot 额外返回 diagnostics，记录每个 API 的真实响应（keys / 错误码），
-    便于在不同 DSM 版本上排查字段差异。
+  - 密码仅在内存中使用，不写入日志。
 """
 import os
 import time
@@ -24,15 +27,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 DEFAULT_PORT_HTTP = 5000
 DEFAULT_PORT_HTTPS = 5001
-TIMEOUT = 10
+TIMEOUT = 15
 
-# 需要动态发现路径/版本的 API 清单
-_API_NAMES = [
-    "SYNO.Core.System.Info",
-    "SYNO.Core.System.Utilization",
-    "SYNO.Core.Storage.Storage",
-    "SYNO.Docker.Container.Container",
-]
+# 已实测验证的 API 规范：(api_name, path, version, session)
+_CONTAINER_API = ("SYNO.Docker.Container", "entry.cgi", 1, "Docker")
+_UTIL_API = ("SYNO.Core.System.Utilization", "entry.cgi", 1, "Core")
 
 
 class SynoError(Exception):
@@ -77,101 +76,65 @@ def _to_pct(v):
         return None
 
 
+def _extract_networks(c):
+    """从容器 dict 提取多网络 [{name, ip, gateway}]。"""
+    out = []
+    ns = (c.get("NetworkSettings") or {}) if isinstance(c, dict) else {}
+    nets = ns.get("Networks") or {}
+    if isinstance(nets, dict):
+        for name, info in nets.items():
+            if not isinstance(info, dict):
+                continue
+            out.append({
+                "name": name,
+                "ip": info.get("IPAddress") or None,
+                "gateway": info.get("Gateway") or None,
+            })
+    return out
+
+
+def _extract_ports(detail):
+    """从 get 详情响应（{data:{details:...}}）提取端口 [{ip, host, container, type}]。"""
+    out = []
+    cont = ((detail.get("data") or {}).get("details")) or {}
+    if not isinstance(cont, dict):
+        return out
+    ns = cont.get("NetworkSettings") or {}
+    ports = ns.get("Ports") if isinstance(ns, dict) else None
+    if not isinstance(ports, dict):
+        return out
+    for spec, binds in ports.items():
+        if "/" in spec:
+            cport, ptype = spec.split("/", 1)
+        else:
+            cport, ptype = spec, "tcp"
+        entries = binds if isinstance(binds, list) and binds else [None]
+        for b in entries:
+            if isinstance(b, dict):
+                out.append({
+                    "ip": b.get("HostIp", "0.0.0.0"),
+                    "host": b.get("HostPort"),
+                    "container": cport,
+                    "type": ptype,
+                })
+            else:
+                # 仅容器内暴露、未发布到宿主机
+                out.append({"ip": "0.0.0.0", "host": None, "container": cport, "type": ptype})
+    return out
+
+
 class SynoClient:
-    def __init__(self, config=None, session="Core"):
+    def __init__(self, config=None):
         self.cfg = config or load_config()
-        self.session = session  # 登录会话名：Core 跨套件通用
-        self.sid = None
         self.base = "{scheme}://{host}:{port}".format(
             scheme="https" if self.cfg["https"] else "http",
             host=self.cfg["host"],
             port=self.cfg["port"],
         )
-        self._apis = None  # query.cgi 发现结果缓存
+        self._sessions = {}  # session -> (sid, synotoken)
 
-    # ---------- 动态发现 API 路径/版本 ----------
-    def _query_apis(self):
-        if self._apis is not None:
-            return self._apis
-        try:
-            resp = requests.get(
-                self.base + "/webapi/query.cgi",
-                params={
-                    "api": "SYNO.API.Info",
-                    "method": "query",
-                    "version": 1,
-                    "query": ",".join(_API_NAMES),
-                },
-                timeout=TIMEOUT,
-                verify=False,
-            )
-            data = resp.json().get("data", {})
-        except Exception:
-            data = {}
-        self._apis = data
-        return data
-
-    def _api_meta(self, name):
-        """返回 (path, version)。优先 query 发现；回退 entry.cgi / 1。"""
-        info = self._query_apis().get(name) or {}
-        path = info.get("path") or "entry.cgi"
-        ver = info.get("minVersion") or info.get("maxVersion") or 1
-        try:
-            ver = int(ver)
-        except (TypeError, ValueError):
-            ver = 1
-        return path, ver
-
-    # ---------- 底层请求 ----------
-    def _api(self, api_name, version, method, params=None, try_login=True):
-        if not self.sid and try_login:
-            self.login()
-        path, discovered_ver = self._api_meta(api_name)
-        if version is None:
-            version = discovered_ver
-        qs = {
-            "api": api_name,
-            "version": version,
-            "method": method,
-            "_sid": self.sid or "",
-        }
-        if params:
-            qs.update(params)
-        try:
-            resp = requests.get(
-                self.base + "/webapi/" + path,
-                params=qs,
-                timeout=TIMEOUT,
-                verify=False,
-            )
-            data = resp.json()
-        except requests.RequestException as e:
-            raise SynoError("请求 DSM 失败: %s" % e)
-        except ValueError:
-            raise SynoError("DSM 返回非 JSON 响应（可能地址/端口不正确）")
-        if data.get("success") is not True:
-            code = (data.get("error") or {}).get("code")
-            # 119/105/106 多表示未授权或 sid 失效 → 重试一次登录
-            if code in (119, 105, 106) and try_login:
-                self.sid = None
-                self.login()
-                return self._api(api_name, version, method, params, try_login=False)
-            raise SynoError("DSM API 错误 code=%s" % code)
-        return data.get("data", {})
-
-    def _api_safe(self, api_name, version, method, params=None):
-        """容错版：成功返回 (data, diag)，失败返回 ({}, diag)，不抛异常。"""
-        diag = {"api": api_name, "ok": False}
-        try:
-            d = self._api(api_name, version, method, params)
-            diag["ok"] = True
-            diag["keys"] = list(d.keys())[:12]
-            return d, diag
-        except SynoError as e:
-            diag["error"] = str(e)
-            return {}, diag
-
-    def login(self):
+    # ---------- 登录（按 session 缓存，带 SynoToken） ----------
+    def _login(self, session):
         try:
             resp = requests.get(
                 self.base + "/webapi/auth.cgi",
@@ -181,8 +144,9 @@ class SynoClient:
                     "method": "login",
                     "account": self.cfg["user"],
                     "passwd": self.cfg["password"],
-                    "session": self.session,
+                    "session": session,
                     "format": "sid",
+                    "enable_syno_token": "yes",
                 },
                 timeout=TIMEOUT,
                 verify=False,
@@ -194,150 +158,200 @@ class SynoClient:
             raise SynoError("群晖返回非 JSON 响应（可能地址/端口不正确）")
         if data.get("success") is not True:
             raise SynoError("群晖登录失败（账号/密码错误或未开启 API）")
-        self.sid = (data.get("data") or {}).get("sid")
-        if not self.sid:
+        d = data.get("data") or {}
+        sid = d.get("sid")
+        if not sid:
             raise SynoError("群晖登录未返回 sid")
-        return self.sid
+        return sid, d.get("synotoken")
 
-    def logout(self):
-        if self.sid:
+    def _ensure_login(self, session):
+        cached = self._sessions.get(session)
+        if cached:
+            return cached
+        sid, synotoken = self._login(session)
+        self._sessions[session] = (sid, synotoken)
+        return self._sessions[session]
+
+    # ---------- 底层请求 ----------
+    def _api(self, api_name, version, method, params=None, session="Core"):
+        sid, synotoken = self._ensure_login(session)
+
+        def _request(sid_val, synotoken_val):
+            qs = {
+                "api": api_name,
+                "version": version,
+                "method": method,
+                "_sid": sid_val,
+            }
+            if synotoken_val:
+                qs["SynoToken"] = synotoken_val
+            if params:
+                qs.update(params)
             try:
-                requests.get(
-                    self.base + "/webapi/auth.cgi",
-                    params={"api": "SYNO.API.Auth", "version": 1, "method": "logout", "_sid": self.sid},
+                resp = requests.get(
+                    self.base + "/webapi/entry.cgi",
+                    params=qs,
                     timeout=TIMEOUT,
                     verify=False,
                 )
-            except requests.RequestException:
-                pass
-        self.sid = None
+                return resp.json()
+            except requests.RequestException as e:
+                raise SynoError("请求 DSM 失败: %s" % e)
+            except ValueError:
+                raise SynoError("DSM 返回非 JSON 响应（可能地址/端口不正确）")
 
-    # ---------- 数据拉取（各自容错 + 诊断） ----------
-    def get_system_info(self):
-        d, diag = self._api_safe("SYNO.Core.System.Info", 1, "get")
-        return {
-            "model": d.get("model"),
-            "version": d.get("version"),
-            "uptime_seconds": d.get("uptime"),
-            "temperature": d.get("temperature"),
-        }, diag
+        data = _request(sid, synotoken)
+        if data.get("success") is not True:
+            code = (data.get("error") or {}).get("code")
+            # 119/105/106 表示未授权或 sid 失效 → 重新登录一次
+            if code in (119, 105, 106):
+                self._sessions.pop(session, None)
+                sid, synotoken = self._ensure_login(session)
+                data = _request(sid, synotoken)
+            if data.get("success") is not True:
+                raise SynoError("DSM API 错误 code=%s" % (data.get("error") or {}).get("code"))
+        return data.get("data", {})
 
+    # ---------- 容器列表（session=Docker） ----------
+    def get_containers(self):
+        d = self._api("SYNO.Docker.Container", 1, "list",
+                      {"limit": -1, "offset": 0}, session="Docker")
+        out = []
+        for c in (d.get("containers") or []):
+            if not isinstance(c, dict):
+                continue
+            labels = c.get("Labels") or {}
+            out.append({
+                "id": c.get("id"),
+                "name": (c.get("name") or "").lstrip("/"),
+                "image": c.get("image"),
+                "status": c.get("status") or (c.get("state") or {}).get("Status"),
+                "state": (c.get("state") or {}).get("Status") or c.get("status"),
+                "networks": _extract_networks(c),
+                "created": c.get("created"),
+                "project": labels.get("com.docker.compose.project"),
+                "up_status": c.get("up_status"),
+            })
+        return out
+
+    # ---------- 容器详情（按需取端口，session=Docker） ----------
+    def get_container_detail(self, name=None, cid=None):
+        for key, val in (("name", name), ("id", cid)):
+            if not val:
+                continue
+            try:
+                d = self._api("SYNO.Docker.Container", 1, "get", {key: val}, session="Docker")
+            except SynoError:
+                continue
+            return {"ports": _extract_ports({"data": d})}
+        return None
+
+    # ---------- 利用率（session=Core） ----------
     def get_utilization(self):
-        d, diag = self._api_safe("SYNO.Core.System.Utilization", 1, "get")
+        d = self._api("SYNO.Core.System.Utilization", 1, "get", session="Core")
         cpu = d.get("cpu") or {}
-        cpu_pct = cpu.get("15min")
-        if cpu_pct is None:
-            cpu_pct = cpu.get("user")
         mem = d.get("memory") or {}
-        net = d.get("network") or {}
+        net = d.get("network") or []
         disk = d.get("disk") or {}
-
+        space = d.get("space") or {}
         rx = tx = 0
-        for v in net.values():
+        for v in net:
             if isinstance(v, dict):
                 rx += int(v.get("rx", 0) or 0)
                 tx += int(v.get("tx", 0) or 0)
-
-        disk_util = None
-        if isinstance(disk, dict):
-            if "util" in disk:
-                disk_util = disk["util"]
-            else:
-                vals = [float(x) for x in disk.values() if isinstance(x, (int, float))]
-                if vals:
-                    disk_util = round(sum(vals) / len(vals), 1)
-
-        return {
-            "cpu": _to_pct(cpu_pct),
-            "memory": _to_pct(mem.get("real_usage")),
-            "network": {"rx_bytes": rx, "tx_bytes": tx},
-            "disk_util": _to_pct(disk_util),
-        }, diag
-
-    def get_storage(self):
-        d, diag = self._api_safe("SYNO.Core.Storage.Storage", 1, "get")
+        disk_util = (disk.get("total") or {}).get("utilization")
+        space_util = (space.get("total") or {}).get("utilization")
+        # CPU 使用率 = 用户态 + 系统态 + 其他（iowait/irq 等），三者之和即总占用
+        cpu_usage = (cpu.get("user_load") or 0) + (cpu.get("system_load") or 0) + (cpu.get("other_load") or 0)
+        try:
+            cpu_usage = min(100, round(float(cpu_usage), 1))
+        except (TypeError, ValueError):
+            cpu_usage = None
+        # 存储卷列表：优先 space.volume，缺失时回退物理盘 disk.disk
+        vols = space.get("volume") or []
+        if not vols:
+            vols = disk.get("disk") or []
         volumes = []
-        for v in (d.get("volumes") or []):
-            total = v.get("size")
-            used = v.get("used")
-            pct = None
-            if total and used is not None and total:
-                try:
-                    pct = round(used / total * 100, 1)
-                except (TypeError, ValueError):
-                    pct = None
+        for v in vols:
+            if not isinstance(v, dict):
+                continue
             volumes.append({
-                "name": v.get("name") or v.get("id"),
-                "total_bytes": total,
-                "used_bytes": used,
+                "name": v.get("display_name") or v.get("device"),
+                "utilization": _to_pct(v.get("utilization")),
+                "read_byte": v.get("read_byte"),
+                "write_byte": v.get("write_byte"),
+            })
+        return {
+            "cpu_usage": cpu_usage,
+            "cpu_user": cpu.get("user_load"),
+            "cpu_system": cpu.get("system_load"),
+            "cpu_other": cpu.get("other_load"),
+            "cpu_1": cpu.get("1min_load"),
+            "cpu_5": cpu.get("5min_load"),
+            "cpu_15": cpu.get("15min_load"),
+            "memory": _to_pct(mem.get("real_usage")),
+            "memory_total": mem.get("total_real"),
+            "memory_avail": mem.get("avail_real"),
+            "network": {"rx_bytes": rx, "tx_bytes": tx},
+            "disk_io": _to_pct(disk_util),
+            "space_util": _to_pct(space_util),
+            "volumes": volumes,
+        }
+
+    # ---------- 存储容量（session=Core，该 DSM 常返回 101） ----------
+    def get_storage(self):
+        """容量占用（SYNO.Core.Storage.Volume）。该 DSM 常返回 101，需账号有 Storage 权限。"""
+        d = self._api("SYNO.Core.Storage.Volume", 1, "list",
+                      {"offset": 0, "limit": -1}, session="Core")
+        vols = d.get("volumes")
+        if isinstance(vols, dict):
+            vols = vols.get("volumes") or []
+        out = []
+        for v in (vols or []):
+            if not isinstance(v, dict):
+                continue
+            total = v.get("total_size") or v.get("size") or 0
+            used = v.get("used_size") or v.get("used") or 0
+            pct = round(used / total * 100, 1) if total else None
+            out.append({
+                "name": v.get("name") or v.get("display_name"),
+                "total": total,
+                "used": used,
                 "usage_pct": pct,
             })
-        return {"volumes": volumes}, diag
+        return out
 
-    def _extract_container_ip(self, c):
-        """容错提取容器网络 IP（不同 DSM 版本字段名不同）。"""
-        ip = c.get("ip")
-        if isinstance(ip, str) and ip:
-            return ip
-
-        def _dig(o):
-            if isinstance(o, dict):
-                for k in ("ip", "ip_address", "addr", "IPv4Address"):
-                    v = o.get(k)
-                    if isinstance(v, str) and v:
-                        return v
-                for v in o.values():
-                    r = _dig(v)
-                    if r:
-                        return r
-            elif isinstance(o, list):
-                for v in o:
-                    r = _dig(v)
-                    if r:
-                        return r
-            return None
-
-        return _dig(c.get("network"))
-
-    def get_containers(self):
-        d, diag = self._api_safe("SYNO.Docker.Container.Container", 1, "list", {"limit": -1})
-        out = []
-        for c in (d.get("containers") or []):
-            out.append({
-                "id": c.get("id"),
-                "name": c.get("name"),
-                "state": c.get("state"),
-                "status": c.get("status"),
-                "image": c.get("image"),
-                "cpu_pct": c.get("cpu"),
-                "mem_bytes": c.get("mem"),
-                "container_ip": self._extract_container_ip(c),
-                "ports": c.get("ports"),
-            })
-        return {"containers": out}, diag
-
-    def container_action(self, container_id, action):
+    # ---------- 启停操作（session=Docker） ----------
+    def container_action(self, cid, action):
         """action: start / stop / restart"""
-        self._api("SYNO.Docker.Container.Container", 1, action, {"id": container_id})
+        self._api("SYNO.Docker.Container", 1, action, {"id": cid}, session="Docker")
         return True
 
+    # ---------- 一次性快照（容错聚合） ----------
     def snapshot(self):
-        """一次性拉取所有监控数据；单模块失败不阻断其他，并记录诊断。"""
         diagnostics = {}
-        info, diagnostics["system"] = self.get_system_info()
-        util, diagnostics["utilization"] = self.get_utilization()
-        storage, diagnostics["storage"] = self.get_storage()
-        cont, diagnostics["containers"] = self.get_containers()
-        containers = cont.get("containers", [])
+        try:
+            containers = self.get_containers()
+            diagnostics["containers"] = {"ok": True}
+        except SynoError as e:
+            containers = []
+            diagnostics["containers"] = {"ok": False, "error": str(e)}
+        try:
+            util = self.get_utilization()
+            diagnostics["utilization"] = {"ok": True}
+        except SynoError as e:
+            util = {}
+            diagnostics["utilization"] = {"ok": False, "error": str(e)}
+        try:
+            util["storage"] = self.get_storage()
+            diagnostics["storage"] = {"ok": True}
+        except SynoError as e:
+            util["storage"] = None
+            diagnostics["storage"] = {"ok": False, "error": str(e)}
         return {
             "host": self.cfg["host"],
-            "system": info,
-            "cpu": util.get("cpu"),
-            "memory": util.get("memory"),
-            "network": util.get("network"),
-            "disk_util": util.get("disk_util"),
-            "storage": storage,
             "containers": containers,
+            "utilization": util,
             "fetched_at": int(time.time()),
             "diagnostics": diagnostics,
         }

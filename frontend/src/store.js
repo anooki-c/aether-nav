@@ -135,6 +135,8 @@ export async function loadSettings() {
     store.siteName = data.site_name || '云航导航'
     store.siteSubtitle = data.site_subtitle || ''
     store.siteLogo = data.site_logo || ''
+    // 站点 Logo 同步为浏览器标签页图标
+    applyFavicon(store.siteLogo)
     // 应用站点默认配色方案（登录用户若设置了个人配色，会在 loadMe→applyUserPrefs 中覆盖）
     applyColorScheme(store.siteColorScheme, false)
     // 同步浏览器标签标题为站点名称
@@ -268,6 +270,38 @@ export function applyColorScheme(scheme, persist = true) {
 
 export function setColorScheme(scheme, persist = true) {
   applyColorScheme(scheme, persist)
+}
+
+// 站点 Logo 同步为浏览器标签页图标（favicon）：
+//  - 图片路径（/uploads、http(s):、data:）→ 直接作为图标
+//  - 纯 emoji / 文本 → 生成 SVG data-url favicon（透明底居中显示）
+//  - 空 → 移除自定义图标，回退浏览器默认
+export function applyFavicon(logo) {
+  if (typeof document === 'undefined') return
+  let href = ''
+  const v = (logo || '').trim()
+  if (v) {
+    if (/^(\/|https?:\/\/|data:)/.test(v)) {
+      href = v
+    } else {
+      // emoji / 文本：SVG 图标，避免把文字塞进 <img> 破图
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+        `<text y=".9em" font-size="56" text-anchor="middle" x="50%">${v}</text></svg>`
+      href = 'data:image/svg+xml,' + encodeURIComponent(svg)
+    }
+  }
+  let link = document.querySelector('link[rel="icon"]')
+  if (!href) {
+    if (link) link.remove()
+    return
+  }
+  if (!link) {
+    link = document.createElement('link')
+    link.rel = 'icon'
+    document.head.appendChild(link)
+  }
+  link.href = href
 }
 
 // 显示模式三态循环：浅色 → 深色 → 跟随系统 → 浅色

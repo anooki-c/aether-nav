@@ -68,9 +68,8 @@ const symbolName = computed(() => (isSymbol.value ? value.value : props.fallback
     v-if="isImage"
     :src="value"
     :alt="alt"
-    :class="cover ? 'object-cover' : 'object-contain'"
-    class="shrink-0"
-    :style="{ width: px, height: px }"
+    :class="cover ? 'w-full h-full object-cover' : 'object-contain shrink-0'"
+    :style="cover ? null : { width: px, height: px }"
     @error="imgError = true"
   />
   <span v-else-if="isFeather" class="shrink-0 leading-none" :style="{ color: 'currentColor' }" v-html="featherSvg"></span>

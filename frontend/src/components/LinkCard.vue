@@ -44,10 +44,6 @@ const catIconStyle = computed(() =>
 function onCardClick() {
   emit('open', props.link)
 }
-// 点击图标区域（可编辑时）：调用默认接口自动获取/更新图标
-function onIconClick() {
-  if (props.editable) emit('fetch-icon', props.link)
-}
 </script>
 
 <template>
@@ -72,24 +68,23 @@ function onIconClick() {
     <button
       v-if="editable"
       type="button"
-      class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 focus:opacity-100 transition-[opacity,transform] duration-200 ease-spring hover:scale-105 active:scale-95"
+      class="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center text-on-surface-variant opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 hover:text-brand"
       title="编辑链接"
       @click.stop="emit('edit', link)"
     >
       <span class="material-symbols-outlined text-[18px]">edit</span>
     </button>
 
-    <!-- 图标区域（对齐原型：Material Symbols 小图标 + 彩色，非大号 emoji） -->
+    <!-- 图标区域（对齐原型：Material Symbols 小图标 + 彩色，非大号 emoji）。点击图标即打开链接（冒泡到卡片），刷新图标由右上角小按钮触发 -->
     <div
-      class="relative w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors overflow-hidden"
+      class="relative w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
       :class="catActive ? '' : 'bg-surface-container group-hover:bg-primary-fixed'"
       :style="catContainerStyle"
-      @click.stop="onIconClick"
     >
       <EntityIcon
         :icon="link.icon"
         :fallback="getLinkIcon(link.title)"
-        :size="22"
+        :size="30"
         :alt="link.title"
         :class="catActive ? '' : iconColor"
         :style="catIconStyle"
@@ -97,10 +92,20 @@ function onIconClick() {
       <!-- 编辑模式下：图标刷新中显示转圈遮罩 -->
       <div
         v-if="iconBusy"
-        class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center"
+        class="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center"
       >
         <span class="material-symbols-outlined text-[18px] text-white animate-spin">progress_activity</span>
       </div>
+      <!-- 可编辑：图标右上角小刷新按钮（纯图标，无背景，与编辑按钮同系列） -->
+      <button
+        v-if="editable"
+        type="button"
+        class="absolute -top-1.5 -right-1.5 z-20 flex items-center justify-center text-on-surface-variant opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 hover:text-brand"
+        title="刷新图标"
+        @click.stop="emit('fetch-icon', link)"
+      >
+        <span class="material-symbols-outlined text-[18px]">refresh</span>
+      </button>
     </div>
 
     <!-- 文字信息 -->
@@ -115,17 +120,17 @@ function onIconClick() {
       class="absolute bottom-2 right-2 text-error material-symbols-outlined text-[16px] leading-none"
     >lock</span>
 
-    <!-- 内外网标识（桌面端：右上角小药丸，外网=绿/内网=蓝，纯文字） -->
+    <!-- 内外网标识（桌面端：右上角小药丸，外网=绿/内网=橙，纯文字） -->
     <span
       class="absolute top-2 right-2 text-[10px] px-[7px] py-[2px] rounded-md font-semibold hidden md:flex items-center"
-      :class="link.network === 'external' ? 'bg-success/10 text-success' : 'bg-info/10 text-info'"
+      :class="link.network === 'external' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'"
     >
       {{ link.network === 'internal' ? '内网' : '外网' }}
     </span>
-    <!-- 移动端：右上角小圆点（外网=绿/内网=蓝） -->
+    <!-- 移动端：右上角小圆点（外网=绿/内网=橙） -->
     <span
       class="absolute top-2 right-2 w-2.5 h-2.5 rounded-full md:hidden"
-      :class="link.network === 'external' ? 'bg-success' : 'bg-info'"
+      :class="link.network === 'external' ? 'bg-success' : 'bg-warning'"
     ></span>
   </a>
 </template>
