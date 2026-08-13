@@ -15,10 +15,15 @@
   - 端口映射不在 list 接口里，需对每个容器 SYNO.Docker.Container v1 method=get
     （参数先 name 后 id），从 data.details.NetworkSettings.Ports 取。
   - 利用率：SYNO.Core.System.Utilization v1（session=Core），不强制 SynoToken。
+  - 存储容量：SYNO.Storage.CGI.Storage v1 method=load_info（session=Core）。
+    替代常返回 101 的 SYNO.Core.Storage.Volume，可拉到真实卷容量（size.total/used）。
+  - 系统健康/主机信息：SYNO.Core.System.SystemHealth v1 method=get（session=Core），
+    返回 hostname / uptime / interfaces。
   - 群晖默认自签证书，故关闭 TLS 校验并屏蔽告警。
   - 密码仅在内存中使用，不写入日志。
 """
 import os
+import re
 import time
 import urllib3
 import requests
@@ -74,6 +79,33 @@ def _to_pct(v):
         return round(float(v), 1)
     except (TypeError, ValueError):
         return None
+
+
+def _to_num(v):
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _norm_volume_name(v):
+    """把存储卷归一化为利用率接口同款名称（如 'volume3'）。
+
+    存储 CGI（SYNO.Storage.CGI.Storage）的卷：vol_path='/volume3' 或
+    id='volume_3'；利用率接口（SYNO.Core.System.Utilization）的 space.volume
+    名称形如 'volume3'。归一化后两者可按名称对齐合并。
+    """
+    path = (v.get("vol_path") or "") if isinstance(v, dict) else ""
+    if path:
+        return path.strip("/").split("/")[0]
+    vid = (v.get("id") or "") if isinstance(v, dict) else ""
+    if vid:
+        # 'volume_3' / 'volume 3' -> 'volume3'
+        return re.sub(r"[_ ]+", "", vid)
+    name = (v.get("display_name") or v.get("name") or "") if isinstance(v, dict) else ""
+    return name.strip()
 
 
 def _extract_networks(c):
@@ -173,7 +205,7 @@ class SynoClient:
         return self._sessions[session]
 
     # ---------- 底层请求 ----------
-    def _api(self, api_name, version, method, params=None, session="Core"):
+    def _api(self, api_name, version, method, params=None, session="Core", http_method="get"):
         sid, synotoken = self._ensure_login(session)
 
         def _request(sid_val, synotoken_val):
@@ -188,12 +220,11 @@ class SynoClient:
             if params:
                 qs.update(params)
             try:
-                resp = requests.get(
-                    self.base + "/webapi/entry.cgi",
-                    params=qs,
-                    timeout=TIMEOUT,
-                    verify=False,
-                )
+                url = self.base + "/webapi/entry.cgi"
+                if http_method.lower() == "post":
+                    resp = requests.post(url, data=qs, timeout=TIMEOUT, verify=False)
+                else:
+                    resp = requests.get(url, params=qs, timeout=TIMEOUT, verify=False)
                 return resp.json()
             except requests.RequestException as e:
                 raise SynoError("请求 DSM 失败: %s" % e)
@@ -203,8 +234,8 @@ class SynoClient:
         data = _request(sid, synotoken)
         if data.get("success") is not True:
             code = (data.get("error") or {}).get("code")
-            # 119/105/106 表示未授权或 sid 失效 → 重新登录一次
-            if code in (119, 105, 106):
+            # 119/105/106 表示未授权或 sid 失效；114 表示 Docker API 缺少/过期 SynoToken → 重新登录一次
+            if code in (119, 105, 106, 114):
                 self._sessions.pop(session, None)
                 sid, synotoken = self._ensure_login(session)
                 data = _request(sid, synotoken)
@@ -298,33 +329,69 @@ class SynoClient:
             "volumes": volumes,
         }
 
-    # ---------- 存储容量（session=Core，该 DSM 常返回 101） ----------
+    # ---------- 存储容量（session=Core） ----------
     def get_storage(self):
-        """容量占用（SYNO.Core.Storage.Volume）。该 DSM 常返回 101，需账号有 Storage 权限。"""
-        d = self._api("SYNO.Core.Storage.Volume", 1, "list",
-                      {"offset": 0, "limit": -1}, session="Core")
-        vols = d.get("volumes")
+        """容量占用（SYNO.Storage.CGI.Storage load_info）。
+
+        替代常返回 101 的 SYNO.Core.Storage.Volume。该接口在 DSM 7.2.2 上实测可用，
+        返回每个卷的 size.total / size.used（字符串数字），并与利用率接口的
+        space.volume（name 形如 'volume3'）按归一化名称对齐，供前端合并容量与 I/O。
+        """
+        d = self._api("SYNO.Storage.CGI.Storage", 1, "load_info", session="Core")
+        vols = d.get("volumes") or []
         if isinstance(vols, dict):
-            vols = vols.get("volumes") or []
+            vols = list(vols.values())
         out = []
-        for v in (vols or []):
+        for v in vols:
             if not isinstance(v, dict):
                 continue
-            total = v.get("total_size") or v.get("size") or 0
-            used = v.get("used_size") or v.get("used") or 0
-            pct = round(used / total * 100, 1) if total else None
+            size = v.get("size") or {}
+            total = _to_num(size.get("total"))
+            if total is None:
+                continue
+            used = _to_num(size.get("used"))
+            pct = round(used / total * 100, 1) if used is not None else None
+            norm = _norm_volume_name(v)
+            if not norm:
+                continue
             out.append({
-                "name": v.get("name") or v.get("display_name"),
+                "name": norm,
+                "display_name": v.get("display_name") or v.get("name") or norm,
                 "total": total,
                 "used": used,
                 "usage_pct": pct,
             })
         return out
 
+    # ---------- 系统健康 / 主机信息（session=Core） ----------
+    def get_system_health(self):
+        """系统健康 / 主机信息（SYNO.Core.System.SystemHealth get）。
+
+        返回 hostname / uptime（HH:MM:SS）/ interfaces（含 IP）。
+        """
+        d = self._api("SYNO.Core.System.SystemHealth", 1, "get", session="Core")
+        interfaces = []
+        for itf in (d.get("interfaces") or []):
+            if isinstance(itf, dict):
+                interfaces.append({
+                    "id": itf.get("id"),
+                    "ip": itf.get("ip"),
+                    "type": itf.get("type"),
+                })
+        return {
+            "hostname": d.get("hostname"),
+            "uptime": d.get("uptime"),
+            "interfaces": interfaces,
+        }
+
     # ---------- 启停操作（session=Docker） ----------
-    def container_action(self, cid, action):
-        """action: start / stop / restart"""
-        self._api("SYNO.Docker.Container", 1, action, {"id": cid}, session="Docker")
+    def container_action(self, name, action):
+        """action: start / stop / restart
+
+        DSM Docker API 的 start/stop/restart 方法使用 ``name`` 参数（容器名），
+        而非 ``id``（容器 hash）。前端直接传容器名。
+        """
+        self._api("SYNO.Docker.Container", 1, action, {"name": name}, session="Docker")
         return True
 
     # ---------- 一次性快照（容错聚合） ----------
@@ -348,10 +415,17 @@ class SynoClient:
         except SynoError as e:
             util["storage"] = None
             diagnostics["storage"] = {"ok": False, "error": str(e)}
+        try:
+            health = self.get_system_health()
+            diagnostics["system_health"] = {"ok": True}
+        except SynoError as e:
+            health = None
+            diagnostics["system_health"] = {"ok": False, "error": str(e)}
         return {
             "host": self.cfg["host"],
             "containers": containers,
             "utilization": util,
+            "system_health": health,
             "fetched_at": int(time.time()),
             "diagnostics": diagnostics,
         }

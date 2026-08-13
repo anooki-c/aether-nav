@@ -210,7 +210,7 @@ def favicon_template_for(provider=None, custom_template=""):
 def resolve_favicon_url(page_url, provider=None, custom_template="", size=FAVICON_SIZE):
     """由页面地址推断图标地址（只返回地址，不下载）。
 
-    - 内网 / 无点主机 → 恒为 ``<origin>/favicon.ico``（第三方服务访问不到内网）；
+    - 内网 / 无点主机 → 优先 ``<origin>/favicon.svg``（现代站点常用 svg）；
     - 公网域名 → 按系统设置里选定的图标接口生成地址。
     """
     raw = (page_url or "").strip()
@@ -222,7 +222,7 @@ def resolve_favicon_url(page_url, provider=None, custom_template="", size=FAVICO
     hostname = parsed.hostname or ""
     scheme = parsed.scheme or "http"
     if PRIVATE_HOST_RE.match(hostname) or "." not in hostname:
-        return f"{scheme}://{parsed.netloc}/favicon.ico"
+        return f"{scheme}://{parsed.netloc}/favicon.svg"
     return render_favicon_template(favicon_template_for(provider, custom_template), parsed, size)
 
 
@@ -230,6 +230,9 @@ def resolve_favicon_candidates(page_url, provider=None, custom_template="", size
     """返回按优先级排列的候选图标地址：选定接口 → 站点自身 /favicon.ico。
 
     选定接口挂掉（国内访问不到、接口下线等）时可以自动退到直连，保证「自动获取」可用。
+
+    内网 / 无点主机：第三方服务访问不到，只能直连；此时同时尝试 ``/favicon.svg`` 与
+    ``/favicon.ico``（现代站点常用 svg，旧站用 ico），按顺序逐个探测直到成功。
     """
     raw = (page_url or "").strip()
     if not raw:
@@ -237,11 +240,13 @@ def resolve_favicon_candidates(page_url, provider=None, custom_template="", size
     parsed = urlparse(raw if "//" in raw else "//" + raw, scheme="http")
     if not parsed.netloc:
         return []
-    direct = render_favicon_template(DIRECT_FAVICON_TEMPLATE, parsed, size)
     hostname = parsed.hostname or ""
-    # 内网 / 无点主机：第三方服务访问不到，只能直连
+    scheme = parsed.scheme or "http"
+    base = f"{scheme}://{parsed.netloc}"
+    # 内网 / 无点主机：第三方服务访问不到，只能直连；svg 优先于 ico
     if PRIVATE_HOST_RE.match(hostname) or "." not in hostname:
-        return [direct]
+        return [f"{base}/favicon.svg", f"{base}/favicon.ico"]
+    direct = render_favicon_template(DIRECT_FAVICON_TEMPLATE, parsed, size)
     primary = render_favicon_template(favicon_template_for(provider, custom_template), parsed, size)
     return [primary] if primary == direct else [primary, direct]
 

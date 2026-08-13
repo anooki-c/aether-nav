@@ -11,12 +11,16 @@ const root = ref(null)
 const displayName = computed(() => store.user?.display_name || store.user?.username || '访客')
 const isAdmin = computed(() => store.user && store.user.role === 'admin')
 
-// 头像菜单对所有登录用户一致：个人设置 + 管理后台 + 退出登录（不区分管理员/普通用户）
+// 头像菜单：个人设置 + 管理后台 对所有登录用户一致；网络检测仅管理员可见
 const items = computed(() => {
-  return [
+  const list = [
     { k: 'settings', icon: 'settings', label: '个人设置', to: '/settings' },
     { k: 'admin', icon: 'admin_panel_settings', label: '管理后台', to: '/admin' },
   ]
+  if (isAdmin.value) {
+    list.push({ k: 'net', icon: 'hub', label: '网络检测', to: '/network-check' })
+  }
+  return list
 })
 
 function toggle() {

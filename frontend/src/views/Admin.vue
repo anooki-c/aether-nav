@@ -12,6 +12,7 @@ import EntityIcon from '../components/EntityIcon.vue'
 import LinkCard from '../components/LinkCard.vue'
 import UserMenu from '../components/UserMenu.vue'
 import IconPicker from '../components/IconPicker.vue'
+import PasswordModal from '../components/PasswordModal.vue'
 import { getLinkIcon } from '../utils/linkIcon'
 import { parseUrlScheme, buildUrl } from '../utils/urlScheme'
 
@@ -223,6 +224,22 @@ async function confirmPwd() {
     msg.value = '密码已更新'
   } catch (e) {
     pwdError.value = e.message
+  }
+}
+
+// ---------- 链接管理：点击外/内网 URL 打开 ----------
+// 有密码的链接先弹密码框验证，再新标签页打开；无密码直接打开（带点击埋点）。
+const adminPwdOpen = ref(false)
+const adminPwdLink = ref(null)
+function openLinkUrl(l, which) {
+  const url = which === 'external' ? (l.url_external || '') : (l.url_internal || '')
+  if (!url) return
+  if (l.has_password) {
+    adminPwdLink.value = { ...l, url }
+    adminPwdOpen.value = true
+  } else {
+    if (l.id) api.trackClick(l.id).catch(() => {})
+    window.open(url, '_blank')
   }
 }
 
@@ -1135,10 +1152,12 @@ onMounted(async () => {
                       </td>
                       <td class="py-4 px-6 font-semibold text-on-surface">{{ l.title }}</td>
                       <td class="py-4 px-6 text-text-secondary max-w-[260px]">
-                        <span class="truncate block" :title="l.url_external">{{ l.url_external || '—' }}</span>
+                        <button v-if="l.url_external" type="button" class="block w-full truncate text-left text-primary hover:underline" :title="'打开外网链接：' + l.url_external" @click="openLinkUrl(l, 'external')">{{ l.url_external }}</button>
+                        <span v-else class="text-text-secondary/60">—</span>
                       </td>
                       <td class="py-4 px-6 text-text-secondary max-w-[260px]">
-                        <span class="truncate block" :title="l.url_internal">{{ l.url_internal || '—' }}</span>
+                        <button v-if="l.url_internal" type="button" class="block w-full truncate text-left text-primary hover:underline" :title="'打开内网链接：' + l.url_internal" @click="openLinkUrl(l, 'internal')">{{ l.url_internal }}</button>
+                        <span v-else class="text-text-secondary/60">—</span>
                       </td>
                       <td class="py-4 px-6">
                         <div class="flex items-center gap-1 flex-wrap">
@@ -2079,6 +2098,8 @@ onMounted(async () => {
     <AddLinkModal v-model:open="showAdd" />
     <PermissionEditModal v-model:open="permOpen" :user="permUser" />
     <LinkPermissionMatrixModal v-model:open="matrixOpen" :link="matrixLink" />
+    <!-- 点击加密链接时弹出的密码验证框（打开前已把目标 URL 写入 link.url） -->
+    <PasswordModal v-model:open="adminPwdOpen" :link="adminPwdLink" />
 
     <!-- 密码设置 / 修改弹窗 -->
     <div v-if="pwdModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4">

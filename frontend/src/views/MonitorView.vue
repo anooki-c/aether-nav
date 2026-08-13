@@ -1,6 +1,8 @@
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { api } from '../api/client'
+import { showToast } from '../store'
+import QuickAddLink from '../components/QuickAddLink.vue'
 
 /* ── 连接配置 ─────────────────────────────────────── */
 const config = reactive({ host: '', port: '', user: '', password: '', https: false })
@@ -19,21 +21,112 @@ const AUTO_INTERVAL = 15000
 
 const util = computed(() => snap.value?.utilization || {})
 const containers = computed(() => snap.value?.containers || [])
+const systemHealth = computed(() => snap.value?.system_health || null)
 
 /* ── 磁盘容量（空间用量）────────────────────────── */
-const diskStorage = computed(() => (util.value.storage || []).find((v) => v.usage_pct != null))
-const diskHeadline = computed(() => {
-  if (diskStorage.value && diskStorage.value.usage_pct != null) return diskStorage.value.usage_pct + '%'
-  return util.value.disk_io != null ? util.value.disk_io + '%' : '—'
-})
-const diskSub = computed(() => {
-  if (diskStorage.value) {
-    const s = diskStorage.value
-    return `空间用量 · 已用 ${fmtBytes(s.used)} / 共 ${fmtBytes(s.total)}`
+// 每个物理硬盘：合并容量（storage）与 I/O（volumes），用于在顶部一行内逐盘展示。
+// 容量接口不可用时退化为仅 I/O 卷；两者皆空则列表为空（模板显示占位）。
+// 容量（storage）与 I/O（volumes）均按归一化卷名（如 volume3）对齐合并。
+const diskVolumes = computed(() => {
+  const caps = (util.value.storage || []).filter((v) => v && v.name)
+  const ios = util.value.volumes || []
+  const ioByName = {}
+  for (const v of ios) {
+    if (v && v.name) ioByName[v.name] = v
   }
-  const io = util.value.disk_io != null ? util.value.disk_io + '%' : '—'
-  return `磁盘 I/O ${io}${util.value.storage === null ? '（容量接口不可用）' : ''}`
+  if (caps.length) {
+    return caps.map((c) => ({
+      name: c.name,
+      display_name: c.display_name || c.name,
+      used: c.used, total: c.total, usage_pct: c.usage_pct,
+      io: ioByName[c.name] || null,
+    }))
+  }
+  if (ios.length) {
+    return ios.map((v) => ({
+      name: v.name,
+      display_name: v.name,
+      used: null, total: null, usage_pct: null, io: v,
+    }))
+  }
+  return []
 })
+
+/* ── Docker 容器「快速添加为导航链接」────────────── */
+// 仅内网：URL = 群晖宿主机 IP + docker 宿主机端口；复用快速添加弹窗（自动识别网络 + 自动获取图标）。
+const quickAddOpen = ref(false)
+const quickPrefill = ref({ url: '', title: '' })
+
+// 取群晖宿主机 IP：优先 SystemHealth 接口 IP，回退快照 host
+function synologyHostIp() {
+  const itfs = (systemHealth.value && systemHealth.value.interfaces) || []
+  const ip = itfs.length ? itfs[0].ip : (snap.value && snap.value.host) || ''
+  return ip || ''
+}
+
+// 构造内网 URL（群晖宿主 IP + docker 已发布到宿主机的端口）
+function containerAddUrl(c) {
+  const ip = synologyHostIp()
+  if (!ip) return ''
+  const ports = filteredPorts(c.id)
+  const pub = ports.find((p) => p.host && p.host !== 'None')
+  const port = pub ? pub.host : (ports[0] && ports[0].container) || ''
+  if (!port) return ''
+  return `http://${ip}:${port}`
+}
+
+async function openAddConnection(c) {
+  if (c.state !== 'running') return
+  // 端口未加载则先拉取，确保能拿到宿主端口
+  if (!portCache[c.id]) {
+    await fetchPorts(c, true).catch(() => {})
+  }
+  const url = containerAddUrl(c)
+  if (!url) {
+    showToast('该容器暂无可用的宿主机端口', 'warn')
+    return
+  }
+  quickPrefill.value = { url, title: c.name }
+  quickAddOpen.value = true
+}
+
+/* ── 已有链接（一次拉取，用于「快速添加地址是否已存在」判定 → 已存在则禁用按钮）── */
+const existingLinks = ref([])
+async function loadExistingLinks() {
+  try {
+    // 用 internal 模式，使返回 url 优先反映内网地址（与容器内网添加 URL 可比）
+    const data = await api.links('internal')
+    const groups = (data && data.groups) || []
+    const flat = []
+    for (const g of groups) {
+      const ls = (g && g.links) || []
+      for (const l of ls) flat.push(l)
+    }
+    existingLinks.value = flat
+  } catch (e) {
+    existingLinks.value = []
+  }
+}
+
+// 归一化 URL → host:port（含默认端口），用于「域名+端口」去重比较
+function hostPortKey(url) {
+  if (!url) return ''
+  try {
+    const u = new URL(url)
+    let port = u.port
+    if (!port) port = u.protocol === 'https:' ? '443' : '80'
+    return (u.hostname || '').toLowerCase() + ':' + port
+  } catch (e) { return '' }
+}
+function linkExistsByUrl(url) {
+  const key = hostPortKey(url)
+  if (!key) return false
+  return existingLinks.value.some((l) => hostPortKey(l.url) === key)
+}
+// 容器内网添加 URL 是否已存在于导航链接（按域名+端口判定）
+function addUrlExists(c) {
+  return linkExistsByUrl(containerAddUrl(c))
+}
 
 /* ── 容器视图：Tab / 搜索 / 列表卡片切换 ────────────── */
 const viewMode = ref('list')        // 'list' | 'card'
@@ -330,6 +423,10 @@ function fmtPort(p) {
   if (p.host && p.host !== 'None') return `${p.host} → ${p.container}/${p.type}`
   return `${p.container}/${p.type}（容器内）`
 }
+function fmtUptime(u) {
+  if (!u) return '—'
+  return String(u).split(':').map((p) => p.padStart(2, '0')).join(':')
+}
 function barColor(p) {
   if (p == null) return 'bg-text-secondary'
   if (p < 60) return 'bg-success'
@@ -358,9 +455,13 @@ function stateCardClass(state) {
 onMounted(async () => {
   await loadConfig()
   if (!needConfig.value) loadSnapshot()
+  loadExistingLinks()
   timer = setInterval(() => { if (!needConfig.value) loadSnapshot() }, AUTO_INTERVAL)
 })
 onBeforeUnmount(() => { if (timer) clearInterval(timer) })
+
+// 快速添加弹窗关闭后（无论保存或取消）刷新已有链接，及时更新按钮禁用态
+watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
 </script>
 
 <template>
@@ -405,6 +506,22 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
         </details>
       </div>
 
+      <!-- 主机信息（SystemHealth） -->
+      <div v-if="systemHealth" class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-label-sm text-text-secondary mb-4">
+        <span class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px] text-primary">dns</span>
+          {{ systemHealth.hostname || '—' }}
+        </span>
+        <span class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px] text-info">schedule</span>
+          已运行 {{ fmtUptime(systemHealth.uptime) }}
+        </span>
+        <span v-for="itf in (systemHealth.interfaces || [])" :key="itf.id" class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px] text-success">lan</span>
+          {{ itf.ip || '—' }}
+        </span>
+      </div>
+
       <!-- 利用率概览卡片（含折线图） -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-grid-gutter mb-6">
         <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50">
@@ -430,17 +547,6 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
         </div>
         <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50">
           <div class="flex items-center justify-between mb-1">
-            <span class="text-label-sm text-text-secondary">磁盘</span>
-            <span class="material-symbols-outlined text-[18px] text-warning">storage</span>
-          </div>
-          <div class="font-headline-md text-headline-md text-text-primary">{{ diskHeadline }}</div>
-          <div class="mt-1 text-label-sm text-text-secondary">{{ diskSub }}</div>
-          <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full h-8 mt-2 text-warning">
-            <path :d="smoothPath(history.map(h => h.disk))" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
-          </svg>
-        </div>
-        <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50">
-          <div class="flex items-center justify-between mb-1">
             <span class="text-label-sm text-text-secondary">网络速率</span>
             <span class="material-symbols-outlined text-[18px] text-success">lan</span>
           </div>
@@ -449,50 +555,32 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
             <path :d="smoothPath(history.map(h => h.net))" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
           </svg>
         </div>
-      </div>
-
-      <!-- 硬盘 / 存储卷（I/O 活动 + 累计读写） -->
-      <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50 mb-6">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="font-headline-sm text-headline-sm text-text-primary">硬盘 / 存储卷</h2>
-          <span class="text-label-sm text-text-secondary">{{ (util.volumes || []).length }} 个</span>
-        </div>
-        <div v-if="(!util.volumes || !util.volumes.length) && (!util.storage || !util.storage.length)" class="text-text-secondary text-sm py-2">
-          无存储卷数据（或该 DSM 存储接口不可用）
-        </div>
-        <!-- 容量占用 -->
-        <div v-if="util.storage && util.storage.length" class="space-y-3 mb-4">
-          <div v-for="(v, i) in util.storage" :key="'cap' + i" class="space-y-1">
-            <div class="flex items-center justify-between text-sm">
-              <span class="text-text-primary font-medium">{{ v.name }}</span>
-              <span class="text-text-secondary text-xs">已用 {{ fmtBytes(v.used) }} / 共 {{ fmtBytes(v.total) }}</span>
-            </div>
-            <div class="flex items-center gap-3">
-              <div class="flex-1 h-2 rounded-full bg-surface-container overflow-hidden">
-                <div class="h-full rounded-full transition-all" :class="barColor(v.usage_pct)" :style="{ width: (v.usage_pct || 0) + '%' }"></div>
+        <!-- 硬盘（所有卷合并到一张卡片，每行一个卷：名称 + 容量 + IO + 进度条） -->
+        <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-label-sm text-text-secondary">硬盘</span>
+            <span class="material-symbols-outlined text-[18px] text-warning">storage</span>
+          </div>
+          <div v-if="diskVolumes.length" class="space-y-2.5">
+            <div v-for="(d, i) in diskVolumes" :key="'disk' + i" class="space-y-1">
+              <div class="flex items-center gap-3 text-sm min-w-0">
+                <span class="text-text-primary font-medium shrink-0 w-20 truncate" :title="d.display_name || d.name">{{ d.display_name || d.name }}</span>
+                <span class="text-text-primary text-xs shrink-0">{{ d.used != null ? fmtBytes(d.used) + ' / ' + fmtBytes(d.total) : '—' }}</span>
+                <span class="text-text-secondary text-xs shrink-0 ml-auto">
+                  <template v-if="d.io">IO {{ fmtBytes(d.io.read_byte) }} / {{ fmtBytes(d.io.write_byte) }}</template>
+                  <template v-else>IO —</template>
+                </span>
               </div>
-              <span class="w-12 text-right text-label-sm text-text-secondary">{{ v.usage_pct != null ? v.usage_pct + '%' : '—' }}</span>
+              <div v-if="d.usage_pct != null" class="flex items-center gap-2">
+                <div class="flex-1 h-1.5 rounded-full bg-surface-container overflow-hidden">
+                  <div class="h-full rounded-full transition-all" :class="barColor(d.usage_pct)" :style="{ width: (d.usage_pct || 0) + '%' }"></div>
+                </div>
+                <span class="text-label-sm text-text-secondary w-9 text-right shrink-0">{{ d.usage_pct }}%</span>
+              </div>
             </div>
           </div>
+          <div v-else class="text-label-sm text-text-secondary py-1">无存储卷数据</div>
         </div>
-        <!-- I/O 活动 -->
-        <div v-if="util.volumes && util.volumes.length" class="space-y-3">
-          <div v-for="(v, i) in util.volumes" :key="'io' + i" class="space-y-1">
-            <div class="flex items-center justify-between text-sm">
-              <span class="text-text-primary font-medium">{{ v.name }}</span>
-              <span class="text-text-secondary text-xs">读 {{ fmtBytes(v.read_byte) }} / 写 {{ fmtBytes(v.write_byte) }}</span>
-            </div>
-            <div class="flex items-center gap-3">
-              <div class="flex-1 h-2 rounded-full bg-surface-container overflow-hidden">
-                <div class="h-full rounded-full transition-all" :class="barColor(v.utilization)" :style="{ width: (v.utilization || 0) + '%' }"></div>
-              </div>
-              <span class="w-12 text-right text-label-sm text-text-secondary">{{ v.utilization != null ? v.utilization + '%' : '—' }}</span>
-            </div>
-          </div>
-        </div>
-        <p class="text-label-sm text-text-secondary mt-3">
-          上部为各存储卷容量占用（已用/总量，需 SYNO.Core.Storage.Volume 接口）；下部为 I/O 活动与累计读写（自启动累计）。若容量显示「接口不可用」，表示该 DSM 存储接口暂未开放（账号需有 Storage 权限）。
-        </p>
       </div>
 
       <!-- Docker 容器 -->
@@ -610,12 +698,22 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
                     </div>
                   </td>
                   <td class="py-2 text-right whitespace-nowrap" @click.stop>
-                    <button v-if="c.state !== 'running'" @click="act(c.id, 'start')" :disabled="actingId === c.id + ':start'"
+                    <button v-if="c.state !== 'running'" @click="act(c.name, 'start')" :disabled="actingId === c.name + ':start'"
                       class="px-2 py-1 rounded-lg text-xs font-semibold bg-success/10 text-success hover:bg-success/20 transition-all disabled:opacity-60">启动</button>
-                    <button v-if="c.state === 'running'" @click="act(c.id, 'stop')" :disabled="actingId === c.id + ':stop'"
+                    <button v-if="c.state === 'running'" @click="act(c.name, 'stop')" :disabled="actingId === c.name + ':stop'"
                       class="px-2 py-1 rounded-lg text-xs font-semibold bg-error/10 text-error hover:bg-error/20 transition-all disabled:opacity-60">停止</button>
-                    <button @click="act(c.id, 'restart')" :disabled="actingId === c.id + ':restart'"
+                    <button @click="act(c.name, 'restart')" :disabled="actingId === c.name + ':restart'"
                       class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all disabled:opacity-60 ml-1">重启</button>
+                    <!-- 快速添加为导航链接：仅内网（群晖宿主 IP + docker 宿主机端口）；未运行或地址已存在则禁用 -->
+                    <button v-if="c.state === 'running'" @click="openAddConnection(c)"
+                      :disabled="addUrlExists(c)"
+                      class="px-2 py-1 rounded-lg text-xs font-semibold transition-all ml-1"
+                      :class="addUrlExists(c)
+                        ? 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 cursor-not-allowed'
+                        : 'bg-primary/10 text-primary hover:bg-primary/20'"
+                      :title="addUrlExists(c) ? '该内网地址已存在链接' : '快速添加为导航链接（内网地址）'">添加连接</button>
+                    <button v-else disabled
+                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 transition-all ml-1 cursor-not-allowed" title="容器未运行，暂不可用">添加连接</button>
                   </td>
                 </tr>
               </template>
@@ -639,12 +737,21 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
                 </div>
               </div>
               <div class="flex items-center gap-1 shrink-0" @click.stop>
-                <button v-if="c.state !== 'running'" @click="act(c.id, 'start')" :disabled="actingId === c.id + ':start'"
+                <button v-if="c.state !== 'running'" @click="act(c.name, 'start')" :disabled="actingId === c.name + ':start'"
                   class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-success/10 text-success hover:bg-success/20 transition-all disabled:opacity-60">启动</button>
-                <button v-if="c.state === 'running'" @click="act(c.id, 'stop')" :disabled="actingId === c.id + ':stop'"
+                <button v-if="c.state === 'running'" @click="act(c.name, 'stop')" :disabled="actingId === c.name + ':stop'"
                   class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-error/10 text-error hover:bg-error/20 transition-all disabled:opacity-60">停止</button>
-                <button @click="act(c.id, 'restart')" :disabled="actingId === c.id + ':restart'"
+                <button @click="act(c.name, 'restart')" :disabled="actingId === c.name + ':restart'"
                   class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all disabled:opacity-60">重启</button>
+                <button v-if="c.state === 'running'" @click="openAddConnection(c)"
+                  :disabled="addUrlExists(c)"
+                  class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold transition-all"
+                  :class="addUrlExists(c)
+                    ? 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 cursor-not-allowed'
+                    : 'bg-primary/10 text-primary hover:bg-primary/20'"
+                  :title="addUrlExists(c) ? '该内网地址已存在链接' : '快速添加为导航链接（内网地址）'">添加连接</button>
+                <button v-else disabled title="容器未运行，暂不可用"
+                  class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 transition-all cursor-not-allowed">添加连接</button>
               </div>
             </div>
             <div class="text-[11px] text-text-secondary truncate">镜像：{{ c.image || '—' }}</div>
@@ -795,7 +902,12 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
         </div>
       </div>
 
-      <!-- 群晖连接配置弹窗（点击按钮打开） -->
+      <!-- 从 Docker 容器快速添加为导航链接（复用快速添加弹窗：自动识别内网 + 自动获取图标） -->
+      <QuickAddLink :open="quickAddOpen" :prefill-url="quickPrefill.url" :prefill-title="quickPrefill.title" @update:open="quickAddOpen = $event" />
+
+      <!-- 群晖连接配置弹窗（点击按钮打开）。Teleport 到 body，脱离 Admin/App 嵌套的 overflow 布局，
+           避免 fixed 弹窗被祖先滚动容器裁剪或层级被压住导致「点击配置无反应」。 -->
+      <Teleport to="body">
       <div v-if="showConfig" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showConfig = false"></div>
         <div class="relative bg-bg-card w-full max-w-[640px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
@@ -859,6 +971,7 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
           </div>
         </div>
       </div>
+      </Teleport>
     </div>
   </div>
 </template>

@@ -434,6 +434,22 @@ def search():
     return jsonify({"results": [l.to_dict(user=user) for l in links][:20]})
 
 
+def _host_port_key(url):
+    """归一化 URL 为 `host:port`（含默认端口），用于「域名+端口」去重；非法/空返回空串。"""
+    if not url:
+        return ""
+    try:
+        p = urlparse(url)
+        if not p.hostname:
+            return ""
+        port = p.port
+        if not port:
+            port = 443 if p.scheme == "https" else 80
+        return f"{p.hostname.lower()}:{port}"
+    except Exception:
+        return ""
+
+
 @app.route("/api/links", methods=["POST"])
 @auth_required
 def create_link(user):
@@ -450,6 +466,13 @@ def create_link(user):
         return jsonify({"error": "分类不存在"}), 404
     if cat.parent_id is None and cat.children.count() > 0:
         return jsonify({"error": "该父分类下已有子分类，请添加到子分类"}), 400
+    # 域名+端口去重：内网/外网 URL 任一命中已存在链接则拒绝（兜底防护，前端按钮也会预禁用）
+    new_keys = {k for k in (_host_port_key(data.get("url_internal")), _host_port_key(data.get("url_external"))) if k}
+    if new_keys:
+        for existing in Link.query.all():
+            ek = {_host_port_key(existing.url_internal), _host_port_key(existing.url_external)} & new_keys
+            if ek:
+                return jsonify({"error": f"该地址（域名+端口）已存在链接：{existing.title or '未命名'}（{sorted(ek)[0]}）"}), 409
     # 图标：按输入框里的地址（网址 / 本地文件路径）落地到本地，失败则留空由展示层兜底
     icon_value, icon_err = localize_icon(data.get("icon"), user.id)
     link = Link(
