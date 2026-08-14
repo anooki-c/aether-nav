@@ -25,6 +25,7 @@
 import os
 import re
 import time
+import concurrent.futures
 import urllib3
 import requests
 
@@ -205,7 +206,7 @@ class SynoClient:
         return self._sessions[session]
 
     # ---------- 底层请求 ----------
-    def _api(self, api_name, version, method, params=None, session="Core", http_method="get"):
+    def _api(self, api_name, version, method, params=None, session="Core", http_method="get", timeout=TIMEOUT):
         sid, synotoken = self._ensure_login(session)
 
         def _request(sid_val, synotoken_val):
@@ -222,9 +223,9 @@ class SynoClient:
             try:
                 url = self.base + "/webapi/entry.cgi"
                 if http_method.lower() == "post":
-                    resp = requests.post(url, data=qs, timeout=TIMEOUT, verify=False)
+                    resp = requests.post(url, data=qs, timeout=timeout, verify=False)
                 else:
-                    resp = requests.get(url, params=qs, timeout=TIMEOUT, verify=False)
+                    resp = requests.get(url, params=qs, timeout=timeout, verify=False)
                 return resp.json()
             except requests.RequestException as e:
                 raise SynoError("请求 DSM 失败: %s" % e)
@@ -337,7 +338,7 @@ class SynoClient:
         返回每个卷的 size.total / size.used（字符串数字），并与利用率接口的
         space.volume（name 形如 'volume3'）按归一化名称对齐，供前端合并容量与 I/O。
         """
-        d = self._api("SYNO.Storage.CGI.Storage", 1, "load_info", session="Core")
+        d = self._api("SYNO.Storage.CGI.Storage", 1, "load_info", session="Core", timeout=30)
         vols = d.get("volumes") or []
         if isinstance(vols, dict):
             vols = list(vols.values())
@@ -394,33 +395,63 @@ class SynoClient:
         self._api("SYNO.Docker.Container", 1, action, {"name": name}, session="Docker")
         return True
 
-    # ---------- 一次性快照（容错聚合） ----------
+    # ---------- 一次性快照（并发容错聚合） ----------
     def snapshot(self):
         diagnostics = {}
+
+        def _safe(fn):
+            try:
+                return fn()
+            except SynoError as e:
+                return e
+            except Exception as e:  # noqa: BLE001 — 任何意外都转为错误对象，避免拖垮整页
+                return SynoError("调用异常: %s" % e)
+
+        # 四个子模块相互独立，并发拉取：任一缓慢/失败都不阻塞或拖垮其余。
+        # 存储接口在部分 NAS 上偶发缓慢/挂起，故单独只等 8s，超时即视为不可用（不阻塞整页）。
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         try:
-            containers = self.get_containers()
-            diagnostics["containers"] = {"ok": True}
-        except SynoError as e:
+            f_con = ex.submit(_safe, self.get_containers)
+            f_util = ex.submit(_safe, self.get_utilization)
+            f_health = ex.submit(_safe, self.get_system_health)
+            f_store = ex.submit(_safe, self.get_storage)
+            containers = f_con.result(timeout=20)
+            util = f_util.result(timeout=20)
+            health = f_health.result(timeout=20)
+            try:
+                storage = f_store.result(timeout=8)
+            except concurrent.futures.TimeoutError:
+                storage = None  # 存储缓慢：本次视为不可用，后台线程稍后自行结束
+        finally:
+            ex.shutdown(wait=False)
+
+        if isinstance(containers, Exception):
+            diagnostics["containers"] = {"ok": False, "error": str(containers)}
             containers = []
-            diagnostics["containers"] = {"ok": False, "error": str(e)}
-        try:
-            util = self.get_utilization()
-            diagnostics["utilization"] = {"ok": True}
-        except SynoError as e:
+        else:
+            diagnostics["containers"] = {"ok": True}
+
+        if isinstance(util, Exception):
+            diagnostics["utilization"] = {"ok": False, "error": str(util)}
             util = {}
-            diagnostics["utilization"] = {"ok": False, "error": str(e)}
-        try:
-            util["storage"] = self.get_storage()
-            diagnostics["storage"] = {"ok": True}
-        except SynoError as e:
-            util["storage"] = None
-            diagnostics["storage"] = {"ok": False, "error": str(e)}
-        try:
-            health = self.get_system_health()
-            diagnostics["system_health"] = {"ok": True}
-        except SynoError as e:
+        else:
+            diagnostics["utilization"] = {"ok": True}
+
+        if isinstance(storage, Exception):
+            diagnostics["storage"] = {"ok": False, "error": str(storage)}
+            storage = None
+        else:
+            diagnostics["storage"] = {"ok": storage is not None}
+
+        if isinstance(health, Exception):
+            diagnostics["system_health"] = {"ok": False, "error": str(health)}
             health = None
-            diagnostics["system_health"] = {"ok": False, "error": str(e)}
+        else:
+            diagnostics["system_health"] = {"ok": True}
+
+        util = util or {}
+        util["storage"] = storage
+
         return {
             "host": self.cfg["host"],
             "containers": containers,
