@@ -1,9 +1,14 @@
 # ---- 阶段 1：构建前端 ----
 FROM node:20-alpine AS fe
+# 接收构建提交 SHA：把它注入 ENV 以污染前端 build 层的缓存键，
+# 确保每次提交都强制重新构建前端（绕开 gha 对已变源码的层误复用，
+# 否则会出现「后端 version.json 是新 commit、但 dist 仍是旧产物」的不一致）。
+ARG BUILD_COMMIT=unknown
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
+ENV VITE_BUILD_COMMIT=$BUILD_COMMIT
 RUN npm run build
 
 # ---- 阶段 2：运行后端 ----
