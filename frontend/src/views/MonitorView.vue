@@ -521,14 +521,13 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
         <p class="font-body-md text-body-md text-text-secondary mt-1">通过 DSM API 实时查看 NAS 利用率与 Docker 容器（仅管理员可见）</p>
       </div>
       <div class="flex items-center gap-2">
-        <button @click="showConfig = true"
+        <button v-if="!needConfig" @click="showConfig = !showConfig"
           class="px-3 py-2 rounded-xl text-sm font-semibold border transition-all flex items-center gap-1"
-          :class="needConfig
+          :class="showConfig
             ? 'bg-primary text-on-primary hover:opacity-90'
             : 'bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high'">
           <span class="material-symbols-outlined text-[18px]">router</span>
-          <span v-if="needConfig" class="w-2 h-2 rounded-full bg-warning"></span>
-          {{ needConfig ? '配置连接' : '连接配置' }}
+          {{ showConfig ? '收起配置' : '连接配置' }}
         </button>
         <button v-if="!needConfig" @click="loadSnapshot(true)" :disabled="loading"
           class="px-3 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all flex items-center gap-1 disabled:opacity-60">
@@ -538,9 +537,66 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
       </div>
     </div>
 
+    <!-- 群晖连接配置（内联卡片，不弹窗）。未配置时强制显示并高亮；已配置时由右上角按钮展开/收起 -->
+    <div v-if="needConfig || showConfig"
+      class="mb-6 rounded-[20px] border p-6 bg-surface-container-low"
+      :class="needConfig ? 'border-warning/50' : 'border-outline-variant/30'">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined text-[20px]">router</span>
+        </div>
+        <div>
+          <h2 class="font-headline-md text-headline-md text-text-primary">群晖连接配置</h2>
+          <p v-if="needConfig" class="text-label-sm text-warning mt-0.5">尚未配置连接，请填写以下信息</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-label-sm text-text-secondary">主机地址 / IP</span>
+          <input v-model="config.host" type="text" placeholder="如 192.168.1.10"
+            class="mt-1 w-full px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        </label>
+        <label class="block">
+          <span class="text-label-sm text-text-secondary">端口（留空用默认）</span>
+          <input v-model="config.port" type="number" placeholder="5000 / 5001"
+            class="mt-1 w-full px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        </label>
+      </div>
+      <label class="flex items-center gap-3 mt-4">
+        <input v-model="config.https" type="checkbox" class="w-4 h-4 rounded accent-primary" />
+        <span class="text-sm text-text-primary">使用 HTTPS（默认 5001 端口）</span>
+      </label>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+        <label class="block">
+          <span class="text-label-sm text-text-secondary">账号</span>
+          <input v-model="config.user" type="text" placeholder="admin"
+            class="mt-1 w-full px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        </label>
+        <label class="block">
+          <span class="text-label-sm text-text-secondary">密码（留空则不修改）</span>
+          <input v-model="config.password" type="password" placeholder="••••••••"
+            class="mt-1 w-full px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        </label>
+      </div>
+      <p class="text-label-sm text-text-secondary mt-3">
+        凭据存储于站点数据库（或环境变量 SYNO_*）。群晖账号需拥有 Container Manager / 系统监控权限。
+      </p>
+      <div class="flex items-center justify-end gap-3 mt-4">
+        <span v-if="configMsg" class="text-label-sm text-text-secondary mr-auto">{{ configMsg }}</span>
+        <button v-if="!needConfig" @click="showConfig = false"
+          class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all">
+          收起
+        </button>
+        <button @click="saveConfig" :disabled="savingConfig"
+          class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all disabled:opacity-60">
+          {{ savingConfig ? '保存中…' : '保存并连接' }}
+        </button>
+      </div>
+    </div>
+
     <!-- 未配置 / 错误 -->
     <div v-if="needConfig" class="text-center text-text-secondary py-16">
-      ⚠️ 尚未配置群晖连接，点击右上角「配置连接」填写信息
+      ⚠️ 尚未配置群晖连接，请填写上方配置表单
     </div>
     <div v-else-if="error && !snap" class="text-center text-error py-16">⚠️ {{ error }}</div>
 
@@ -953,74 +1009,6 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
 
       <!-- 从 Docker 容器快速添加为导航链接（复用快速添加弹窗：自动识别内网 + 自动获取图标） -->
       <QuickAddLink :open="quickAddOpen" :prefill-url="quickPrefill.url" :prefill-title="quickPrefill.title" @update:open="quickAddOpen = $event" />
-
-      <!-- 群晖连接配置弹窗（点击按钮打开）。Teleport 到 body，脱离 Admin/App 嵌套的 overflow 布局，
-           避免 fixed 弹窗被祖先滚动容器裁剪或层级被压住导致「点击配置无反应」。 -->
-      <Teleport to="body">
-      <div v-if="showConfig" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showConfig = false"></div>
-        <div class="relative bg-bg-card w-full max-w-[640px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
-          <!-- Header -->
-          <div class="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
-                <span class="material-symbols-outlined text-[20px]">router</span>
-              </div>
-              <h2 class="font-headline-md text-headline-md text-text-primary">群晖连接配置</h2>
-            </div>
-            <button class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-text-secondary" @click="showConfig = false">
-              <span class="material-symbols-outlined">close</span>
-            </button>
-          </div>
-          <!-- Body -->
-          <div class="p-6 space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label class="block">
-                <span class="text-label-sm text-text-secondary">主机地址 / IP</span>
-                <input v-model="config.host" type="text" placeholder="如 192.168.1.10"
-                  class="mt-1 w-full px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
-              </label>
-              <label class="block">
-                <span class="text-label-sm text-text-secondary">端口（留空用默认）</span>
-                <input v-model="config.port" type="number" placeholder="5000 / 5001"
-                  class="mt-1 w-full px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
-              </label>
-            </div>
-            <label class="flex items-center gap-3">
-              <input v-model="config.https" type="checkbox" class="w-4 h-4 rounded accent-primary" />
-              <span class="text-sm text-text-primary">使用 HTTPS（默认 5001 端口）</span>
-            </label>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label class="block">
-                <span class="text-label-sm text-text-secondary">账号</span>
-                <input v-model="config.user" type="text" placeholder="admin"
-                  class="mt-1 w-full px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
-              </label>
-              <label class="block">
-                <span class="text-label-sm text-text-secondary">密码（留空则不修改）</span>
-                <input v-model="config.password" type="password" placeholder="••••••••"
-                  class="mt-1 w-full px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
-              </label>
-            </div>
-            <p class="text-label-sm text-text-secondary">
-              凭据存储于站点数据库（或环境变量 SYNO_*）。群晖账号需拥有 Container Manager / 系统监控权限。
-            </p>
-          </div>
-          <!-- Footer -->
-          <div class="px-6 py-4 border-t border-outline-variant/20 flex items-center justify-end gap-3 shrink-0">
-            <span v-if="configMsg" class="text-label-sm text-text-secondary mr-auto">{{ configMsg }}</span>
-            <button @click="showConfig = false"
-              class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all">
-              取消
-            </button>
-            <button @click="saveConfig" :disabled="savingConfig"
-              class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all disabled:opacity-60">
-              {{ savingConfig ? '保存中…' : '保存并连接' }}
-            </button>
-          </div>
-        </div>
-      </div>
-      </Teleport>
     </div>
   </div>
 </template>
