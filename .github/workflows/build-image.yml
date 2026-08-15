@@ -61,6 +61,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha
+          # 只对前端构建阶段（fe）禁用层缓存：每次 CI 都强制实跑 npm run build，
+          # 杜绝 gha 复用旧的 dist 层导致「version.json 新、dist 旧」的不一致。
+          no-cache-filters: fe
           # 注入版本号：构建提交 SHA 与构建时间，供镜像内 /app/version.json 使用
           build-args: |
             BUILD_COMMIT=${{ github.sha }}
