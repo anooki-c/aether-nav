@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { store, loadTree, loadMe, loadSettings, focusSearch, openDrawer, openAddLink, applyFavicon } from './store'
 import Sidebar from './components/Sidebar.vue'
 import TopBar from './components/TopBar.vue'
@@ -9,6 +9,7 @@ import AddLinkModal from './components/AddLinkModal.vue'
 import QuickAddLink from './components/QuickAddLink.vue'
 
 const route = useRoute()
+const router = useRouter()
 const isLogin = computed(() => route.name === 'login')
 // 后台管理 / 个人设置均为独立控制台（自有侧边栏+顶栏），不再套用主应用导航
 const isAdmin = computed(() => route.name === 'admin')

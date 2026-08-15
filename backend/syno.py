@@ -25,11 +25,30 @@
 import os
 import re
 import time
+import threading
 import concurrent.futures
 import urllib3
 import requests
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# ── 静态数据缓存（分层刷新核心）─────────────────────────────────────────
+# 存储容量 / 系统健康 变化极慢（硬盘大小、主机名几天不变），但存储接口在部分
+# NAS 上偶发缓慢/挂起。故将其与易变数据（容器/利用率）解耦：长 TTL 缓存、
+# 后台静默刷新、刷新失败回退旧值且不频繁重试，绝不阻塞页面。
+_STATIC_CACHE = {"storage": None, "health": None, "ts": 0.0, "next_retry": 0.0}
+_STATIC_TTL = 300.0  # 5 分钟：静态数据自动刷新间隔
+_STATIC_LOCK = threading.Lock()
+
+
+def _safe_call(fn):
+    """执行 fn，任何异常都转为 SynoError 返回（不抛出），便于并发聚合时区分成败。"""
+    try:
+        return fn()
+    except SynoError as e:
+        return e
+    except Exception as e:  # noqa: BLE001 — 任何意外都转为错误对象，避免拖垮整页
+        return SynoError("调用异常: %s" % e)
 
 DEFAULT_PORT_HTTP = 5000
 DEFAULT_PORT_HTTPS = 5001
@@ -395,35 +414,24 @@ class SynoClient:
         self._api("SYNO.Docker.Container", 1, action, {"name": name}, session="Docker")
         return True
 
-    # ---------- 一次性快照（并发容错聚合） ----------
-    def snapshot(self):
+    # ---------- 一次性快照（分层刷新：易变实时 / 静态长缓存） ----------
+    def snapshot(self, force=False):
         diagnostics = {}
 
-        def _safe(fn):
-            try:
-                return fn()
-            except SynoError as e:
-                return e
-            except Exception as e:  # noqa: BLE001 — 任何意外都转为错误对象，避免拖垮整页
-                return SynoError("调用异常: %s" % e)
-
-        # 四个子模块相互独立，并发拉取：任一缓慢/失败都不阻塞或拖垮其余。
-        # 存储接口在部分 NAS 上偶发缓慢/挂起，故单独只等 8s，超时即视为不可用（不阻塞整页）。
-        ex = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        # ① 易变且快：容器列表 + 利用率（CPU/内存/网络/磁盘IO），每次轮询实时拉取。
+        #    这两个接口正常 <1s，是监控页最该"新鲜"的数据，保持 15s 实时。
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         try:
-            f_con = ex.submit(_safe, self.get_containers)
-            f_util = ex.submit(_safe, self.get_utilization)
-            f_health = ex.submit(_safe, self.get_system_health)
-            f_store = ex.submit(_safe, self.get_storage)
+            f_con = ex.submit(_safe_call, self.get_containers)
+            f_util = ex.submit(_safe_call, self.get_utilization)
             containers = f_con.result(timeout=20)
             util = f_util.result(timeout=20)
-            health = f_health.result(timeout=20)
-            try:
-                storage = f_store.result(timeout=8)
-            except concurrent.futures.TimeoutError:
-                storage = None  # 存储缓慢：本次视为不可用，后台线程稍后自行结束
         finally:
             ex.shutdown(wait=False)
+
+        # ② 静态且偶发慢：存储容量 + 系统健康，走长 TTL 缓存（见 _load_static）。
+        storage, health, static_diag = self._load_static(force)
+        diagnostics.update(static_diag)
 
         if isinstance(containers, Exception):
             diagnostics["containers"] = {"ok": False, "error": str(containers)}
@@ -437,18 +445,6 @@ class SynoClient:
         else:
             diagnostics["utilization"] = {"ok": True}
 
-        if isinstance(storage, Exception):
-            diagnostics["storage"] = {"ok": False, "error": str(storage)}
-            storage = None
-        else:
-            diagnostics["storage"] = {"ok": storage is not None}
-
-        if isinstance(health, Exception):
-            diagnostics["system_health"] = {"ok": False, "error": str(health)}
-            health = None
-        else:
-            diagnostics["system_health"] = {"ok": True}
-
         util = util or {}
         util["storage"] = storage
 
@@ -460,3 +456,66 @@ class SynoClient:
             "fetched_at": int(time.time()),
             "diagnostics": diagnostics,
         }
+
+    def _load_static(self, force):
+        """拉取静态数据（存储容量 + 系统健康），带长 TTL 缓存与失败回退。
+
+        返回 (storage, health, diagnostics)。行为：
+          - 缓存新鲜（< _STATIC_TTL 且已有数据）且非强制 → 直接返回缓存（秒级）。
+          - 过期 / 强制 → 并发刷新；存储接口单独只等 8s，超时即视为本次失败。
+          - 刷新成功才更新数据；失败则回退旧值（若有），并统一设置 next_retry，
+            保证挂起/失败期间每 15s 轮询**不会**反复狠打 DSM（最多每 5 分钟一次）。
+        """
+        diagnostics = {}
+        now = time.time()
+        with _STATIC_LOCK:
+            cached = _STATIC_CACHE
+            need_refresh = force or (now >= cached["next_retry"])
+            if not need_refresh:
+                diagnostics["storage"] = {"ok": True, "cached": True}
+                diagnostics["system_health"] = {"ok": True, "cached": True}
+                return cached["storage"], cached["health"], diagnostics
+
+        # 需要刷新：并发拉取，存储单独只等 8s
+        new_store = None
+        new_health = None
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+        try:
+            f_store = ex.submit(_safe_call, self.get_storage)
+            f_health = ex.submit(_safe_call, self.get_system_health)
+            try:
+                store_res = f_store.result(timeout=8)
+                if not isinstance(store_res, Exception):
+                    new_store = store_res
+            except concurrent.futures.TimeoutError:
+                pass  # 存储缓慢：本次视为失败，回退旧值
+            health_res = f_health.result(timeout=20)
+            if not isinstance(health_res, Exception):
+                new_health = health_res
+        finally:
+            ex.shutdown(wait=False)
+
+        with _STATIC_LOCK:
+            cached = _STATIC_CACHE
+            if new_store is not None:
+                cached["storage"] = new_store
+                diagnostics["storage"] = {"ok": True}
+            else:
+                if cached["storage"] is not None:
+                    new_store = cached["storage"]  # 回退旧值，页面仍有数据
+                    diagnostics["storage"] = {"ok": True, "cached": True}
+                else:
+                    diagnostics["storage"] = {"ok": False, "error": "存储信息获取超时/失败"}
+            if new_health is not None:
+                cached["health"] = new_health
+                diagnostics["system_health"] = {"ok": True}
+            else:
+                if cached["health"] is not None:
+                    new_health = cached["health"]
+                    diagnostics["system_health"] = {"ok": True, "cached": True}
+                else:
+                    diagnostics["system_health"] = {"ok": False, "error": "系统健康获取失败"}
+            # 关键：无论成败都更新 next_retry，避免挂起时每轮询都重新打 DSM
+            cached["ts"] = now
+            cached["next_retry"] = now + _STATIC_TTL
+        return new_store, new_health, diagnostics

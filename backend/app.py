@@ -2246,6 +2246,12 @@ def monitor_config_save(user):
     return jsonify({"ok": True})
 
 
+# 监控快照短期缓存：避免前端每 15s 轮询都狠打 DSM 多个接口，
+# 同时让慢响应期间的重复请求直接命中缓存（秒级返回）。
+_MONITOR_CACHE = {"ts": 0.0, "data": None}
+_MONITOR_TTL = 10  # 秒
+
+
 @app.route("/api/monitor")
 @auth_required
 def monitor_snapshot(user):
@@ -2256,11 +2262,18 @@ def monitor_snapshot(user):
         return jsonify({"error": "尚未配置群晖连接", "need_config": True}), 400
     if not cfg["password"]:
         return jsonify({"error": "群晖密码未配置", "need_config": True}), 400
+    # 命中缓存（手动刷新带 ?force=1 绕过）
+    force = request.args.get("force") == "1"
+    now = time.time()
+    if not force and _MONITOR_CACHE["data"] and (now - _MONITOR_CACHE["ts"]) < _MONITOR_TTL:
+        return jsonify(_MONITOR_CACHE["data"])
     try:
         client = SynoClient(cfg)
-        snap = client.snapshot()
+        snap = client.snapshot(force=force)
     except SynoError as e:
         return jsonify({"error": str(e)}), 502
+    _MONITOR_CACHE["ts"] = time.time()
+    _MONITOR_CACHE["data"] = snap
     return jsonify(snap)
 
 

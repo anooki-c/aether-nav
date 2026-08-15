@@ -77,13 +77,21 @@ function containerAddUrl(c) {
 
 async function openAddConnection(c) {
   if (c.state !== 'running') return
-  // 端口未加载则先拉取，确保能拿到宿主端口
+  // 端口未加载则先拉取，确保能算出正确的内网 URL（去重判定依赖它）
   if (!portCache[c.id]) {
     await fetchPorts(c, true).catch(() => {})
   }
+  // 每次点击都重新拉取最新链接列表，确保去重数据是最新的（不依赖 onMounted 缓存）
+  await loadExistingLinks()
   const url = containerAddUrl(c)
+  // 打开前检测链接是否已存在（精确 host:port + 同端口兜底，兼容多 IP）
+  if (addUrlExists(c)) {
+    showToast('该内网地址已存在链接，无需重复添加', 'warn')
+    return
+  }
   if (!url) {
-    showToast('该容器暂无可用的宿主机端口', 'warn')
+    const isHostNet = (c.networks || []).some((n) => n.name === 'host')
+    showToast(isHostNet ? '该容器使用宿主机网络模式(host)，无端口映射，请手动添加' : '该容器暂无可用的宿主机端口', 'warn')
     return
   }
   quickPrefill.value = { url, title: c.name }
@@ -121,7 +129,25 @@ function hostPortKey(url) {
 function linkExistsByUrl(url) {
   const key = hostPortKey(url)
   if (!key) return false
-  return existingLinks.value.some((l) => hostPortKey(l.url) === key)
+  // 精确匹配：url / url_internal / url_external
+  if (existingLinks.value.some((l) =>
+    hostPortKey(l.url) === key ||
+    hostPortKey(l.url_internal) === key ||
+    hostPortKey(l.url_external) === key
+  )) return true
+  // 兜底：同端口匹配（同一台 NAS 可能有多个 IP，如 10.x vs 192.168.x，
+  // 容器端口在宿主机上是唯一的，任一 IP + 同端口 = 同一个服务）
+  const targetPort = key.split(':')[1]
+  if (targetPort) {
+    return existingLinks.value.some((l) => {
+      for (const field of [l.url, l.url_internal, l.url_external]) {
+        const k = hostPortKey(field)
+        if (k && k.endsWith(':' + targetPort)) return true
+      }
+      return false
+    })
+  }
+  return false
 }
 // 容器内网添加 URL 是否已存在于导航链接（按域名+端口判定）
 function addUrlExists(c) {
@@ -163,7 +189,10 @@ function pushHistory() {
   const now = Date.now()
   let net = null
   const rx = (u.network || {}).rx_bytes
-  if (lastRx != null && lastT) {
+  // rx_bytes 是各接口自开机累计字节之和。NAS 重启复位、或容器 veth 接口随启停
+  // 增减都会使该总和回退变小，此时 (rx-lastRx) 为负。仅在「严格递增」时才求差，
+  // 否则丢弃该样本并重置基线，避免负速率与折线图尖刺。
+  if (lastRx != null && lastT && rx != null && rx >= lastRx) {
     const dt = (now - lastT) / 1000
     if (dt > 0) net = (rx - lastRx) / dt
   }
@@ -173,17 +202,22 @@ function pushHistory() {
     cpu: u.cpu_usage ?? 0,
     mem: u.memory ?? 0,
     disk: u.disk_io ?? 0,
-    net: net ?? 0,
+    net: net,
   })
   if (history.value.length > 30) history.value.shift()
 }
 function smoothPath(vals, w = 120, h = 32) {
   if (!vals || vals.length < 2) return ''
-  const max = Math.max(...vals)
-  const min = Math.min(...vals)
-  const range = max - min || 1
+  // Y 轴自动留边距（上下各 pad 比例），避免贝塞尔控制点把线条推出图表区
+  const rawMax = Math.max(...vals)
+  const rawMin = Math.min(...vals)
+  const rawRange = rawMax - rawMin || 1
+  const pad = 0.15          // 上下各留 15% 边距
+  const yMin = rawMin - rawRange * pad
+  const yMax = rawMax + rawRange * pad
+  const range = yMax - yMin
   const step = w / (vals.length - 1)
-  const pts = vals.map((v, i) => [i * step, h - ((v - min) / range) * h])
+  const pts = vals.map((v, i) => [i * step, h - ((v - yMin) / range) * h])
   if (pts.length === 2) return `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)} L ${pts[1][0].toFixed(1)} ${pts[1][1].toFixed(1)}`
   let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`
   for (let i = 0; i < pts.length - 1; i++) {
@@ -237,11 +271,12 @@ async function saveConfig() {
   }
 }
 
-async function loadSnapshot() {
+async function loadSnapshot(force = false) {
+  if (loading.value) return  // 防止慢响应期间自动刷新叠加请求
   loading.value = true
   error.value = ''
   try {
-    const d = await api.monitorSnapshot()
+    const d = await api.monitorSnapshot(force)
     snap.value = d
     pushHistory()
     // 端口被动更新：首次拉取运行容器，之后仅状态变化的容器重拉
@@ -324,8 +359,12 @@ async function checkPort() {
   const q = String(portCheckValue.value).trim()
   if (!q) return
   const cs = containers.value
-  // 查询时触发端口数据刷新（强制拉取最新）
-  await Promise.all(cs.map((c) => fetchPorts(c, true).catch(() => {})))
+  // 端口已随运行容器在快照时被动缓存（首次加载 + 状态变化更新）。
+  // 检测前仅补充「尚未加载」的容器端口，已有缓存一律复用，不强制全量重抓
+  // （容器端口配置极少变动，避免每次查询都重新抓取所有容器）。
+  await Promise.all(cs
+    .filter((c) => !portCache[c.id])
+    .map((c) => fetchPorts(c, true).catch(() => {})))
   // 按容器聚合，避免同一容器多个映射重复出现
   const byContainer = {}
   const hostOwners = {}   // 外部端口 -> 占用它的容器名集合（用于冲突检测）
@@ -419,6 +458,15 @@ function fmtBytes(b) {
   while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
   return (i ? n.toFixed(1) : n) + ' ' + u[i]
 }
+// 网络速率：输入字节/秒，按比特/秒（bps/Kbps/Mbps/Gbps）显示——网速业界用比特而非字节
+function fmtNetRate(bps) {
+  if (bps == null || bps < 0) return '—'
+  const bits = bps * 8
+  const u = ['bps', 'Kbps', 'Mbps', 'Gbps']
+  let i = 0, n = bits
+  while (n >= 1000 && i < u.length - 1) { n /= 1000; i++ }
+  return (i ? n.toFixed(1) : Math.round(n)) + ' ' + u[i]
+}
 function fmtPort(p) {
   if (p.host && p.host !== 'None') return `${p.host} → ${p.container}/${p.type}`
   return `${p.container}/${p.type}（容器内）`
@@ -455,8 +503,8 @@ function stateCardClass(state) {
 onMounted(async () => {
   await loadConfig()
   if (!needConfig.value) loadSnapshot()
-  loadExistingLinks()
-  timer = setInterval(() => { if (!needConfig.value) loadSnapshot() }, AUTO_INTERVAL)
+  await loadExistingLinks()   // 必须等待：按钮 disabled / openAddConnection 去重都依赖 existingLinks
+  timer = setInterval(() => { if (!needConfig.value && !loading.value) loadSnapshot() }, AUTO_INTERVAL)
 })
 onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 
@@ -482,7 +530,7 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
           <span v-if="needConfig" class="w-2 h-2 rounded-full bg-warning"></span>
           {{ needConfig ? '配置连接' : '连接配置' }}
         </button>
-        <button v-if="!needConfig" @click="loadSnapshot" :disabled="loading"
+        <button v-if="!needConfig" @click="loadSnapshot(true)" :disabled="loading"
           class="px-3 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all flex items-center gap-1 disabled:opacity-60">
           <span class="material-symbols-outlined text-[18px]" :class="loading ? 'animate-spin' : ''">refresh</span>
           {{ loading ? '刷新中…' : '刷新' }}
@@ -522,37 +570,38 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
         </span>
       </div>
 
-      <!-- 利用率概览卡片（含折线图） -->
+      <!-- 利用率概览卡片：Grid stretch 保持四卡等高；含折线图的卡片用 flex 纵向布局，
+           SVG flex-1 自动填满剩余空间，避免线条被遮挡 -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-grid-gutter mb-6">
-        <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50">
-          <div class="flex items-center justify-between mb-1">
+        <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50 flex flex-col min-h-0">
+          <div class="flex items-center justify-between shrink-0">
             <span class="text-label-sm text-text-secondary">CPU 使用率</span>
             <span class="material-symbols-outlined text-[18px] text-primary">memory</span>
           </div>
-          <div class="font-headline-md text-headline-md text-text-primary">{{ util.cpu_usage != null ? util.cpu_usage + '%' : '—' }}</div>
-          <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full h-8 mt-2 text-primary">
-            <path :d="smoothPath(history.map(h => h.cpu))" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+          <div class="font-headline-md text-headline-md text-text-primary shrink-0">{{ util.cpu_usage != null ? util.cpu_usage + '%' : '—' }}</div>
+          <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full flex-1 min-h-[40px] mt-1 text-primary">
+            <path :d="smoothPath(history.map(h => h.cpu))" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round" />
           </svg>
-          <div class="mt-1 text-label-sm text-text-secondary" v-if="util.cpu_1 != null">负载 {{ util.cpu_1 }}/{{ util.cpu_5 }}/{{ util.cpu_15 }}</div>
+          <div class="text-label-sm text-text-secondary shrink-0" v-if="util.cpu_1 != null">负载 {{ util.cpu_1 }}/{{ util.cpu_5 }}/{{ util.cpu_15 }}</div>
         </div>
-        <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50">
-          <div class="flex items-center justify-between mb-1">
+        <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50 flex flex-col min-h-0">
+          <div class="flex items-center justify-between shrink-0">
             <span class="text-label-sm text-text-secondary">内存使用率</span>
             <span class="material-symbols-outlined text-[18px] text-info">developer_board</span>
           </div>
-          <div class="font-headline-md text-headline-md text-text-primary">{{ util.memory != null ? util.memory + '%' : '—' }}</div>
-          <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full h-8 mt-2 text-info">
-            <path :d="smoothPath(history.map(h => h.mem))" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+          <div class="font-headline-md text-headline-md text-text-primary shrink-0">{{ util.memory != null ? util.memory + '%' : '—' }}</div>
+          <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full flex-1 min-h-[40px] mt-1 text-info">
+            <path :d="smoothPath(history.map(h => h.mem))" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round" />
           </svg>
         </div>
-        <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50">
-          <div class="flex items-center justify-between mb-1">
+        <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50 flex flex-col min-h-0">
+          <div class="flex items-center justify-between shrink-0">
             <span class="text-label-sm text-text-secondary">网络速率</span>
             <span class="material-symbols-outlined text-[18px] text-success">lan</span>
           </div>
-          <div class="font-headline-md text-headline-md text-text-primary">{{ history.length ? fmtBytes(history[history.length - 1].net) + '/s' : '—' }}</div>
-          <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full h-8 mt-2 text-success">
-            <path :d="smoothPath(history.map(h => h.net))" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+          <div class="font-headline-md text-headline-md text-text-primary shrink-0">{{ history.length ? fmtNetRate(history[history.length - 1].net) : '—' }}</div>
+          <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full flex-1 min-h-[40px] mt-1 text-success">
+            <path :d="smoothPath(history.map(h => h.net))" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round" />
           </svg>
         </div>
         <!-- 硬盘（所有卷合并到一张卡片，每行一个卷：名称 + 容量 + IO + 进度条） -->

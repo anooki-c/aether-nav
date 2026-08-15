@@ -142,7 +142,7 @@ export const api = {
   // ---------- 群晖监控（DSM API） ----------
   monitorConfig: () => request('/monitor/config'),
   monitorConfigSave: (payload) => request('/monitor/config', json(payload)),
-  monitorSnapshot: () => request('/monitor'),
+  monitorSnapshot: (force) => request('/monitor' + (force ? '?force=1' : '')),
   monitorContainerAction: (id, action) => request('/monitor/container/action', json({ id, action })),
   monitorContainerDetail: (params) => request('/monitor/container/detail?' + new URLSearchParams(params).toString()),
 }
