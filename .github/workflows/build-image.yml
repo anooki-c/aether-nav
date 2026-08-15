@@ -59,12 +59,11 @@ jobs:
           # fallback：如果 metadata-action 未产出任何 tag（极端情况），使用 latest 兜底
           tags: ${{ steps.meta.outputs.tags != '' && steps.meta.outputs.tags || format('ghcr.io/{0}:latest', github.repository) }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha
-          # 只对前端构建阶段（fe）禁用层缓存：每次 CI 都强制实跑 npm run build，
-          # 杜绝 gha 复用旧的 dist 层导致「version.json 新、dist 旧」的不一致。
-          no-cache-filters: fe
-          # 注入版本号：构建提交 SHA 与构建时间，供镜像内 /app/version.json 使用
+          # 不使用 gha 层缓存：gha 缓存在多阶段构建中会错误复用前端 build 层，
+          # 导致 dist 与 version.json 不一致（version.json 新、dist 旧）。
+          # 去掉缓存后每次 CI 全量构建，牺牲约 1-2 分钟构建时间换取可靠性。
+          # no-cache-filters: fe
+          # 注入版本号：构建提交 SHA 与 构建时间，供镜像内 /app/version.json 使用
           build-args: |
             BUILD_COMMIT=${{ github.sha }}
             BUILD_TIME=${{ steps.meta.outputs.created }}
