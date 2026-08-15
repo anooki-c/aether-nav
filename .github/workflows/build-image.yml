@@ -61,4 +61,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha
+          # 注入版本号：构建提交 SHA 与构建时间，供镜像内 /app/version.json 使用
+          build-args: |
+            BUILD_COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.meta.outputs.created }}
           provenance: false

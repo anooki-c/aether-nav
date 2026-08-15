@@ -1,6 +1,7 @@
 """Flask 后端入口 + REST API（骨架版）。"""
 import base64
 import datetime
+import json
 import os
 import re
 import random
@@ -2313,6 +2314,137 @@ def monitor_container_detail(user):
     if not detail:
         return jsonify({"error": "未找到该容器（请确认名称/ID）"}), 404
     return jsonify(detail)
+
+
+# ---------------------------------------------------------------------------
+# 版本与更新检测
+# ---------------------------------------------------------------------------
+_VERSION_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "version.json")
+_GHCR_REPO = "anooki-c/aether-nav"
+# 简单内存缓存：避免反复点击「检查更新」时频繁请求 ghcr.io
+_update_cache = {"ts": 0.0, "data": None}
+_UPDATE_TTL = 120.0
+
+
+def _read_version():
+    """读取构建时注入的版本文件；开发环境无该文件则返回开发版信息。"""
+    try:
+        with open(_VERSION_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return {"commit": None, "tag": "dev", "build_time": None, "source": "dev"}
+    data.setdefault("source", "docker")
+    return data
+
+
+def _ghcr_latest_revision():
+    """查询 ghcr.io 上 latest 镜像内置的构建提交 SHA（org.opencontainers.image.revision）。
+
+    容器环境（尤其是 NAS）常遇 SSL 证书链 / OCSP 问题，此处跳过 verify 仅读取公开元数据。
+    """
+    import urllib3
+    base = "https://ghcr.io/v2/" + _GHCR_REPO
+    sess = requests.Session()
+    # 抑制 InsecureRequestWarning（仅针对此会话）
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    def fetch(url, accept):
+        headers = {"Accept": accept}
+        try:
+            r = sess.get(url, headers=headers, timeout=12, verify=False)
+        except (requests.exceptions.SSLError, requests.exceptions.ConnectionError,
+                urllib3.exceptions.SSLError) as exc:
+            raise RuntimeError("无法连接 ghcr.io（%s）" % str(exc)) from exc
+        if r.status_code == 401:
+            auth = r.headers.get("WWW-Authenticate", "")
+            realm = re.search(r'realm="([^"]+)"', auth)
+            service = re.search(r'service="([^"]+)"', auth)
+            scope = re.search(r'scope="([^"]+)"', auth)
+            if not realm:
+                return r
+            token_url = realm.group(1)
+            params = []
+            if service:
+                params.append("service=" + service.group(1))
+            if scope:
+                params.append("scope=" + scope.group(1))
+            if params:
+                token_url += "?" + "&".join(params)
+            tok = sess.get(token_url, timeout=12, verify=False).json().get("token") or \
+                sess.get(token_url, timeout=12, verify=False).json().get("access_token")
+            r = sess.get(url, headers={**headers, "Authorization": "Bearer " + tok}, timeout=12, verify=False)
+        return r
+
+    manifest = fetch(
+        base + "/manifests/latest",
+        "application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json",
+    ).json()
+    config_digest = (manifest.get("config") or {}).get("digest")
+    if not config_digest:
+        # 多架构镜像索引：取第一个子 manifest 的 config
+        subs = manifest.get("manifests") or []
+        if subs:
+            sub = fetch(
+                base + "/manifests/" + subs[0].get("digest", ""),
+                "application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json",
+            ).json()
+            config_digest = (sub.get("config") or {}).get("digest")
+    if not config_digest:
+        raise RuntimeError("无法解析 latest 镜像 manifest")
+    config = fetch(
+        base + "/blobs/" + config_digest,
+        "application/vnd.oci.image.config.v1+json, application/json",
+    ).json()
+    labels = ((config.get("config") or {}).get("Labels")) or {}
+    return labels.get("org.opencontainers.image.revision")
+
+
+@app.route("/api/version")
+@auth_required
+def api_version(user):
+    return jsonify(_read_version())
+
+
+@app.route("/api/check-update")
+@auth_required
+def api_check_update(user):
+    info = _read_version()
+    current = info.get("commit")
+    now = datetime.datetime.utcnow()
+    if _update_cache["data"] and (now.timestamp() - _update_cache["ts"]) < _UPDATE_TTL:
+        cached = dict(_update_cache["data"])
+        cached["cached"] = True
+        return jsonify(cached)
+    result = {
+        "current_commit": current,
+        "current_tag": info.get("tag"),
+        "build_time": info.get("build_time"),
+        "source": info.get("source"),
+        "update_available": None,
+        "latest_commit": None,
+        "latest_build_time": None,
+        "checked_at": now.isoformat() + "Z",
+        "error": None,
+        "cached": False,
+    }
+    try:
+        rev = _ghcr_latest_revision()
+        result["latest_commit"] = rev
+        if not current:
+            result["error"] = "本地为开发版本，无提交号可比"
+        elif not rev:
+            result["error"] = "无法读取 latest 镜像的构建提交号"
+        else:
+            result["update_available"] = (current != rev)
+    except Exception as e:
+        err = str(e)
+        # 截断过长的底层 SSL 错误，只保留关键信息
+        if "InvalidHeader" in err or "OCSP" in err or "SSL" in err.upper():
+            err = "网络连接失败（SSL 证书问题），请检查网络或代理设置"
+        result["error"] = "检测失败：" + err
+    _update_cache["ts"] = now.timestamp()
+    _update_cache["data"] = result
+    return jsonify(result)
 
 
 def create_app():

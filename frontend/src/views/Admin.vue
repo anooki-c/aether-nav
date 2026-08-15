@@ -31,6 +31,29 @@ const isAdmin = computed(() => store.user && store.user.role === 'admin')
 // 避免 F5 刷新瞬间闪现「仅管理员可访问」
 const authPending = computed(() => !!store.token && !store.user)
 
+// ---------- 版本与更新检测 ----------
+const versionInfo = ref(null)
+const checking = ref(false)
+const updateStatus = ref(null) // { update_available, latest_commit, error, ... }
+async function loadVersion() {
+  try {
+    versionInfo.value = await api.version()
+  } catch (e) {
+    versionInfo.value = { source: 'dev', commit: null }
+  }
+}
+async function checkUpdate() {
+  checking.value = true
+  updateStatus.value = null
+  try {
+    updateStatus.value = await api.checkUpdate()
+  } catch (e) {
+    updateStatus.value = { error: (e && e.message) || '检测失败' }
+  } finally {
+    checking.value = false
+  }
+}
+
 // ---------- 链接管理 ----------
 const adminLinkList = ref([])
 // 分类筛选：两级联动（父 → 子）
@@ -962,6 +985,7 @@ watch(tab, (v) => {
 onMounted(async () => {
   // 普通用户即可查看「链接管理」「分类管理」，因此始终加载链接；
   // 管理员额外加载用户/设置等管理数据
+  loadVersion()
   await loadLinks()
   if (isAdmin.value) await loadAdminData()
 })
@@ -1701,6 +1725,35 @@ onMounted(async () => {
             <div class="mb-8">
               <h1 class="font-headline-lg text-headline-lg text-text-primary tracking-tight">系统设置</h1>
               <p class="font-body-md text-body-md text-text-secondary mt-1">配置全局首选项和仪表板行为。</p>
+            </div>
+
+            <!-- 版本与更新检测 -->
+            <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-variant bg-surface px-4 py-3">
+              <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-label-sm text-text-secondary">
+                <span v-if="versionInfo">
+                  当前版本：
+                  <code class="rounded bg-surface-variant px-1.5 py-0.5 text-text-primary">{{ versionInfo.commit ? versionInfo.commit.slice(0, 7) : '开发版' }}</code>
+                  <span v-if="versionInfo.build_time" class="text-text-secondary opacity-70">· 构建 {{ versionInfo.build_time }}</span>
+                </span>
+                <span v-else class="text-text-secondary opacity-70">版本信息加载中…</span>
+
+                <span v-if="updateStatus && !updateStatus.error" class="inline-flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[16px]"
+                        :class="updateStatus.update_available === false ? 'text-success' : (updateStatus.update_available === true ? 'text-warning' : 'text-text-secondary opacity-70')">
+                    {{ updateStatus.update_available === false ? 'check_circle' : (updateStatus.update_available === true ? 'system_update' : 'help') }}
+                  </span>
+                  <span :class="updateStatus.update_available === false ? 'text-success' : (updateStatus.update_available === true ? 'text-warning' : 'text-text-secondary opacity-70')">
+                    {{ updateStatus.update_available === false ? '已是最新' : (updateStatus.update_available === true ? '有更新可用（latest: ' + (updateStatus.latest_commit || '').slice(0, 7) + '）' : '更新状态未知') }}
+                  </span>
+                  <span v-if="updateStatus.cached" class="text-text-secondary opacity-70">（缓存 {{ updateStatus.checked_at ? updateStatus.checked_at.slice(11, 19) : '' }}）</span>
+                </span>
+                <span v-else-if="updateStatus && updateStatus.error" class="text-warning">检测失败：{{ updateStatus.error }}</span>
+              </div>
+              <button
+                class="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-label-sm font-medium text-on-primary transition-opacity hover:opacity-90 disabled:opacity-50"
+                :disabled="checking"
+                @click="checkUpdate"
+              >{{ checking ? '检测中…' : '检查更新' }}</button>
             </div>
 
             <!-- 单卡片容器 + 三列分组（列间竖线分隔） -->

@@ -145,4 +145,8 @@ export const api = {
   monitorSnapshot: (force) => request('/monitor' + (force ? '?force=1' : '')),
   monitorContainerAction: (id, action) => request('/monitor/container/action', json({ id, action })),
   monitorContainerDetail: (params) => request('/monitor/container/detail?' + new URLSearchParams(params).toString()),
+
+  // ---------- 版本与更新检测 ----------
+  version: () => request('/version'),
+  checkUpdate: () => request('/check-update'),
 }
