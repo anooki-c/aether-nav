@@ -134,7 +134,7 @@ function prefillFromObject(l) {
     category_id: l.category_id || null,
     icon: l.icon || '',
     permission: l.permission || 'admin',
-    enablePwd: false,
+    enablePwd: !!l.has_password,
     pwdNew: '',
     pwdConfirm: '',
   }
@@ -158,6 +158,7 @@ async function fetchEditDetail(id) {
     form.value.url_internal = data.url_internal || ''
     form.value.icon = data.icon || ''
     form.value.permission = data.permission || 'admin'
+    form.value.enablePwd = !!data.has_password
     if (data.category_id) {
       form.value.category_id = data.category_id
       const pid = findParentCategoryId(data.category_id)
@@ -210,20 +211,27 @@ async function save() {
     error.value = '请选择分类'
     return
   }
-  // 每用户独立密码校验
+  // 每用户独立密码：开启且填写新密码才设置；开启但留空(编辑态)保留原密码；
+  // 关闭且原先有密码则清除；新建态开启但留空则要求必填
+  let payloadPassword = undefined
   if (form.value.enablePwd) {
-    if (!form.value.pwdNew) {
+    if (form.value.pwdNew) {
+      if (form.value.pwdNew !== form.value.pwdConfirm) {
+        pwdError.value = '两次输入的密码不一致'
+        return
+      }
+      if (form.value.pwdNew.length < 4) {
+        pwdError.value = '密码至少 4 位'
+        return
+      }
+      payloadPassword = form.value.pwdNew
+    } else if (!isEdit.value) {
       pwdError.value = '请输入访问密码'
       return
     }
-    if (form.value.pwdNew !== form.value.pwdConfirm) {
-      pwdError.value = '两次输入的密码不一致'
-      return
-    }
-    if (form.value.pwdNew.length < 4) {
-      pwdError.value = '密码至少 4 位'
-      return
-    }
+    // 编辑态开启但留空新密码 → 保留原有密码（不传 password）
+  } else if (isEdit.value && props.editLink && props.editLink.has_password) {
+    payloadPassword = '' // 关闭 → 清除当前用户的密码
   }
   saving.value = true
   try {
@@ -237,7 +245,7 @@ async function save() {
       icon: form.value.icon.trim() || '',
       permission: form.value.permission,
     }
-    if (form.value.enablePwd) payload.password = form.value.pwdNew
+    if (payloadPassword !== undefined) payload.password = payloadPassword
     if (isEdit.value) {
       const res = await api.updateLink(props.editLink.id, payload)
       bumpLinks()

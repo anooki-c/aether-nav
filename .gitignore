@@ -13,6 +13,8 @@ frontend/dist/
 # 废弃/调试构建产物（构建卡顿产生的 dist_stuck_*，非源码、不被服务）
 frontend/dist_stuck*/
 dist_stuck*/
+frontend/dist_validate/
+frontend/dist_chk_*/
 
 # npm 缓存与日志
 frontend/.npmcache/
