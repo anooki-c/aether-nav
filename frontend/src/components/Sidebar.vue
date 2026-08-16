@@ -220,7 +220,7 @@ function onLogin() {
           :class="collapsed ? 'flex-col px-0 pt-1 mx-auto' : 'px-6'"
           @click="goFront"
         >
-          <div class="w-10 h-10 rounded-lg bg-brand flex items-center justify-center text-white text-xl font-bold shadow-fab overflow-hidden">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center text-primary text-xl font-bold overflow-hidden">
             <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
             <span v-else>云</span>
           </div>

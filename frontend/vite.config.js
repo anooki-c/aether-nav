@@ -27,6 +27,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
+    // false：部分环境下 Vite 清理 dist 会被安全删除包装拦截而构建失败；
+    // 改为覆盖写入，旧的无用哈希产物可手动删除（不影响新产物引用）。
+    emptyOutDir: false,
   },
 })

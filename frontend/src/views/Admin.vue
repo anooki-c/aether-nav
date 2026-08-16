@@ -65,6 +65,8 @@ const filterOwner = ref('')
 const filterPwd = ref('') // '' | 'set' | 'unset'
 // 权限筛选
 const filterPerm = ref('') // '' | 'all' | 'registered' | 'admin' | 'self'
+// 标题关键字筛选
+const filterTitle = ref('')
 const linkSubTab = ref('all') // all | archived
 const linksPage = ref(1)
 const linksPageSize = ref(10)
@@ -173,6 +175,8 @@ const filteredLinks = computed(() => {
     if (filterPwd.value === 'unset' && l.has_password) return false
     // 权限筛选
     if (filterPerm.value && l.permission !== filterPerm.value) return false
+    // 标题关键字筛选
+    if (filterTitle.value && !(l.title || '').toLowerCase().includes(filterTitle.value.trim().toLowerCase())) return false
     return true
   })
 })
@@ -425,6 +429,53 @@ async function delLink(l) {
   msg.value = '链接已删除'
 }
 
+// ---------- 链接批量选择 / 批量编辑 ----------
+const selectedLinkIds = ref([])
+const selectedLinkSet = computed(() => new Set(selectedLinkIds.value))
+function isLinkSelected(id) { return selectedLinkSet.value.has(id) }
+function toggleLinkSelect(id) {
+  const s = new Set(selectedLinkIds.value)
+  if (s.has(id)) s.delete(id); else s.add(id)
+  selectedLinkIds.value = [...s]
+}
+const allFilteredSelected = computed(() =>
+  filteredLinks.value.length > 0 && filteredLinks.value.every((l) => selectedLinkSet.value.has(l.id))
+)
+function toggleSelectAllLinks() {
+  const s = new Set(selectedLinkIds.value)
+  if (allFilteredSelected.value) {
+    filteredLinks.value.forEach((l) => s.delete(l.id))
+  } else {
+    filteredLinks.value.forEach((l) => s.add(l.id))
+  }
+  selectedLinkIds.value = [...s]
+}
+function clearLinkSelection() { selectedLinkIds.value = [] }
+
+// 批量编辑：权限 + 是否主页显示
+const batchPerm = ref('')
+const batchShowHome = ref('') // '' | 'show' | 'hide'
+const batchBusy = ref(false)
+async function applyBatchLinks() {
+  if (!selectedLinkIds.value.length) return
+  if (!batchPerm.value && !batchShowHome.value) { msg.value = '请先选择要修改的权限或主页显示'; return }
+  const payload = {}
+  if (batchPerm.value) payload.permission = batchPerm.value
+  if (batchShowHome.value === 'show') payload.show_on_home = true
+  if (batchShowHome.value === 'hide') payload.show_on_home = false
+  batchBusy.value = true
+  try {
+    const res = await api.batchUpdateLinks(selectedLinkIds.value, payload)
+    msg.value = `已更新 ${res.updated} 个链接`
+    selectedLinkIds.value = []
+    batchPerm.value = ''
+    batchShowHome.value = ''
+    await loadLinks()
+    bumpLinks()
+  } catch (e) { msg.value = e.message }
+  finally { batchBusy.value = false }
+}
+
 // ---------- 分类管理 ----------
 const expanded = ref({})
 const selectedCat = ref(null)
@@ -467,6 +518,31 @@ const catForm = ref({ id: null, name: '', parent_id: null, icon: '', color: '#6C
 // 当前用户能否编辑某个分类：仅管理员可编辑/删除；普通成员只能「添加」分类，不能修改（含自己创建的）
 function canEditCat(c) {
   return isAdmin.value
+}
+// ---------- 分类批量选择 / 批量权限（仅管理员） ----------
+const selectedCatIds = ref([])
+const selectedCatSet = computed(() => new Set(selectedCatIds.value))
+function toggleCatSelect(id) {
+  const s = new Set(selectedCatIds.value)
+  if (s.has(id)) s.delete(id); else s.add(id)
+  selectedCatIds.value = [...s]
+}
+function clearCatSelection() { selectedCatIds.value = [] }
+const batchCatPerm = ref('')
+const batchCatBusy = ref(false)
+async function applyBatchCats() {
+  if (!selectedCatIds.value.length) return
+  if (!batchCatPerm.value) { msg.value = '请选择要修改的权限'; return }
+  batchCatBusy.value = true
+  try {
+    const res = await api.batchUpdateCategories(selectedCatIds.value, { permission: batchCatPerm.value })
+    msg.value = `已更新 ${res.updated} 个分类`
+    selectedCatIds.value = []
+    batchCatPerm.value = ''
+    const { loadTree } = await import('../store')
+    await loadTree()
+  } catch (e) { msg.value = e.message }
+  finally { batchCatBusy.value = false }
 }
 function selectCat(c) {
   if (!canEditCat(c)) return
@@ -959,7 +1035,8 @@ const visibleNav = computed(() =>
   navItems.filter((n) => isAdmin.value || n.k === 'links' || n.k === 'categories')
 )
 
-watch([filterParent, filterChild, filterOwner, filterPwd, filterPerm, linkSubTab], () => { linksPage.value = 1 })
+watch([filterParent, filterChild, filterOwner, filterPwd, filterPerm, filterTitle, linkSubTab], () => { linksPage.value = 1 })
+watch(linksPageSize, () => { linksPage.value = 1 })
 watch(filterParent, () => { filterChild.value = '' })
 watch([userSubTab], () => { usersPage.value = 1 })
 
@@ -996,10 +1073,13 @@ onMounted(async () => {
     <!-- Admin Sidebar -->
     <aside class="hidden md:flex flex-col bg-surface shadow-md w-[240px] shrink-0">
       <button class="px-6 pt-6 pb-6 border-b border-outline-variant/30 flex items-center gap-3 text-left hover:opacity-80 transition-opacity" @click="router.push('/')">
-        <div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg shadow-sm">云</div>
+        <div class="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+          <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
+          <span v-else class="font-bold text-lg text-primary">云</span>
+        </div>
         <div>
           <div class="font-headline-sm text-headline-sm font-bold text-primary">{{ siteName }}</div>
-          <div class="font-label-sm text-label-sm text-secondary">管理控制台</div>
+          <div class="font-label-sm text-label-sm text-secondary">{{ store.siteSubtitle }}</div>
         </div>
       </button>
       <nav class="flex-1 px-4 py-4 flex flex-col gap-1">
@@ -1029,13 +1109,13 @@ onMounted(async () => {
     <transition name="drawer">
       <aside v-if="adminNavOpen" class="fixed left-0 top-0 h-full w-[260px] max-w-[85vw] bg-surface shadow-xl z-50 flex flex-col md:hidden">
         <div class="px-6 pt-6 pb-6 border-b border-outline-variant/30 flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden">
+          <div class="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
             <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
-            <span v-else>云</span>
+            <span v-else class="font-bold text-lg text-primary">云</span>
           </div>
           <div>
             <div class="font-headline-sm text-headline-sm font-bold text-primary">{{ siteName }}</div>
-            <div class="font-label-sm text-label-sm text-secondary">管理控制台</div>
+            <div class="font-label-sm text-label-sm text-secondary">{{ store.siteSubtitle }}</div>
           </div>
         </div>
         <nav class="flex-1 px-4 py-4 flex flex-col gap-1 overflow-y-auto">
@@ -1067,11 +1147,7 @@ onMounted(async () => {
           <button class="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-primary hover:bg-surface-container transition-colors" @click="adminNavOpen = true" title="菜单">
             <span class="material-symbols-outlined">menu</span>
           </button>
-          <button class="flex items-center gap-2 font-headline-md text-headline-md font-bold text-primary hidden md:block hover:opacity-80 transition-opacity" @click="router.push('/')">
-            <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-6 h-6 object-contain" />
-            <span v-else class="material-symbols-outlined text-primary">cloud</span>
-            {{ siteName }}
-          </button>
+          <div class="font-headline-md text-headline-md font-bold text-primary">管理控制台</div>
         </div>
         <div class="flex items-center gap-2">
           <UserMenu />
@@ -1148,6 +1224,36 @@ onMounted(async () => {
                   <option value="self">仅自己</option>
                 </select>
               </div>
+              <div class="flex items-center gap-2">
+                <label class="font-label-sm text-label-sm text-text-secondary">标题:</label>
+                <input v-model="filterTitle" type="text" placeholder="搜索标题…" class="bg-bg-card border border-outline-variant rounded-lg px-3 py-1.5 font-body-sm text-body-sm focus:outline-none focus:border-primary w-40" />
+              </div>
+            </div>
+
+            <div v-if="selectedLinkIds.length" class="flex flex-wrap items-center gap-3 mb-4 p-3 rounded-xl bg-primary-fixed/30 border border-primary/20">
+              <span class="font-body-sm text-body-sm text-primary font-semibold">已选 {{ selectedLinkIds.length }} 个</span>
+              <div class="flex items-center gap-2">
+                <label class="font-label-sm text-label-sm text-text-secondary">权限:</label>
+                <select v-model="batchPerm" class="bg-bg-card border border-outline-variant rounded-lg px-2 py-1.5 font-body-sm text-body-sm focus:outline-none focus:border-primary">
+                  <option value="">不改</option>
+                  <option value="all">所有人</option>
+                  <option value="registered">注册用户</option>
+                  <option value="admin">管理员</option>
+                  <option value="self">仅自己</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="font-label-sm text-label-sm text-text-secondary">主页显示:</label>
+                <select v-model="batchShowHome" class="bg-bg-card border border-outline-variant rounded-lg px-2 py-1.5 font-body-sm text-body-sm focus:outline-none focus:border-primary">
+                  <option value="">不改</option>
+                  <option value="show">显示</option>
+                  <option value="hide">隐藏</option>
+                </select>
+              </div>
+              <button :disabled="batchBusy" @click="applyBatchLinks" class="flex items-center gap-1 bg-primary text-on-primary px-3 py-1.5 rounded-lg font-body-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+                <span class="material-symbols-outlined text-sm">check</span>应用
+              </button>
+              <button @click="clearLinkSelection" class="px-3 py-1.5 rounded-lg font-body-sm text-secondary hover:bg-surface-container transition-colors">取消选择</button>
             </div>
 
             <div class="bg-bg-card rounded-[16px] shadow-sm overflow-hidden border border-outline-variant/30">
@@ -1155,6 +1261,9 @@ onMounted(async () => {
                 <table class="w-full text-left border-collapse">
                   <thead>
                     <tr class="border-b border-outline-variant/50 bg-surface-container-lowest">
+                      <th class="py-4 px-4 w-10">
+                        <input type="checkbox" class="w-4 h-4 accent-primary" :checked="allFilteredSelected" :indeterminate.prop="selectedLinkIds.length > 0 && !allFilteredSelected" @change="toggleSelectAllLinks" title="全选/取消全选当前筛选结果" />
+                      </th>
                       <th class="py-4 px-6 font-headline-sm text-headline-sm text-on-surface-variant font-semibold">图标</th>
                       <th class="py-4 px-6 font-headline-sm text-headline-sm text-on-surface-variant font-semibold">名称</th>
                       <th class="py-4 px-6 font-headline-sm text-headline-sm text-on-surface-variant font-semibold">外网URL</th>
@@ -1169,6 +1278,9 @@ onMounted(async () => {
                   </thead>
                   <tbody class="font-body-md text-body-md">
                     <tr v-for="l in pagedLinks" :key="l.id" class="border-b border-outline-variant/20 hover:bg-surface-container-low transition-colors group">
+                      <td class="py-4 px-4 w-10">
+                        <input type="checkbox" class="w-4 h-4 accent-primary" :checked="isLinkSelected(l.id)" @change="toggleLinkSelect(l.id)" />
+                      </td>
                       <td class="py-4 px-6">
                         <div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary group-hover:bg-primary-fixed transition-colors overflow-hidden">
                           <EntityIcon :icon="l.icon" :fallback="getLinkIcon(l.title)" :size="24" :alt="l.title" />
@@ -1243,20 +1355,34 @@ onMounted(async () => {
                       </td>
                     </tr>
                     <tr v-if="!pagedLinks.length">
-                      <td colspan="8" class="py-10 text-center text-on-surface-variant">无内容</td>
+                      <td colspan="11" class="py-10 text-center text-on-surface-variant">无内容</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <div class="border-t border-outline-variant/50 p-4 flex items-center justify-between bg-surface-container-lowest rounded-b-[16px]">
-                <span class="font-body-sm text-body-sm text-on-surface-variant">共 {{ filteredLinks.length }} 条记录 · 第 {{ linksPage }} / {{ linksTotalPages }} 页</span>
+              <div class="border-t border-outline-variant/50 p-4 flex flex-wrap items-center justify-between gap-3 bg-surface-container-lowest rounded-b-[16px]">
+                <div class="flex items-center gap-3">
+                  <span class="font-body-sm text-body-sm text-on-surface-variant">共 {{ filteredLinks.length }} 条 · 第 {{ linksPage }} / {{ linksTotalPages }} 页</span>
+                  <div class="flex items-center gap-1">
+                    <label class="font-label-sm text-label-sm text-on-surface-variant">每页</label>
+                    <select v-model.number="linksPageSize" class="bg-bg-card border border-outline-variant rounded-lg px-2 py-1 font-body-sm text-body-sm focus:outline-none focus:border-primary">
+                      <option :value="10">10</option>
+                      <option :value="20">20</option>
+                      <option :value="50">50</option>
+                      <option :value="100">100</option>
+                    </select>
+                    <span class="font-label-sm text-label-sm text-on-surface-variant">条</span>
+                  </div>
+                </div>
                 <div class="flex items-center gap-1">
+                  <button class="px-2 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-40" :disabled="linksPage <= 1" @click="goLinksPage(1)" title="首页">«</button>
                   <button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-40" :disabled="linksPage <= 1" @click="goLinksPage(linksPage - 1)">‹</button>
                   <button v-for="p in linksPages" :key="p"
                     class="w-8 h-8 flex items-center justify-center rounded border font-body-sm transition-colors"
                     :class="p === '...' ? 'border-transparent cursor-default text-on-surface-variant' : (p === linksPage ? 'border-primary bg-primary-container text-on-primary-container font-semibold' : 'border-outline-variant text-on-surface-variant hover:bg-surface-container')"
                     :disabled="p === '...'" @click="goLinksPage(p)">{{ p }}</button>
                   <button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-40" :disabled="linksPage >= linksTotalPages" @click="goLinksPage(linksPage + 1)">›</button>
+                  <button class="px-2 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-40" :disabled="linksPage >= linksTotalPages" @click="goLinksPage(linksTotalPages)" title="尾页">»</button>
                 </div>
               </div>
             </div>
@@ -1274,6 +1400,24 @@ onMounted(async () => {
                   <span class="material-symbols-outlined text-sm">add</span> 新建分类
                 </button>
               </div>
+            </div>
+
+            <div v-if="isAdmin && selectedCatIds.length" class="flex flex-wrap items-center gap-3 mb-6 p-3 rounded-xl bg-primary-fixed/30 border border-primary/20">
+              <span class="font-body-sm text-body-sm text-primary font-semibold">已选 {{ selectedCatIds.length }} 个分类</span>
+              <div class="flex items-center gap-2">
+                <label class="font-label-sm text-label-sm text-text-secondary">权限:</label>
+                <select v-model="batchCatPerm" class="bg-bg-card border border-outline-variant rounded-lg px-2 py-1.5 font-body-sm text-body-sm focus:outline-none focus:border-primary">
+                  <option value="">请选择</option>
+                  <option value="all">所有人</option>
+                  <option value="registered">注册用户</option>
+                  <option value="admin">管理员</option>
+                  <option value="self">仅自己</option>
+                </select>
+              </div>
+              <button :disabled="batchCatBusy" @click="applyBatchCats" class="flex items-center gap-1 bg-primary text-on-primary px-3 py-1.5 rounded-lg font-body-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+                <span class="material-symbols-outlined text-sm">check</span>应用
+              </button>
+              <button @click="clearCatSelection" class="px-3 py-1.5 rounded-lg font-body-sm text-secondary hover:bg-surface-container transition-colors">取消选择</button>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1298,6 +1442,7 @@ onMounted(async () => {
                              :title="canEditCat(p) ? '' : '无权限：仅可编辑自己创建的分类'"
                              @click="canEditCat(p) && selectCat(p)">
                           <span class="material-symbols-outlined text-sm" @click.stop="expanded[p.id] = !expanded[p.id]">{{ expanded[p.id] ? 'expand_more' : 'chevron_right' }}</span>
+                          <input v-if="isAdmin" type="checkbox" class="w-4 h-4 accent-primary shrink-0" :checked="selectedCatSet.has(p.id)" @click.stop="toggleCatSelect(p.id)" title="选择此分类批量改权限" />
                           <EntityIcon :icon="p.icon" fallback="folder" :size="20" :alt="p.name" />
                           <span class="font-body-md font-bold">{{ p.name }}</span>
                           <span v-if="p.visible === false" class="text-label-sm opacity-80 text-error">已隐藏</span>
@@ -1315,6 +1460,7 @@ onMounted(async () => {
                                ]"
                                :title="canEditCat(c) ? '' : '无权限：仅可编辑自己创建的分类'"
                                @click="canEditCat(c) && selectCat(c)">
+                            <input v-if="isAdmin" type="checkbox" class="w-4 h-4 accent-primary shrink-0" :checked="selectedCatSet.has(c.id)" @click.stop="toggleCatSelect(c.id)" title="选择此分类批量改权限" />
                             <EntityIcon :icon="c.icon" fallback="folder" :size="20" :alt="c.name" />
                             <span class="font-body-md">{{ c.name }}</span>
                             <span v-if="c.visible === false" class="ml-1 text-label-sm opacity-80 text-error">已隐藏</span>

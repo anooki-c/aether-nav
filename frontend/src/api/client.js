@@ -102,6 +102,10 @@ export const api = {
       body: JSON.stringify({ new_password: newPassword || '' }),
     }),
   adminLinks: () => request('/admin/links'),
+  // 批量更新链接：权限（仅可编辑者）+ 是否主页显示（按当前用户）
+  batchUpdateLinks: (ids, payload) => request('/admin/links/batch', json({ ids, ...payload })),
+  // 批量更新分类权限（仅管理员）
+  batchUpdateCategories: (ids, payload) => request('/admin/categories/batch', json({ ids, ...payload })),
 
   // ---------- 用户权限（编辑弹窗 edit_permissions） ----------
   userPermissions: (uid) => request(`/admin/users/${uid}/permissions`),

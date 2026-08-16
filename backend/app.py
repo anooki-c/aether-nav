@@ -642,6 +642,47 @@ def delete_link(user, link_id):
     return jsonify({"ok": True})
 
 
+@app.route("/api/admin/links/batch", methods=["POST"])
+@auth_required
+def batch_update_links(user):
+    """批量更新链接：权限（仅链接可编辑者）+ 是否主页显示（按当前用户独立存储）。
+
+    body: { ids: [int], permission?: 'all'|'registered'|'admin'|'self', show_on_home?: bool }
+    """
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids") or []
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"error": "请选择至少一个链接"}), 400
+    perm = data.get("permission")
+    show = data.get("show_on_home")
+    if perm is not None and perm not in ("all", "registered", "admin", "self"):
+        return jsonify({"error": "权限值非法"}), 400
+    updated = 0
+    for raw in ids:
+        try:
+            lid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        link = Link.query.get(lid)
+        if not link:
+            continue
+        can_edit = _can_edit_link(user, link)
+        if perm is not None and can_edit:
+            if link.permission != perm:
+                audit(user, "link_permission", "link", link.id, link.title,
+                      "批量：基础权限 %s → %s" % (link.permission, perm))
+            link.permission = perm
+        if show is not None:
+            row = UserLinkVisibility.query.filter_by(user_id=user.id, link_id=link.id).first()
+            if not row:
+                row = UserLinkVisibility(user_id=user.id, link_id=link.id)
+                db.session.add(row)
+            row.show_on_home = bool(show)
+        updated += 1
+    db.session.commit()
+    return jsonify({"ok": True, "updated": updated})
+
+
 # ---------- 分类：CRUD / 重排 ----------
 @app.route("/api/categories", methods=["POST"])
 @auth_required
@@ -756,6 +797,37 @@ def update_category(user, cat_id):
     if parts:
         audit(user, "category_update", "category", cat.id, cat.name, "；".join(parts))
     return jsonify({"category": cat.to_dict(with_children=True)})
+
+
+@app.route("/api/admin/categories/batch", methods=["POST"])
+@auth_required
+def batch_update_categories(user):
+    """批量更新分类权限（仅管理员）。body: { ids: [int], permission: 'all'|'registered'|'admin'|'self' }"""
+    if user.role != "admin":
+        return jsonify({"error": "无权限：仅管理员可批量修改分类权限"}), 403
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids") or []
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"error": "请选择至少一个分类"}), 400
+    perm = data.get("permission")
+    if perm not in ("all", "registered", "admin", "self"):
+        return jsonify({"error": "权限值非法"}), 400
+    updated = 0
+    for raw in ids:
+        try:
+            cid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        cat = Category.query.get(cid)
+        if not cat:
+            continue
+        if cat.permission != perm:
+            audit(user, "category_update", "category", cat.id, cat.name,
+                  "批量：分类权限 %s→%s" % (cat.permission or "all", perm))
+        cat.permission = perm
+        updated += 1
+    db.session.commit()
+    return jsonify({"ok": True, "updated": updated})
 
 
 @app.route("/api/categories/<int:cat_id>", methods=["DELETE"])

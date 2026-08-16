@@ -163,9 +163,9 @@ async function savePassword() {
     <!-- 个人设置 侧边栏（与后台同款独立控制台） -->
     <aside class="hidden md:flex flex-col bg-surface shadow-md w-[240px] shrink-0">
       <button class="px-6 pt-6 pb-6 border-b border-outline-variant/30 flex items-center gap-3 text-left hover:opacity-80 transition-opacity" @click="goFront">
-        <div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden">
+        <div class="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
           <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
-          <span v-else>云</span>
+          <span v-else class="font-bold text-lg text-primary">云</span>
         </div>
         <div>
           <div class="font-headline-sm text-headline-sm font-bold text-primary">{{ store.siteName }}</div>
