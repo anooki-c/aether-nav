@@ -949,7 +949,7 @@ const siteName = ref('云航导航')
 const siteSubtitle = ref('')
 const siteLogo = ref('')
 const logoUploading = ref(false)
-// 代理网络（第三列「代理网络」分组）：仅用于获取图标与检测链接连通性
+// 代理网络（第三列「代理网络」分组）：仅作为兜底——直连获取图标失败 / 连通性不通时走代理重试
 const proxyUrl = ref('')
 
 // ---------- 编辑链接弹窗：图标接口选择（下拉 + 获取） ----------
@@ -2424,7 +2424,7 @@ onMounted(async () => {
                     <input v-model="proxyUrl" type="text"
                       class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
                       placeholder="如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080" />
-                    <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅用于「获取图标」与「检测链接连通性」两类请求；页面加载、更新检测等其他请求均不使用代理。留空则直连。</p>
+                    <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅作为兜底：只在「获取图标失败」或「连通性检测不通」时走代理重试；页面加载、更新检测等其他请求均不使用。留空则始终直连。</p>
                   </div>
                 </div>
 

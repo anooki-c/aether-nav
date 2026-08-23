@@ -629,7 +629,7 @@ def create_link(user):
             if ek:
                 return jsonify({"error": f"该地址（域名+端口）已存在链接：{existing.title or '未命名'}（{sorted(ek)[0]}）"}), 409
     # 图标：按输入框里的地址（网址 / 本地文件路径）落地到本地，失败则留空由展示层兜底
-    icon_value, icon_err = localize_icon(data.get("icon"), user.id, proxies=outbound_proxy())
+    icon_value, icon_err = localize_icon(data.get("icon"), user.id)
     link = Link(
         title=title,
         description=data.get("description", ""),
@@ -768,7 +768,7 @@ def update_link(user, link_id):
         # 依据输入框中的地址重新落地图标；与原值相同则不重复下载
         new_icon = (data["icon"] or "").strip()
         if new_icon != (link.icon or ""):
-            link.icon, icon_err = localize_icon(new_icon, user.id, proxies=outbound_proxy())
+            link.icon, icon_err = localize_icon(new_icon, user.id)
     if "category_id" in data and data["category_id"]:
         cat = Category.query.get(data["category_id"])
         if not cat:
@@ -1092,10 +1092,10 @@ def favicon_conf():
 def outbound_proxy():
     """返回供「获取图标 / 检测链接连通性」使用的代理字典；未配置则返回 None。
 
-    仅以下两类出站请求使用该代理：
-    - 获取图标（probe_icon / 图标接口测试 / 快速添加识别）
+    该代理仅在以下两类场景、且「直连失败」时作为兜底使用：
+    - 获取图标（probe_icon / 图标接口测试）
     - 检测链接连通性（链接可达性探测 / 快速添加端口检测）
-    其它请求（如页面加载、ghcr.io 更新检测等）一律不使用代理。
+    其它请求（如页面加载、标题识别、ghcr.io 更新检测等）一律不使用代理。
     """
     url = (Setting.get("proxy_url") or "").strip()
     if not url:
@@ -1135,7 +1135,7 @@ def resolve_icon(user):
         return jsonify({"error": "无法从该 URL 解析出域名"}), 400
     last_err = ""
     for idx, url in enumerate(candidates):
-        _, _, err = probe_icon(url, timeout=6, proxies=outbound_proxy())
+        _, _, err = probe_icon(url, timeout=6)
         if not err:
             return jsonify({"icon_url": url, "provider": provider, "fallback": idx > 0})
         last_err = err
@@ -1162,7 +1162,7 @@ def test_icon_provider(user):
     if not icon_url:
         return jsonify({"ok": False, "error": "无法从该地址解析出域名"}), 400
     started = time.time()
-    content, ct, err = probe_icon(icon_url, proxies=outbound_proxy())
+    content, ct, err = probe_icon(icon_url)
     elapsed = int((time.time() - started) * 1000)
     if err:
         return jsonify({"ok": False, "icon_url": icon_url, "elapsed_ms": elapsed, "error": err})
@@ -1282,7 +1282,6 @@ def fetch_link_meta(user):
             timeout=6,
             allow_redirects=False,
             stream=True,
-            proxies=outbound_proxy(),
         )
         html_parts = []
         total = 0
@@ -2571,10 +2570,9 @@ def _link_ping_url(link):
     return link.url_external or link.url_internal
 
 
-def _do_ping(url, timeout=6):
-    """返回 'ok' 或 'unreachable'。仅对 http(s) 外部链接做实际探测。"""
+def _ping_once(url, timeout, proxies=None):
+    """单次连通性探测（不含兜底），返回 'ok' 或 'unreachable'。"""
     try:
-        proxies = outbound_proxy()
         r = requests.head(url, timeout=timeout, allow_redirects=True, proxies=proxies)
         if r.status_code == 405:  # 部分服务不支持 HEAD，回退 GET
             r = requests.get(url, timeout=timeout, allow_redirects=True, stream=True, proxies=proxies)
@@ -2582,6 +2580,17 @@ def _do_ping(url, timeout=6):
         return "ok" if r.status_code < 400 else "unreachable"
     except Exception:
         return "unreachable"
+
+
+def _do_ping(url, timeout=6):
+    """返回 'ok' 或 'unreachable'。仅对 http(s) 外部链接做实际探测。
+
+    先直连；直连不通且配置了代理时，以代理作为兜底再探测一次。
+    """
+    result = _ping_once(url, timeout)
+    if result == "unreachable" and outbound_proxy():
+        result = _ping_once(url, timeout, outbound_proxy())
+    return result
 
 
 def ping_all_links():
@@ -2904,8 +2913,6 @@ def monitor_diagnostics(user):
     })
 
 
-@app.route("/api/network/check", methods=["POST"])
-@auth_required
 def _tcp_reachable(hostname, port, timeout=2.5, proxy=None):
     """TCP 端口可达性检测；配置 http/https 代理时走 CONNECT 隧道，socks 代理需 PySocks。"""
     if proxy:
@@ -2957,6 +2964,8 @@ def _tcp_reachable(hostname, port, timeout=2.5, proxy=None):
         return False
 
 
+@app.route("/api/network/check", methods=["POST"])
+@auth_required
 def network_check(user):
     """Validate a URL and optionally check its TCP endpoint from the server."""
     data = request.get_json(silent=True) or {}
@@ -2966,12 +2975,14 @@ def network_check(user):
         return jsonify({"error": url_error}), 400
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     result = {"url": raw_url, "hostname": parsed.hostname, "port": port, "valid": True, "reachable": None, "error": None}
-    proxy = outbound_proxy()
-    proxy_url = None
-    if proxy:
-        proxy_url = proxy.get("https") or proxy.get("http")
+    # 先直连；直连不通且配置了代理时，以代理作为兜底再检测一次
     try:
-        result["reachable"] = _tcp_reachable(parsed.hostname, port, timeout=2.5, proxy=proxy_url)
+        result["reachable"] = _tcp_reachable(parsed.hostname, port, timeout=2.5)
+        if not result["reachable"]:
+            proxy = outbound_proxy()
+            if proxy:
+                proxy_url = proxy.get("https") or proxy.get("http")
+                result["reachable"] = _tcp_reachable(parsed.hostname, port, timeout=2.5, proxy=proxy_url)
     except (OSError, ValueError) as exc:
         result["reachable"] = False
         result["error"] = str(exc)
