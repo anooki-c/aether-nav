@@ -82,7 +82,7 @@ def load_config():
     else:
         https = str(https_env).lower() in ("1", "true", "yes")
     if verify_env is None:
-        verify_ssl = str(_setting_get("syno_verify_ssl", "true")).lower() in ("1", "true", "yes")
+        verify_ssl = str(_setting_get("syno_verify_ssl", "false")).lower() in ("1", "true", "yes")
     else:
         verify_ssl = str(verify_env).lower() in ("1", "true", "yes")
     try:
