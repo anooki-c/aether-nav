@@ -16,6 +16,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 直接切到仓库根目录，后续统一用相对命令，避免 git 在 Git Bash 下
+# 因 MSYS 路径转换失败（fatal: cannot change to '/d/...'）。
+cd "$ROOT"
 VERSION_FILE="$ROOT/VERSION"
 test -f "$VERSION_FILE" || { echo "✗ VERSION 文件不存在: $VERSION_FILE"; exit 1; }
 
@@ -37,9 +40,9 @@ done
 
 bump=""
 if [[ -z "$FORCE" ]]; then
-  last_tag="$(git -C "$ROOT" describe --tags --abbrev=0 2>/dev/null || echo "")"
+  last_tag="$(git describe --tags --abbrev=0 2>/dev/null || echo "")"
   range="${last_tag:+$last_tag..HEAD}"
-  log="$(git -C "$ROOT" log --no-merges $range --pretty=%s)"
+  log="$(git log --no-merges $range --pretty=%s)"
   if echo "$log" | grep -qiE 'BREAKING|破坏性|重大变更|!: '; then
     bump=major
   elif echo "$log" | grep -qiE 'feat|新增|新功能|支持|增加'; then
@@ -64,13 +67,13 @@ new="$MAJOR.$MINOR.$PATCH"
 echo "$new" > "$VERSION_FILE"
 echo "版本: $cur -> $new"
 
-git -C "$ROOT" add VERSION
-git -C "$ROOT" commit -q -m "chore: 发布 v$new"
-git -C "$ROOT" tag -a "v$new" -m "v$new"
+git add VERSION
+git commit -q -m "chore: 发布 v$new"
+git tag -a "v$new" -m "v$new"
 echo "✓ 已更新 VERSION 并打 tag v$new"
 
 if [[ "$PUSH" -eq 1 ]]; then
-  git -C "$ROOT" push origin "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
-  git -C "$ROOT" push origin "v$new"
+  git push origin "$(git rev-parse --abbrev-ref HEAD)"
+  git push origin "v$new"
   echo "✓ 已推送 tag v$new 到 remote"
 fi
