@@ -2148,7 +2148,7 @@ onMounted(async () => {
 
               </div>
 
-              <!-- 中列：主页管理 + 主页入口 + 密码锁标识 + 搜索偏好 -->
+              <!-- 中列：主页管理 + 主页入口 + 显示设置 + 搜索偏好 -->
               <div class="settings-column flex h-full flex-col gap-0 md:px-6">
 
                 <!-- 主页管理 -->
@@ -2197,21 +2197,38 @@ onMounted(async () => {
                   </div>
                 </div>
 
-                <!-- 密码锁标识 -->
+                <!-- 显示设置 -->
                 <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
                   <div class="flex items-center gap-2.5 pb-3">
-                    <span class="material-symbols-outlined text-primary text-[20px]">lock</span>
-                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">密码锁标识</h3>
+                    <span class="material-symbols-outlined text-primary text-[20px]">grid_view</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">显示设置</h3>
+                  </div>
+                  <div class="py-2.5 border-t border-outline-variant/40">
+                    <div class="flex items-center justify-between mb-2 gap-3">
+                      <div class="font-body-sm text-body-sm text-on-surface">每行显示列数（桌面端）</div>
+                      <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-highest rounded-full px-2.5 py-0.5">{{ columns }}</span>
+                    </div>
+                    <input type="range" min="2" max="8" step="1" v-model.number="columns" class="w-full h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer accent-primary">
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
                     <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">显示密码锁标识</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">关闭后带密码的链接不再显示 lock 角标</div>
+                      <div class="font-body-sm text-body-sm text-on-surface">紧凑模式</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">更小的间距，显示更多卡片</div>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input type="checkbox" v-model="showPasswordLock" class="sr-only peer">
+                      <input type="checkbox" v-model="compactMode" class="sr-only peer">
                       <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                     </label>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">卡片密度</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">紧凑视图可显示更多内容</div>
+                    </div>
+                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="density === 'comfortable' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'comfortable'">舒适</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="density === 'compact' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'compact'">紧凑</button>
+                    </div>
                   </div>
                 </div>
 
@@ -2289,7 +2306,7 @@ onMounted(async () => {
 
               </div>
 
-              <!-- 右列：站点品牌 + 显示设置 + 外观设置 -->
+              <!-- 右列：站点品牌 + 密码锁标识 + 外观设置 -->
               <div class="settings-column flex h-full flex-col gap-0 md:pl-6">
 
                 <!-- 站点品牌 -->
@@ -2338,38 +2355,21 @@ onMounted(async () => {
                   </div>
                 </div>
 
-                <!-- 显示设置 -->
+                <!-- 密码锁标识 -->
                 <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
                   <div class="flex items-center gap-2.5 pb-3">
-                    <span class="material-symbols-outlined text-primary text-[20px]">grid_view</span>
-                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">显示设置</h3>
-                  </div>
-                  <div class="py-2.5 border-t border-outline-variant/40">
-                    <div class="flex items-center justify-between mb-2 gap-3">
-                      <div class="font-body-sm text-body-sm text-on-surface">每行显示列数（桌面端）</div>
-                      <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-highest rounded-full px-2.5 py-0.5">{{ columns }}</span>
-                    </div>
-                    <input type="range" min="2" max="8" step="1" v-model.number="columns" class="w-full h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer accent-primary">
+                    <span class="material-symbols-outlined text-primary text-[20px]">lock</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">密码锁标识</h3>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
                     <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">紧凑模式</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">更小的间距，显示更多卡片</div>
+                      <div class="font-body-sm text-body-sm text-on-surface">显示密码锁标识</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">关闭后带密码的链接不再显示 lock 角标</div>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input type="checkbox" v-model="compactMode" class="sr-only peer">
+                      <input type="checkbox" v-model="showPasswordLock" class="sr-only peer">
                       <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                     </label>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">卡片密度</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">紧凑视图可显示更多内容</div>
-                    </div>
-                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="density === 'comfortable' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'comfortable'">舒适</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="density === 'compact' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'compact'">紧凑</button>
-                    </div>
                   </div>
                 </div>
 
