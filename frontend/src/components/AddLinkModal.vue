@@ -69,8 +69,14 @@ const catChildren = computed(() => {
   return p ? (p.children || []).map((c) => ({ id: c.id, name: c.name })) : []
 })
 watch(catParent, () => {
-  // 切换父分类后清空已选子分类，避免选到不存在的归属
-  if (catChildren.value.length > 0) form.value.category_id = null
+  // 切换父分类后清空已选子分类，避免选到不存在的归属（含父分类本身作为顶级）
+  form.value.category_id = null
+})
+// 当前所选父分类的名称（父分类无子分类时作为顶级可挂链接）
+const currentParentName = computed(() => {
+  if (!catParent.value) return ''
+  const p = store.tree.find((x) => x.id === Number(catParent.value))
+  return p ? p.name : ''
 })
 // 打开或切换编辑目标时预填：编辑模式用现有链接，新增模式清空。
 // 同时监听 open 与 editLink，保证「已在打开状态下切换编辑另一链接」也能正确回填。
@@ -452,10 +458,11 @@ async function onUpload(e) {
               </select>
               <select v-model="form.category_id"
                 class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
-                :disabled="!catParent && !form.category_id">
+                :disabled="store.tree.length === 0">
                 <option :value="null">子分类</option>
                 <template v-if="catParent">
                   <option v-for="c in catChildren" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  <option v-if="catChildren.length === 0" :value="Number(catParent)">{{ currentParentName }}（顶级）</option>
                 </template>
                 <template v-else>
                   <template v-for="p in store.tree" :key="'p-'+p.id">
