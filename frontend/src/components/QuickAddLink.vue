@@ -29,6 +29,7 @@ const manualOther = ref('')    // 折叠的「另一个 URL」，高级设置里
 const detectedNetwork = ref('')   // 'lan' | 'wan' | ''
 const detecting = ref(false)
 const detectMsg = ref('')
+const endpointCheck = ref(null)
 const error = ref('')
 const pwdError = ref('')
 const saving = ref(false)
@@ -104,6 +105,7 @@ watch(() => props.open, (v) => {
     detectedNetwork.value = ''
     detecting.value = false
     detectMsg.value = ''
+    endpointCheck.value = null
     error.value = ''
     pwdError.value = ''
     saving.value = false
@@ -140,6 +142,11 @@ async function detect() {
     detectMsg.value = detectedNetwork.value === 'lan'
       ? '已识别为局域网地址，将填入内网 URL'
       : '已识别为互联网地址，将填入外网 URL'
+    try {
+      endpointCheck.value = await api.networkCheck(url)
+    } catch (e) {
+      endpointCheck.value = { reachable: null, error: e.message || '连接检测失败' }
+    }
   } catch (e) {
     // 识别失败不应阻断添加：默认按外网处理，并提示用户手动确认
     detectedNetwork.value = 'wan'
@@ -243,6 +250,11 @@ async function save() {
             </span>
           </div>
           <span v-if="detectMsg" class="text-xs text-on-surface-variant/80">{{ detectMsg }}</span>
+          <span v-if="endpointCheck" class="text-xs" :class="endpointCheck.reachable === true ? 'text-success' : endpointCheck.reachable === false ? 'text-warning' : 'text-on-surface-variant'">
+            <span v-if="endpointCheck.reachable === true">✓ 地址端口可连接</span>
+            <span v-else-if="endpointCheck.reachable === false">⚠ 地址端口暂不可连接，可继续保存</span>
+            <span v-else>连接检测未完成：{{ endpointCheck.error }}</span>
+          </span>
         </div>
 
         <!-- 名称（自动带入） -->

@@ -16,8 +16,8 @@ const loading = ref(false)
 
 async function submit() {
   error.value = ''
-  if (password.value.length < 6) {
-    error.value = '密码至少 6 位'
+  if (password.value.length < 8) {
+    error.value = '密码至少 8 位'
     return
   }
   if (password.value !== confirm.value) {
@@ -80,7 +80,7 @@ async function submit() {
           </div>
           <p v-if="error" class="text-error font-body-sm text-body-sm">{{ error }}</p>
           <div class="pt-unit-8">
-            <button type="submit" :disabled="loading" class="w-full bg-primary text-on-primary font-headline-sm text-headline-sm rounded-lg py-3 px-6 shadow-sm hover:shadow-md hover:-translate-y-[1px] hover:bg-surface-tint transition-all duration-200 disabled:opacity-50">
+            <button type="submit" :disabled="loading" class="ui-btn ui-btn-primary w-full rounded-lg py-3 px-6 font-headline-sm text-headline-sm disabled:opacity-50">
               {{ loading ? '创建中…' : '创建账号' }}
             </button>
           </div>

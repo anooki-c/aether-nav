@@ -1,9 +1,9 @@
 """首次启动初始化。
 
 仅保证「有一个可用的默认管理员账号」，不再注入任何演示数据（分类 / 链接 / 权限）。
-管理员凭据可通过环境变量覆盖：
-  ADMIN_USERNAME   默认 admin
-  ADMIN_PASSWORD   默认 admin123
+管理员凭据通过环境变量提供：
+  ADMIN_USERNAME
+  ADMIN_PASSWORD
   ADMIN_DISPLAY    默认 管理员
   ADMIN_AVATAR     默认 👑
 
@@ -16,15 +16,19 @@ from backend.models import User, db
 
 def seed():
     if User.query.count() == 0:
-        username = os.environ.get("ADMIN_USERNAME", "admin")
-        password = os.environ.get("ADMIN_PASSWORD", "admin123")
+        username = os.environ.get("ADMIN_USERNAME", "admin").strip()
+        password = os.environ.get("ADMIN_PASSWORD", "")
+        if not password:
+            raise RuntimeError("首次初始化必须设置 ADMIN_PASSWORD")
+        if len(password) < 8:
+            raise RuntimeError("ADMIN_PASSWORD 至少需要 8 位")
         display = os.environ.get("ADMIN_DISPLAY", "管理员")
         avatar = os.environ.get("ADMIN_AVATAR", "👑")
         admin = User(username=username, display_name=display, role="admin", avatar=avatar)
         admin.set_password(password)
         db.session.add(admin)
         db.session.commit()
-        print(f"✅ 已创建默认管理员账号：{username} / {password}")
+        print(f"✅ 已创建管理员账号：{username}（密码不会写入日志）")
     else:
         print("ℹ️  已存在用户，跳过管理员创建")
 

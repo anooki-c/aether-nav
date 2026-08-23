@@ -9,11 +9,14 @@ services:
     ports:
       - "5000:5000"
     environment:
+      - APP_ENV=production
       # 默认管理员账号（首次启动 seed 创建）；如需自定义改这里即可
       - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=admin123
-      - SECRET_KEY=change-me-in-prod
-      - TOKEN_SECRET=change-me-in-prod
+      # 首次启动前请务必替换为随机值；不再使用固定默认密码/密钥
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?请先设置 ADMIN_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY:?请先设置 SECRET_KEY}
+      - TOKEN_SECRET=${TOKEN_SECRET:?请先设置 TOKEN_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5001}
     volumes:
       # 绑定到宿主机 ./data，方便用 Navicat 等工具直接打开 ./data/instance/app.db 维护数据
       - ./data/instance:/app/backend/instance

@@ -253,6 +253,17 @@ def resolve_favicon_candidates(page_url, provider=None, custom_template="", size
 
 def probe_icon(url, timeout=8):
     """探测图标地址是否可用，返回 ``(内容字节, Content-Type, 错误信息)``，不落地。"""
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None, "", "图标地址不是有效的 http/https URL"
+    try:
+        addresses = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+        for item in {entry[4][0] for entry in addresses}:
+            ip = ipaddress.ip_address(item)
+            if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+                return None, "", "不允许访问本机或链路本地地址"
+    except (socket.gaierror, ValueError, OSError):
+        return None, "", "图标主机无法解析"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -268,10 +279,29 @@ def probe_icon(url, timeout=8):
         return None, ct, "接口返回内容为空"
     if len(content) > MAX_ICON_BYTES:
         return None, ct, "图标文件超过 2MB"
+    if not valid_icon_content(content, ct, url):
+        return None, ct, "文件内容与图片格式不匹配或包含不安全 SVG"
     low = (ct or "").lower()
     if low and not (low.startswith("image/") or "icon" in low or "octet-stream" in low):
         return None, ct, f"返回的不是图片（Content-Type: {ct}）"
     return content, ct, None
+
+
+def valid_icon_content(content, content_type="", url=""):
+    """用文件头而非扩展名确认图标类型，并拒绝带脚本的 SVG。"""
+    data = content or b""
+    ext = os.path.splitext(urlparse(url).path)[1].lower()
+    ct = (content_type or "").lower()
+    if data.startswith(b"\x89PNG\r\n\x1a\n") or data.startswith(b"\xff\xd8\xff"):
+        return True
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return True
+    if data.startswith(b"\x00\x00\x01\x00"):
+        return True
+    if ext == ".svg" or "svg" in ct or data.lstrip().startswith(b"<svg"):
+        text = data.decode("utf-8", errors="ignore").lower()
+        return "<script" not in text and "javascript:" not in text and "foreignobject" not in text and not re.search(r"\bon[a-z]+\s*=", text)
+    return False
 
 
 def download_icon(user_id, url):
@@ -308,6 +338,8 @@ def _copy_local_icon(user_id, src, allow_passthrough, original):
             return "", "图标文件超过 2MB，已改用默认图标"
         with open(src, "rb") as fh:
             content = fh.read()
+        if not valid_icon_content(content, "", src):
+            return "", "本地图标内容校验失败，已改用默认图标"
         return write_icon(user_id, content, ext), None
     except Exception:
         return "", "本地图标读取失败（无访问权限？），已改用默认图标"

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { store, bumpLinks, loadSettings, showToast, COLOR_SCHEMES } from '../store'
+import { store, bumpLinks, loadSettings, COLOR_SCHEMES } from '../store'
 import { api } from '../api/client'
 import AddLinkModal from '../components/AddLinkModal.vue'
 import PermissionEditModal from '../components/PermissionEditModal.vue'
@@ -15,10 +15,31 @@ import IconPicker from '../components/IconPicker.vue'
 import PasswordModal from '../components/PasswordModal.vue'
 import { getLinkIcon } from '../utils/linkIcon'
 import { parseUrlScheme, buildUrl } from '../utils/urlScheme'
+import draggable from 'vuedraggable'
 
 const router = useRouter()
 const tab = ref('links') // links | categories | users | settings
 const msg = ref('')
+const msgNonce = ref(0)
+const msgDuration = 3600
+let msgTimer = null
+const msgTone = computed(() => {
+  if (/失败|错误|无效|无权限|不能|无法|超出/.test(msg.value)) return 'error'
+  if (/请|警告|关闭|禁用|已归档/.test(msg.value)) return 'warn'
+  return 'success'
+})
+const msgToneClass = computed(() => ({
+  success: 'text-success bg-success/10 border-success/30',
+  warn: 'text-warning bg-warning/10 border-warning/30',
+  error: 'text-error bg-error/10 border-error/30',
+}[msgTone.value]))
+const msgIcon = computed(() => ({ success: 'check_circle', warn: 'warning', error: 'error' }[msgTone.value]))
+watch(msg, (value) => {
+  if (msgTimer) clearTimeout(msgTimer)
+  if (!value) return
+  msgNonce.value += 1
+  msgTimer = setTimeout(() => { msg.value = '' }, msgDuration)
+})
 // 移动端后台侧边导航抽屉（md 以下 aside 隐藏，改用抽屉）
 const adminNavOpen = ref(false)
 function switchTab(k) {
@@ -392,7 +413,7 @@ async function saveEdit() {
     await loadLinks()
     bumpLinks()
     // 图标落地失败：链接已更新，仅图标回退为默认
-    if (res && res.icon_error) { msg.value = res.icon_error; showToast(res.icon_error, 'warn') }
+    if (res && res.icon_error) msg.value = res.icon_error
     else msg.value = '链接已更新'
   } catch (e) { msg.value = e.message }
 }
@@ -571,7 +592,7 @@ async function restoreCat(c) {
     await api.updateCategory(c.id, { archived: false })
     const { loadTree } = await import('../store')
     await loadTree()
-    showToast('已移出回收站（恢复）', 'success')
+    msg.value = '已移出回收站（恢复）'
   } catch (e) { msg.value = e.message }
 }
 async function restoreCurrent() {
@@ -634,13 +655,33 @@ async function doSaveCat(cascade) {
   await loadTree()
   await loadLinks()
 }
+
+async function persistCategoryOrder(categories, successMessage = '分类目录顺序已保存') {
+  if (!isAdmin.value) return
+  try {
+    await api.reorderCategories(categories.map((category, position) => ({ id: category.id, position })))
+    msg.value = successMessage
+  } catch (e) {
+    msg.value = e.message || '分类排序保存失败'
+    const { loadTree } = await import('../store')
+    await loadTree()
+  }
+}
+
+async function onCategoryDragEnd() {
+  await persistCategoryOrder(store.tree)
+}
+
+async function onChildCategoryDragEnd(parent) {
+  await persistCategoryOrder(parent.children || [], '子分类顺序已保存')
+}
 // 主页显示开关：切换为「不显示」时提醒用户（对所有用户生效）
 function toggleCatVisible(next) {
   if (next === false && catForm.value.visible !== false) {
     if (!confirm('设为不显示后，所有用户的首页与侧边栏都将看不到该分类及其下的全部链接，确定隐藏？')) {
       return // 用户取消，保持显示
     }
-    showToast('该分类已设为不在主页显示（对所有用户生效），保存后即时生效', 'warn')
+    msg.value = '该分类已设为不在主页显示（对所有用户生效），保存后即时生效'
   }
   catForm.value.visible = next
 }
@@ -684,15 +725,15 @@ async function confirmCatDel() {
   try {
     if (catDelMode.value === 'archive') {
       await api.deleteCategory(id, { archive: true })
-      showToast('已移动到回收站（归档），可在分类目录中恢复', 'success')
+      msg.value = '已移动到回收站（归档），可在分类目录中恢复'
     } else if (catDelMode.value === 'move') {
       const r = await api.deleteCategory(id, { move_to: catDelMoveTo.value })
       const moved = (r && r.moved_links) || 0
-      showToast(`已删除分类，旗下 ${moved} 个链接已移动到目标分类`, 'success')
+      msg.value = `已删除分类，旗下 ${moved} 个链接已移动到目标分类`
     } else {
       const r = await api.deleteCategory(id, { delete_links: true })
       const del = (r && r.deleted_links) || 0
-      showToast(`已彻底删除分类及其 ${del} 个链接`, 'success')
+      msg.value = `已彻底删除分类及其 ${del} 个链接`
     }
     showCatDel.value = false
     const { loadTree } = await import('../store')
@@ -792,7 +833,7 @@ async function confirmResetPwd() {
   try {
     const r = await api.resetUserPassword(resetPwdUser.value.id, resetPwdForm.value.new_password)
     resetPwdResult.value = r.new_password || '(已重置)'
-    showToast(`已重设 ${resetPwdUser.value.username} 的密码`, 'success')
+    msg.value = `已重设 ${resetPwdUser.value.username} 的密码`
     await loadUsers()
   } catch (e) { msg.value = e.message }
 }
@@ -800,7 +841,7 @@ async function confirmResetPwd() {
 // ---------- 禁用 / 启用用户 ----------
 const banConfirmUser = ref(null)
 function toggleBan(u) {
-  if (u.username === 'admin') { showToast('不能禁用管理员账号', 'warn'); return }
+  if (u.username === 'admin') { msg.value = '不能禁用管理员账号'; return }
   if (u.is_active !== false) {
     banConfirmUser.value = u // 打开应用内确认弹窗（避免原生 confirm 在预览环境被拦截）
   } else {
@@ -811,7 +852,7 @@ async function enableUser(u) {
   try {
     await api.updateUser(u.id, { is_active: true })
     await loadUsers()
-    showToast(`已启用 ${u.username}`, 'success')
+    msg.value = `已启用 ${u.username}`
   } catch (e) { msg.value = e.message }
 }
 async function confirmBan() {
@@ -821,12 +862,60 @@ async function confirmBan() {
   try {
     await api.updateUser(u.id, { is_active: false })
     await loadUsers()
-    showToast(`已禁用 ${u.username}`, 'success')
+    msg.value = `已禁用 ${u.username}`
   } catch (e) { msg.value = e.message }
 }
 
 // ---------- 系统设置 ----------
-const defaultEngine = ref('Google')
+const DEFAULT_SEARCH_ENGINES = [
+  { id: 'local', label: '站内', url: '', enabled: true },
+  { id: 'google', label: 'Google', url: 'https://www.google.com/search?q={q}', enabled: true },
+  { id: 'baidu', label: '百度', url: 'https://www.baidu.com/s?wd={q}', enabled: true },
+  { id: 'bing', label: '必应', url: 'https://www.bing.com/search?q={q}', enabled: true },
+  { id: 'ddg', label: 'DuckDuckGo', url: 'https://duckduckgo.com/?q={q}', enabled: true },
+  { id: 'brave', label: 'Brave', url: 'https://search.brave.com/search?q={q}', enabled: true },
+]
+
+function cloneDefaultSearchEngines() {
+  return DEFAULT_SEARCH_ENGINES.map((item) => ({ ...item }))
+}
+
+function isCustomSearchEngine(engine) {
+  return !DEFAULT_SEARCH_ENGINES.some((item) => item.id === engine.id)
+}
+
+const newEngineLabel = ref('')
+const newEngineUrl = ref('')
+
+function addCustomSearchEngine() {
+  const label = newEngineLabel.value.trim()
+  const url = newEngineUrl.value.trim()
+  if (!label || !url) {
+    msg.value = '请填写搜索引擎名称和 URL'
+    return
+  }
+  if (!/^https?:\/\/[^\s]+$/i.test(url) || !url.includes('{q}')) {
+    msg.value = 'URL 必须以 http(s) 开头，并包含 {q} 查询占位符'
+    return
+  }
+  const id = `custom-${Date.now().toString(36)}`
+  searchEngines.value.push({ id, label, url, enabled: true })
+  newEngineLabel.value = ''
+  newEngineUrl.value = ''
+  msg.value = '已添加自定义搜索引擎，请保存更改'
+}
+
+function removeSearchEngine(engine) {
+  if (!isCustomSearchEngine(engine)) return
+  searchEngines.value = searchEngines.value.filter((item) => item.id !== engine.id)
+  if (defaultEngine.value === engine.id) {
+    defaultEngine.value = searchEngines.value.find((item) => item.enabled !== false && item.id !== 'local')?.id || 'google'
+  }
+}
+
+const defaultEngine = ref('google')
+const searchEngines = ref(cloneDefaultSearchEngines())
+const searchEnginesOpen = ref(false)
 const openNewTab = ref(true)
 const density = ref('comfortable')
 const searchBoxPos = ref('fixed') // fixed | scrolling
@@ -890,7 +979,18 @@ function onPickEditIcon(name) {
 async function fetchSettings() {
   try {
     const data = await api.getSettings()
-    defaultEngine.value = data.default_engine || 'Google'
+    const configuredEngines = Array.isArray(data.search_engines) && data.search_engines.length
+      ? data.search_engines
+      : DEFAULT_SEARCH_ENGINES
+    searchEngines.value = configuredEngines.map((item) => ({
+      ...item,
+      enabled: item.enabled !== false,
+    }))
+    const enabledExternal = searchEngines.value.filter((item) => item.enabled && item.id !== 'local')
+    const requestedDefault = String(data.default_engine || 'google').toLowerCase()
+    defaultEngine.value = enabledExternal.some((item) => item.id === requestedDefault)
+      ? requestedDefault
+      : (enabledExternal[0]?.id || 'google')
     openNewTab.value = data.open_new_tab !== false
     density.value = data.density || 'comfortable'
     searchBoxPos.value = data.search_box_pos || 'fixed'
@@ -912,14 +1012,20 @@ async function fetchSettings() {
     siteSubtitle.value = data.site_subtitle || ''
     siteLogo.value = data.site_logo || ''
   } catch (e) {
-    // 读取失败时保留默认值
+    // 接口读取失败时也保留可用的默认引擎，避免下拉框为空
+    if (!searchEngines.value.length) searchEngines.value = cloneDefaultSearchEngines()
   }
 }
 
 async function saveSettings() {
   try {
+    const enabledExternal = searchEngines.value.filter((item) => item.enabled !== false && item.id !== 'local')
+    if (!enabledExternal.some((item) => item.id === defaultEngine.value)) {
+      defaultEngine.value = enabledExternal[0]?.id || 'google'
+    }
     await api.updateSettings({
       default_engine: defaultEngine.value,
+      search_engines: searchEngines.value.map(({ id, label, url, enabled }) => ({ id, label, url, enabled: enabled !== false })),
       open_new_tab: openNewTab.value,
       theme: store.theme,
       density: density.value,
@@ -1154,7 +1260,10 @@ onMounted(async () => {
         </div>
       </header>
 
-      <p v-if="msg" class="mx-6 mt-3 text-sm text-primary-container bg-primary-fixed/40 px-3 py-2 rounded-lg">{{ msg }}</p>
+      <p v-if="msg" :key="msgNonce" class="ui-alert relative overflow-hidden mx-6 mt-3 text-sm px-3 py-2.5 rounded-xl" :class="msgToneClass" role="status" aria-live="polite">
+        <span class="material-symbols-outlined text-[18px] align-middle mr-1">{{ msgIcon }}</span>{{ msg }}
+        <span class="admin-msg-progress absolute bottom-0 left-0 right-0 h-1 bg-current opacity-35" :style="{ '--admin-msg-duration': `${msgDuration}ms` }" aria-hidden="true"></span>
+      </p>
 
       <main class="flex-1 overflow-y-auto p-4 md:p-6">
         <div v-if="authPending" class="text-center py-20 text-on-surface-variant">
@@ -1431,8 +1540,17 @@ onMounted(async () => {
                       <span class="font-label-sm font-bold">新建</span>
                     </button>
                   </div>
-                  <div class="flex flex-col gap-1">
-                    <template v-for="p in store.tree" :key="p.id">
+                  <draggable
+                    v-model="store.tree"
+                    item-key="id"
+                    handle=".category-drag-handle"
+                    :animation="220"
+                    ghost-class="category-drag-ghost"
+                    chosen-class="category-drag-chosen"
+                    class="flex flex-col gap-1"
+                    @end="onCategoryDragEnd"
+                  >
+                    <template #item="{ element: p }">
                       <div class="flex flex-col">
                         <div class="flex items-center gap-2 p-2 rounded-lg transition-colors"
                              :class="[
@@ -1442,7 +1560,8 @@ onMounted(async () => {
                              :title="canEditCat(p) ? '' : '无权限：仅可编辑自己创建的分类'"
                              @click="canEditCat(p) && selectCat(p)">
                           <span class="material-symbols-outlined text-sm" @click.stop="expanded[p.id] = !expanded[p.id]">{{ expanded[p.id] ? 'expand_more' : 'chevron_right' }}</span>
-                          <input v-if="isAdmin" type="checkbox" class="w-4 h-4 accent-primary shrink-0" :checked="selectedCatSet.has(p.id)" @click.stop="toggleCatSelect(p.id)" title="选择此分类批量改权限" />
+                             <span v-if="isAdmin" class="category-drag-handle material-symbols-outlined text-[18px] text-outline-variant cursor-grab active:cursor-grabbing" title="拖动调整顶级分类顺序" aria-label="拖动调整分类顺序">drag_indicator</span>
+                             <input v-if="isAdmin" type="checkbox" class="w-4 h-4 accent-primary shrink-0" :checked="selectedCatSet.has(p.id)" @click.stop="toggleCatSelect(p.id)" title="选择此分类批量改权限" />
                           <EntityIcon :icon="p.icon" fallback="folder" :size="20" :alt="p.name" />
                           <span class="font-body-md font-bold">{{ p.name }}</span>
                           <span v-if="p.visible === false" class="text-label-sm opacity-80 text-error">已隐藏</span>
@@ -1451,27 +1570,39 @@ onMounted(async () => {
                           <span v-if="p.archived && canEditCat(p)" class="ml-1 text-label-sm text-primary hover:underline" @click.stop="restoreCat(p)">恢复</span>
                           <span class="ml-auto text-label-sm opacity-70">{{ (p.children || []).length }}</span>
                         </div>
-                        <div v-if="expanded[p.id]" class="ml-6 mt-1 flex flex-col gap-1">
-                          <div v-for="c in [...(p.children||[])].sort((a,b)=>a.position-b.position)" :key="c.id"
-                               class="flex items-center gap-2 p-2 rounded-lg transition-colors"
-                               :class="[
-                                 selectedCat === c.id ? 'bg-primary-fixed text-primary' : 'text-secondary',
-                                 canEditCat(c) ? 'cursor-pointer hover:bg-surface-container-low' : 'opacity-50 cursor-not-allowed'
-                               ]"
-                               :title="canEditCat(c) ? '' : '无权限：仅可编辑自己创建的分类'"
-                               @click="canEditCat(c) && selectCat(c)">
-                            <input v-if="isAdmin" type="checkbox" class="w-4 h-4 accent-primary shrink-0" :checked="selectedCatSet.has(c.id)" @click.stop="toggleCatSelect(c.id)" title="选择此分类批量改权限" />
-                            <EntityIcon :icon="c.icon" fallback="folder" :size="20" :alt="c.name" />
-                            <span class="font-body-md">{{ c.name }}</span>
-                            <span v-if="c.visible === false" class="ml-1 text-label-sm opacity-80 text-error">已隐藏</span>
-                            <span v-if="c.archived" class="text-label-sm opacity-80 text-tertiary">已归档</span>
-                            <span v-if="!canEditCat(c)" class="material-symbols-outlined text-label-sm opacity-70" title="无权限编辑">lock</span>
-                            <span v-if="c.archived && canEditCat(c)" class="ml-1 text-label-sm text-primary hover:underline" @click.stop="restoreCat(c)">恢复</span>
-                          </div>
-                        </div>
+                         <draggable
+                           v-if="expanded[p.id]"
+                           v-model="p.children"
+                           item-key="id"
+                           handle=".child-category-drag-handle"
+                           :animation="200"
+                           ghost-class="category-drag-ghost"
+                           chosen-class="category-drag-chosen"
+                           class="ml-6 mt-1 flex flex-col gap-1"
+                           @end="onChildCategoryDragEnd(p)"
+                         >
+                           <template #item="{ element: c }">
+                             <div class="flex items-center gap-2 p-2 rounded-lg transition-colors"
+                                  :class="[
+                                    selectedCat === c.id ? 'bg-primary-fixed text-primary' : 'text-secondary',
+                                    canEditCat(c) ? 'cursor-pointer hover:bg-surface-container-low' : 'opacity-50 cursor-not-allowed'
+                                  ]"
+                                  :title="canEditCat(c) ? '' : '无权限：仅可编辑自己创建的分类'"
+                                  @click="canEditCat(c) && selectCat(c)">
+                               <span v-if="isAdmin" class="child-category-drag-handle material-symbols-outlined text-[18px] text-outline-variant cursor-grab active:cursor-grabbing" title="拖动调整子分类顺序" aria-label="拖动调整子分类顺序">drag_indicator</span>
+                               <input v-if="isAdmin" type="checkbox" class="w-4 h-4 accent-primary shrink-0" :checked="selectedCatSet.has(c.id)" @click.stop="toggleCatSelect(c.id)" title="选择此分类批量改权限" />
+                               <EntityIcon :icon="c.icon" fallback="folder" :size="20" :alt="c.name" />
+                               <span class="font-body-md">{{ c.name }}</span>
+                               <span v-if="c.visible === false" class="ml-1 text-label-sm opacity-80 text-error">已隐藏</span>
+                               <span v-if="c.archived" class="text-label-sm opacity-80 text-tertiary">已归档</span>
+                               <span v-if="!canEditCat(c)" class="material-symbols-outlined text-label-sm opacity-70" title="无权限编辑">lock</span>
+                               <span v-if="c.archived && canEditCat(c)" class="ml-1 text-label-sm text-primary hover:underline" @click.stop="restoreCat(c)">恢复</span>
+                             </div>
+                           </template>
+                         </draggable>
                       </div>
                     </template>
-                  </div>
+                  </draggable>
                 </div>
               </div>
 
@@ -1481,8 +1612,8 @@ onMounted(async () => {
                   <div class="px-6 py-4 border-b border-surface-variant flex items-center justify-between bg-surface-container-lowest">
                     <h2 class="font-headline-sm text-on-surface">{{ selectedCat ? '编辑分类' : '新建分类' }}</h2>
                     <div class="flex items-center gap-3">
-                      <button class="px-4 py-2 rounded-lg font-body-sm text-secondary hover:bg-surface-container transition-colors" @click="newCatMode">取消</button>
-                      <button class="px-4 py-2 rounded-lg font-body-sm bg-primary-container text-on-primary-container hover:bg-surface-tint transition-colors shadow-sm" @click="saveCat">保存更改</button>
+                      <button class="ui-btn ui-btn-ghost px-4 py-2 rounded-lg font-body-sm" @click="newCatMode">取消</button>
+                      <button class="ui-btn ui-btn-primary px-4 py-2 rounded-lg font-body-sm" @click="saveCat">保存更改</button>
                     </div>
                   </div>
                   <div class="p-6 flex flex-col gap-6">
@@ -1911,10 +2042,10 @@ onMounted(async () => {
 
             <!-- 单卡片容器 + 三列分组（列间竖线分隔） -->
             <div class="bg-surface rounded-2xl p-6 shadow-sm border border-surface-variant">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-0 divide-y divide-outline-variant/50 md:divide-y-0 md:divide-x md:divide-outline-variant/50">
+            <div class="grid grid-cols-1 md:grid-cols-3 items-stretch gap-6 md:gap-0 divide-y divide-outline-variant/50 md:divide-y-0 md:divide-x md:divide-outline-variant/50">
 
               <!-- 左列：账号安全 + 局域网 + 搜索偏好 -->
-              <div class="flex flex-col gap-6 md:pr-6">
+              <div class="settings-column flex h-full flex-col gap-0 md:pr-6">
 
                 <!-- 账号与安全 -->
                 <div class="flex flex-col">
@@ -1988,9 +2119,51 @@ onMounted(async () => {
                     </div>
                     <div class="relative w-36 shrink-0">
                       <select v-model="defaultEngine" class="block w-full pl-3 pr-9 py-2 text-sm border border-outline-variant rounded-lg bg-surface appearance-none focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
-                        <option>Google</option><option>DuckDuckGo</option><option>Bing</option><option>Brave</option><option>Baidu</option>
+                        <option v-for="engine in searchEngines.filter((item) => item.enabled !== false && item.id !== 'local')" :key="engine.id" :value="engine.id">{{ engine.label }}</option>
                       </select>
                       <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-outline"><span class="material-symbols-outlined">expand_more</span></div>
+                    </div>
+                  </div>
+                  <div class="py-3 border-t border-outline-variant/40">
+                    <div class="flex items-center justify-between mb-2">
+                      <div>
+                        <div class="font-body-sm text-body-sm text-on-surface">搜索引擎顺序与启用状态</div>
+                        <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">{{ searchEnginesOpen ? '拖动调整顶栏选择顺序，站内搜索始终保留' : `已配置 ${searchEngines.length} 个引擎` }}</div>
+                      </div>
+                      <button type="button" class="ui-btn ui-btn-ghost min-h-8 px-2 py-1 text-xs" @click="searchEnginesOpen = !searchEnginesOpen">
+                        <span>{{ searchEnginesOpen ? '收起' : '编辑清单' }}</span>
+                        <span class="material-symbols-outlined text-[17px] transition-transform" :class="searchEnginesOpen ? 'rotate-180' : ''">expand_more</span>
+                      </button>
+                    </div>
+                    <div v-if="searchEnginesOpen" class="settings-collapse-enter space-y-2">
+                    <draggable v-model="searchEngines" item-key="id" handle=".engine-drag-handle" :animation="180" class="space-y-1.5">
+                      <template #item="{ element: engine }">
+                        <div class="flex items-center gap-2 rounded-lg bg-surface-container-low px-2.5 py-2">
+                          <span class="engine-drag-handle material-symbols-outlined text-[18px] text-outline-variant cursor-grab active:cursor-grabbing">drag_indicator</span>
+                          <div class="min-w-0 flex-1">
+                            <input v-if="isCustomSearchEngine(engine)" v-model="engine.label" class="w-full px-2 py-1 text-sm bg-surface border border-outline-variant rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30" placeholder="引擎名称" />
+                            <span v-else class="font-body-sm text-on-surface">{{ engine.label }}</span>
+                            <input v-if="isCustomSearchEngine(engine)" v-model="engine.url" class="w-full mt-1 px-2 py-1 text-[11px] text-on-surface-variant bg-surface border border-outline-variant rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30" placeholder="https://example.com/search?q={q}" />
+                          </div>
+                          <label class="relative inline-flex items-center cursor-pointer">
+                            <input v-model="engine.enabled" type="checkbox" class="sr-only peer" :disabled="engine.id === 'local'">
+                            <span class="w-8 h-4 bg-surface-variant peer-checked:bg-primary rounded-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-transform peer-checked:after:translate-x-4"></span>
+                          </label>
+                          <button v-if="isCustomSearchEngine(engine)" type="button" class="p-1 text-outline hover:text-error transition-colors" title="删除自定义引擎" @click="removeSearchEngine(engine)">
+                            <span class="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        </div>
+                      </template>
+                    </draggable>
+                    <div class="mt-3 rounded-lg border border-dashed border-outline-variant p-2.5">
+                      <div class="font-label-xs text-[11px] text-on-surface-variant mb-2">添加自定义搜索引擎</div>
+                      <div class="flex flex-col sm:flex-row gap-2">
+                        <input v-model="newEngineLabel" class="min-w-0 flex-1 px-2.5 py-1.5 text-sm bg-surface border border-outline-variant rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30" placeholder="名称，如 夸克" />
+                        <input v-model="newEngineUrl" class="min-w-0 flex-[2] px-2.5 py-1.5 text-sm bg-surface border border-outline-variant rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30" placeholder="https://example.com/search?q={q}" @keyup.enter="addCustomSearchEngine" />
+                        <button type="button" class="shrink-0 px-3 py-1.5 rounded-md bg-primary text-on-primary text-sm hover:opacity-90" @click="addCustomSearchEngine">添加</button>
+                      </div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant mt-1.5">URL 必须使用 http(s)，并用 <code>{q}</code> 表示搜索关键词。</div>
+                    </div>
                     </div>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
@@ -2003,22 +2176,12 @@ onMounted(async () => {
                       <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                     </label>
                   </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">搜索框位置</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">固定顶部或随内容滚动</div>
-                    </div>
-                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="searchBoxPos === 'fixed' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="searchBoxPos = 'fixed'">固定</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="searchBoxPos === 'scrolling' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="searchBoxPos = 'scrolling'">滚动</button>
-                    </div>
-                  </div>
                 </div>
 
               </div>
 
               <!-- 中列：主页管理 + 主页入口 + 网络模式 -->
-              <div class="flex flex-col gap-6 md:px-6">
+              <div class="settings-column flex h-full flex-col gap-0 md:px-6">
 
                 <!-- 主页管理 -->
                 <div class="flex flex-col">
@@ -2105,7 +2268,7 @@ onMounted(async () => {
               </div>
 
               <!-- 右列：显示 / 外观 -->
-              <div class="flex flex-col gap-6 md:pl-6">
+              <div class="settings-column flex h-full flex-col gap-0 md:pl-6">
 
                 <!-- 站点品牌 -->
                 <div class="flex flex-col">
@@ -2154,7 +2317,7 @@ onMounted(async () => {
                 </div>
 
                 <!-- 显示设置 -->
-                <div class="flex flex-col">
+                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
                   <div class="flex items-center gap-2.5 pb-3">
                     <span class="material-symbols-outlined text-primary text-[20px]">grid_view</span>
                     <h3 class="font-title-md text-[15px] font-semibold text-on-surface">显示设置</h3>
@@ -2249,8 +2412,8 @@ onMounted(async () => {
             </div>
 
             <div class="mt-8 flex justify-end gap-4 border-t border-outline-variant/30 pt-6">
-              <button class="px-6 py-2 rounded-lg font-body-sm text-body-sm font-semibold text-secondary hover:bg-surface-container transition-colors">取消</button>
-              <button class="px-6 py-2 rounded-lg font-body-sm text-body-sm font-semibold bg-primary text-on-primary hover:bg-surface-tint shadow-sm transition-all" @click="saveSettings">保存更改</button>
+              <button class="ui-btn ui-btn-ghost px-6 py-2 rounded-lg font-body-sm text-body-sm">取消</button>
+              <button class="ui-btn ui-btn-primary px-6 py-2 rounded-lg font-body-sm text-body-sm" @click="saveSettings">保存更改</button>
             </div>
           </section>
 
@@ -2608,5 +2771,16 @@ onMounted(async () => {
 .drawer-enter-from,
 .drawer-leave-to {
   transform: translateX(-100%);
+}
+.category-drag-ghost,
+.category-drag-chosen {
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--color-primary-fixed, #e8def8) 65%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .category-drag-ghost,
+  .category-drag-chosen {
+    transition: none;
+  }
 }
 </style>

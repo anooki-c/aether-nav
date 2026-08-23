@@ -17,6 +17,7 @@ const showPwd = ref(false)
 // 首页区块入场仅首次挂载播放一次：切换内外网/搜索会经 loading 态卸载重建区块，
 // 若持续重放错峰入场会显得迟缓（Emil：高频操作应去除或大幅缩减动画）。
 const entranceDone = ref(false)
+let loadSequence = 0
 
 // 登录、站点允许主页编辑（canEditHome）且开启拖拽排序时，主页卡片可拖拽（拖拽手柄触发，不干扰点击打开链接）
 const canDrag = computed(() => canEditHome.value && store.dragSortEnabled)
@@ -47,9 +48,15 @@ const gridClass = computed(() => {
 })
 // 紧凑或紧凑密度时卡片更紧凑
 const cardCompact = computed(() => store.compactMode || store.density === 'compact')
-
-// 搜索框是否固定在顶部（后台"系统设置 → 搜索框位置"）
 const searchFixed = computed(() => store.searchBoxPos === 'fixed')
+
+function onSearch({ engine, q }) {
+  if (engine === 'local') load(q)
+  else if (store.searchQuery) {
+    store.searchQuery = ''
+    load('')
+  }
+}
 
 // 主内容区分类顺序必须与侧边栏一致：
 // 按分类树做深度优先展开（父分类 → 其子分类），得到顺序索引后对 groups 排序。
@@ -78,21 +85,19 @@ const orderedGroups = computed(() => {
 })
 
 async function load(query) {
+  const sequence = ++loadSequence
   loading.value = true
   try {
     const data = await api.links(store.network, query || '')
+    if (sequence !== loadSequence) return
     groups.value = data.groups || []
   } catch (e) {
-    groups.value = []
+    if (sequence === loadSequence) groups.value = []
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
     // 首次数据就绪后，下一帧标记入场完成，后续加载不再重放动画
     if (!entranceDone.value) await nextTick().then(() => (entranceDone.value = true))
   }
-}
-
-function onSearch({ q }) {
-  load(q)
 }
 
 // 卡片右侧编辑按钮 → 打开编辑弹窗（与新增共用 AddLinkModal，样式一致）
@@ -149,12 +154,13 @@ async function onDragEnd(group) {
   }
 }
 
-onMounted(() => load())
+onMounted(() => load(store.searchQuery))
 // 内外网模式切换 / 链接变更后刷新
 watch(() => store.network, () => load())
 watch(() => store.linksVersion, () => load())
 // 站点设置（拖拽开关）变化后刷新以应用/取消拖拽
 watch(() => store.dragSortEnabled, () => load())
+watch(() => store.searchQuery, (query) => load(query))
 // 侧边栏选中分类变化后刷新（重新拉取，保证排序/可见性最新）
 // 点击侧边栏分类：主页始终显示全部卡片，仅平滑滚动到对应分类区域
 watch(() => store.scrollNonce, async () => {
@@ -169,16 +175,14 @@ watch(() => store.scrollNonce, async () => {
 </script>
 
 <template>
-  <div class="w-full px-4 lg:px-24 pb-24">
-    <!-- 搜索框：fixed=在滚动容器内吸顶（带毛玻璃背景，向两侧扩展铺满）；吸顶位置在顶栏之下，不与顶栏头像菜单重叠 -->
+  <div class="home-shell w-full px-4 lg:px-24 pb-24">
+    <div class="pt-6">
     <div
       :class="searchFixed ? 'sticky top-0 z-20 lg:-mx-24 lg:px-24 bg-background/85 backdrop-blur-md border-b border-outline-variant/30' : ''"
     >
-      <SearchHero :sticky="searchFixed" @search="onSearch" />
+      <SearchHero :sticky="searchFixed" exclude-local @search="onSearch" />
     </div>
-
-    <!-- 吸顶模式下搜索条下方补一段留白，避免首个分类紧贴 -->
-    <div :class="searchFixed ? 'pt-6' : 'pt-6'">
+    <div class="pt-2">
     <Transition name="fade">
       <div v-if="loading" key="loading" class="text-center text-on-surface-variant py-12 font-body-md text-body-md">加载中…</div>
 
@@ -193,7 +197,7 @@ watch(() => store.scrollNonce, async () => {
         v-for="(g, gi) in orderedGroups"
       :key="g.category.id"
       :id="'cat-section-' + g.category.id"
-      :class="['mb-10', !entranceDone ? 'home-group' : '', searchFixed ? 'scroll-mt-[168px]' : 'scroll-mt-20']"
+       :class="['mb-10', !entranceDone ? 'home-group' : '', 'scroll-mt-20']"
       :style="!entranceDone ? { animationDelay: gi * 35 + 'ms' } : null"
     >
       <h3 class="font-headline-md text-headline-md text-on-background mb-6 flex items-center gap-2">
@@ -233,6 +237,7 @@ watch(() => store.scrollNonce, async () => {
     </section>
       </div>
     </Transition>
+    </div>
     </div>
 
     <PasswordModal v-model:open="showPwd" :link="pendingLink" />

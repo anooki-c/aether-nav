@@ -5,17 +5,39 @@ const BASE = '/api'
 async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) }
   if (store.token) headers['Authorization'] = `Bearer ${store.token}`
-  const res = await fetch(BASE + path, { ...options, headers })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), options.timeout || 15000)
+  const fetchOptions = { ...options, headers, signal: options.signal || controller.signal }
+  delete fetchOptions.timeout
+  let res
+  try {
+    res = await fetch(BASE + path, fetchOptions)
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new Error('请求超时，请检查网络或服务状态')
+    throw err
+  } finally {
+    clearTimeout(timeout)
+  }
   if (!res.ok) {
     let msg = `请求失败 (${res.status})`
     try {
       const data = await res.json()
       if (data.error) msg = data.error
     } catch (e) { /* ignore */ }
-    throw new Error(msg)
+    if (res.status === 401 && store.token) {
+      store.token = ''
+      store.user = null
+      sessionStorage.removeItem('zn_token')
+      localStorage.removeItem('zn_token')
+      localStorage.removeItem('zn_token_expiry')
+    }
+    const error = new Error(msg)
+    error.status = res.status
+    throw error
   }
   if (res.status === 204) return null
-  return res.json()
+  const type = res.headers.get('content-type') || ''
+  return type.includes('application/json') ? res.json() : res.text()
 }
 
 const json = (body) => ({
@@ -146,9 +168,12 @@ export const api = {
   // ---------- 群晖监控（DSM API） ----------
   monitorConfig: () => request('/monitor/config'),
   monitorConfigSave: (payload) => request('/monitor/config', json(payload)),
+  monitorConfigTest: (payload) => request('/monitor/config/test', json(payload)),
   monitorSnapshot: (force) => request('/monitor' + (force ? '?force=1' : '')),
-  monitorContainerAction: (id, action) => request('/monitor/container/action', json({ id, action })),
+  monitorContainerAction: (id, action, name = '') => request('/monitor/container/action', json({ id, name, action })),
   monitorContainerDetail: (params) => request('/monitor/container/detail?' + new URLSearchParams(params).toString()),
+  monitorDiagnostics: (payload) => request('/monitor/diagnostics', json(payload)),
+  networkCheck: (url) => request('/network/check', json({ url })),
 
   // ---------- 版本与更新检测 ----------
   version: () => request('/version'),

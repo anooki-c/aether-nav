@@ -210,7 +210,7 @@ function onLogin() {
       ></div>
     </transition>
     <nav
-      class="bg-surface-container-low border-r border-outline-variant shadow-sm fixed left-0 top-0 h-full z-30 transition-transform duration-300 ease-spring"
+      class="app-sidebar border-r border-outline-variant shadow-sm fixed left-0 top-0 h-full z-30 transition-transform duration-300 ease-spring"
       :class="navClass"
     >
       <div class="flex flex-col h-full py-8 w-full">

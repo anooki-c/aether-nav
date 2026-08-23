@@ -7,6 +7,7 @@ import PasswordField from '../components/PasswordField.vue'
 
 const router = useRouter()
 const username = ref('')
+const currentPassword = ref('')
 const newPassword = ref('')
 const confirm = ref('')
 const error = ref('')
@@ -15,8 +16,8 @@ const loading = ref(false)
 
 async function submit() {
   error.value = ''
-  if (newPassword.value.length < 6) {
-    error.value = '密码至少 6 位'
+  if (newPassword.value.length < 8) {
+    error.value = '密码至少 8 位'
     return
   }
   if (newPassword.value !== confirm.value) {
@@ -25,7 +26,7 @@ async function submit() {
   }
   loading.value = true
   try {
-    await api.resetPassword({ username: username.value.trim(), new_password: newPassword.value })
+    await api.resetPassword({ username: username.value.trim(), current_password: currentPassword.value, new_password: newPassword.value })
     done.value = true
   } catch (e) {
     error.value = e.message || '重置失败'
@@ -51,7 +52,7 @@ async function submit() {
             <span class="material-symbols-outlined text-on-primary-container" style="font-size: 24px;">ac_unit</span>
           </div>
           <h1 class="font-headline-lg text-headline-lg text-text-primary text-center">{{ store.siteName }}</h1>
-          <p class="font-body-md text-body-md text-text-secondary mt-2 text-center">请在下方输入你的新密码</p>
+          <p class="font-body-md text-body-md text-text-secondary mt-2 text-center">请输入当前密码后设置新密码；忘记当前密码请联系管理员</p>
         </div>
 
         <!-- Form -->
@@ -64,6 +65,10 @@ async function submit() {
               </div>
               <input id="username" v-model="username" type="text" class="block w-full pl-10 pr-3 py-2 border border-outline-variant/50 rounded-lg bg-surface-container-lowest font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-colors shadow-sm placeholder:text-outline/50" placeholder="请输入用户名" />
             </div>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1" for="current-password">当前密码</label>
+            <PasswordField id="current-password" v-model="currentPassword" icon="lock" placeholder="••••••••" autocomplete="current-password" input-class="block w-full py-2 border border-outline-variant/50 rounded-lg bg-surface-container-lowest font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-colors shadow-sm placeholder:text-outline/50" />
           </div>
           <div>
             <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1" for="new-password">新密码</label>

@@ -19,7 +19,7 @@
     替代常返回 101 的 SYNO.Core.Storage.Volume，可拉到真实卷容量（size.total/used）。
   - 系统健康/主机信息：SYNO.Core.System.SystemHealth v1 method=get（session=Core），
     返回 hostname / uptime / interfaces。
-  - 群晖默认自签证书，故关闭 TLS 校验并屏蔽告警。
+  - TLS 默认校验；自签证书可通过 SYNO_VERIFY_SSL=false 或 syno_verify_ssl=false 显式关闭。
   - 密码仅在内存中使用，不写入日志。
 """
 import os
@@ -30,15 +30,16 @@ import concurrent.futures
 import urllib3
 import requests
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── 静态数据缓存（分层刷新核心）─────────────────────────────────────────
 # 存储容量 / 系统健康 变化极慢（硬盘大小、主机名几天不变），但存储接口在部分
 # NAS 上偶发缓慢/挂起。故将其与易变数据（容器/利用率）解耦：长 TTL 缓存、
 # 后台静默刷新、刷新失败回退旧值且不频繁重试，绝不阻塞页面。
-_STATIC_CACHE = {"storage": None, "health": None, "ts": 0.0, "next_retry": 0.0}
+_STATIC_CACHE = {"key": None, "storage": None, "health": None, "ts": 0.0, "next_retry": 0.0}
 _STATIC_TTL = 300.0  # 5 分钟：静态数据自动刷新间隔
 _STATIC_LOCK = threading.Lock()
+_CLIENT_CACHE = {}
+_CLIENT_LOCK = threading.Lock()
 
 
 def _safe_call(fn):
@@ -75,10 +76,15 @@ def load_config():
     user = os.environ.get("SYNO_USER") or _setting_get("syno_user", "")
     password = os.environ.get("SYNO_PASS") or _setting_get("syno_pass", "")
     https_env = os.environ.get("SYNO_HTTPS")
+    verify_env = os.environ.get("SYNO_VERIFY_SSL")
     if https_env is None:
         https = str(_setting_get("syno_https", "0")).lower() in ("1", "true", "yes")
     else:
         https = str(https_env).lower() in ("1", "true", "yes")
+    if verify_env is None:
+        verify_ssl = str(_setting_get("syno_verify_ssl", "true")).lower() in ("1", "true", "yes")
+    else:
+        verify_ssl = str(verify_env).lower() in ("1", "true", "yes")
     try:
         port = int(port) if port else (DEFAULT_PORT_HTTPS if https else DEFAULT_PORT_HTTP)
     except (TypeError, ValueError):
@@ -89,7 +95,40 @@ def load_config():
         "user": (user or "").strip(),
         "password": password or "",
         "https": bool(https),
+        "verify_ssl": bool(verify_ssl),
     }
+
+
+def config_key(config):
+    """Stable password-free key for DSM client and snapshot caches."""
+    cfg = config or load_config()
+    return "{}://{}:{}:{}".format(
+        "https" if cfg.get("https") else "http",
+        cfg.get("host", "").strip().lower(),
+        cfg.get("port"),
+        cfg.get("user", "").strip(),
+    )
+
+
+def get_client(config=None):
+    cfg = config or load_config()
+    key = config_key(cfg)
+    with _CLIENT_LOCK:
+        client = _CLIENT_CACHE.get(key)
+        if client is None or client.cfg.get("password") != cfg.get("password"):
+            client = SynoClient(cfg)
+            _CLIENT_CACHE[key] = client
+        return client
+
+
+def clear_client_cache(config=None):
+    with _CLIENT_LOCK:
+        if config is None:
+            _CLIENT_CACHE.clear()
+        else:
+            _CLIENT_CACHE.pop(config_key(config), None)
+    with _STATIC_LOCK:
+        _STATIC_CACHE.update({"key": None, "storage": None, "health": None, "ts": 0.0, "next_retry": 0.0})
 
 
 def _to_pct(v):
@@ -184,6 +223,7 @@ class SynoClient:
             port=self.cfg["port"],
         )
         self._sessions = {}  # session -> (sid, synotoken)
+        self.cache_key = config_key(self.cfg)
 
     # ---------- 登录（按 session 缓存，带 SynoToken） ----------
     def _login(self, session):
@@ -201,7 +241,7 @@ class SynoClient:
                     "enable_syno_token": "yes",
                 },
                 timeout=TIMEOUT,
-                verify=False,
+                verify=self.cfg["verify_ssl"],
             )
             data = resp.json()
         except requests.RequestException as e:
@@ -242,9 +282,9 @@ class SynoClient:
             try:
                 url = self.base + "/webapi/entry.cgi"
                 if http_method.lower() == "post":
-                    resp = requests.post(url, data=qs, timeout=timeout, verify=False)
+                    resp = requests.post(url, data=qs, timeout=timeout, verify=self.cfg["verify_ssl"])
                 else:
-                    resp = requests.get(url, params=qs, timeout=timeout, verify=False)
+                    resp = requests.get(url, params=qs, timeout=timeout, verify=self.cfg["verify_ssl"])
                 return resp.json()
             except requests.RequestException as e:
                 raise SynoError("请求 DSM 失败: %s" % e)
@@ -296,6 +336,29 @@ class SynoClient:
                 continue
             return {"ports": _extract_ports({"data": d})}
         return None
+
+    def get_container_ports_batch(self, containers, max_workers=6):
+        """Fetch port mappings concurrently and preserve per-container errors."""
+        result = {}
+
+        def fetch(container):
+            key = container.get("id") or container.get("name")
+            try:
+                detail = self.get_container_detail(name=container.get("name"), cid=container.get("id"))
+                if detail is None:
+                    return key, {"ports": [], "ok": False, "error": "容器详情不存在"}
+                return key, {"ports": detail.get("ports") or [], "ok": True, "error": None}
+            except SynoError as exc:
+                return key, {"ports": [], "ok": False, "error": str(exc)}
+
+        items = list(containers or [])
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(fetch, c) for c in items]
+            for future in futures:
+                key, value = future.result()
+                if key:
+                    result[key] = value
+        return result
 
     # ---------- 利用率（session=Core） ----------
     def get_utilization(self):
@@ -405,13 +468,18 @@ class SynoClient:
         }
 
     # ---------- 启停操作（session=Docker） ----------
-    def container_action(self, name, action):
+    def container_action(self, name, action, cid=None):
         """action: start / stop / restart
 
         DSM Docker API 的 start/stop/restart 方法使用 ``name`` 参数（容器名），
         而非 ``id``（容器 hash）。前端直接传容器名。
         """
-        self._api("SYNO.Docker.Container", 1, action, {"name": name}, session="Docker")
+        try:
+            self._api("SYNO.Docker.Container", 1, action, {"name": name}, session="Docker")
+        except SynoError:
+            if not cid:
+                raise
+            self._api("SYNO.Docker.Container", 1, action, {"id": cid}, session="Docker")
         return True
 
     # ---------- 一次性快照（分层刷新：易变实时 / 静态长缓存） ----------
@@ -470,6 +538,8 @@ class SynoClient:
         now = time.time()
         with _STATIC_LOCK:
             cached = _STATIC_CACHE
+            if cached.get("key") != self.cache_key:
+                cached.update({"key": self.cache_key, "storage": None, "health": None, "ts": 0.0, "next_retry": 0.0})
             need_refresh = force or (now >= cached["next_retry"])
             if not need_refresh:
                 diagnostics["storage"] = {"ok": True, "cached": True}

@@ -13,6 +13,8 @@ from backend.models import Category, db
 
 def run_migrations(app):
     with app.app_context():
+        with db.engine.begin() as conn:
+            conn.execute(text("CREATE TABLE IF NOT EXISTS schema_migrations (version VARCHAR(32) PRIMARY KEY, applied_at DATETIME NOT NULL)"))
         inspector = inspect(db.engine)
         tables = inspector.get_table_names()
         if "categories" not in tables:
@@ -26,9 +28,8 @@ def run_migrations(app):
                 conn.execute(
                     text("ALTER TABLE categories ADD COLUMN permission VARCHAR(16) NOT NULL DEFAULT 'all'")
                 )
-            print("✅ 迁移：categories 表已新增 permission 列")
-        else:
-            print("ℹ️  迁移：permission 列已存在，跳过")
+            with db.engine.begin() as conn:
+                conn.execute(text("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES ('category_permission_v1', CURRENT_TIMESTAMP)"))
 
         # 兜底：任何 permission 为空的残留行统一置为 'all'
         dirty = False

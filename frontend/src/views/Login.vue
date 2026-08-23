@@ -50,7 +50,7 @@ function enterAsGuest() {
     <main class="w-full max-w-[420px] bg-surface/70 backdrop-blur-xl rounded-[1.25rem] shadow-[0_8px_32px_rgba(83,65,205,0.06)] border border-outline-variant/40 p-8 relative z-10 flex flex-col gap-unit-24">
       <!-- Header -->
       <div class="flex flex-col items-center text-center">
-        <div class="w-16 h-16 bg-primary-container text-on-primary-container rounded-[1rem] flex items-center justify-center shadow-sm mb-4 overflow-hidden">
+        <div class="w-16 h-16 text-primary flex items-center justify-center mb-4 overflow-hidden">
           <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
           <span v-else class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'FILL' 1;">dashboard</span>
         </div>
@@ -95,7 +95,7 @@ function enterAsGuest() {
 
         <button
           type="submit"
-          class="w-full bg-primary text-on-primary font-headline-sm text-headline-sm rounded-lg py-3.5 mt-2 hover:bg-surface-tint shadow-[0_4px_14px_rgba(83,65,205,0.25)] transition-all active:scale-[0.98] flex justify-center items-center gap-2 disabled:opacity-50"
+          class="ui-btn ui-btn-primary w-full rounded-lg py-3.5 mt-2 font-headline-sm text-headline-sm disabled:opacity-50"
           :disabled="loading"
         >
           <span>{{ loading ? '登录中…' : '登录' }}</span>
@@ -104,7 +104,7 @@ function enterAsGuest() {
 
         <button
           type="button"
-          class="w-full mt-3 py-2.5 rounded-lg border border-outline-variant/70 text-on-surface-variant font-body-md hover:bg-surface-container transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+          class="ui-btn ui-btn-secondary w-full mt-3 py-2.5 rounded-lg font-body-md disabled:opacity-50"
           :disabled="loading"
           @click="enterAsGuest"
         >
@@ -121,7 +121,7 @@ function enterAsGuest() {
         </router-link>
         <span class="text-outline-variant">|</span>
         <router-link to="/reset-password" class="group font-body-md text-body-md text-secondary hover:text-primary transition-colors inline-flex items-center gap-1">
-          <span>忘记密码</span>
+          <span>修改密码</span>
           <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
         </router-link>
       </div>

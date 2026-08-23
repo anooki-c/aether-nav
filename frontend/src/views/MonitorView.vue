@@ -7,6 +7,7 @@ import QuickAddLink from '../components/QuickAddLink.vue'
 /* ── 连接配置 ─────────────────────────────────────── */
 const config = reactive({ host: '', port: '', user: '', password: '', https: false })
 const savingConfig = ref(false)
+const testingConfig = ref(false)
 const configMsg = ref('')
 const needConfig = ref(false)
 const showConfig = ref(false)
@@ -271,6 +272,22 @@ async function saveConfig() {
   }
 }
 
+async function testConfig() {
+  testingConfig.value = true
+  configMsg.value = ''
+  try {
+    const d = await api.monitorConfigTest({
+      host: config.host, port: config.port, user: config.user,
+      password: config.password, https: config.https,
+    })
+    configMsg.value = `连接成功：${d.hostname || 'DSM'}，发现 ${d.container_count || 0} 个容器`
+  } catch (e) {
+    configMsg.value = `连接失败：${e.message}`
+  } finally {
+    testingConfig.value = false
+  }
+}
+
 async function loadSnapshot(force = false) {
   if (loading.value) return  // 防止慢响应期间自动刷新叠加请求
   loading.value = true
@@ -353,6 +370,8 @@ function filteredPorts(cid) {
 /* ── 端口重复性检测 ──────────────────────────────── */
 const portCheckValue = ref('')
 const showPortModal = ref(false)
+const portCheckLoading = ref(false)
+const portCheckErrors = ref([])
 const portMatches = ref([])      // [{ name, networks, ports:[{map,host,container}] }]
 const portConflict = ref([])     // 被多个容器占用的外部端口列表
 async function checkPort() {
@@ -420,6 +439,7 @@ const ipPrefix = computed(() => {
 const showIpModal = ref(false)
 const ipCheckNetwork = ref('')
 const ipCheckOctet = ref('')
+const ipCheckValue = ref('')
 const ipTarget = ref('')
 const ipMatches = ref([])      // [{ name, state, networks:[{name, ip, matched}] }]
 function openIpModal() {
@@ -504,12 +524,54 @@ onMounted(async () => {
   await loadConfig()
   if (!needConfig.value) loadSnapshot()
   await loadExistingLinks()   // 必须等待：按钮 disabled / openAddConnection 去重都依赖 existingLinks
-  timer = setInterval(() => { if (!needConfig.value && !loading.value) loadSnapshot() }, AUTO_INTERVAL)
+  timer = setInterval(() => {
+    if (document.visibilityState === 'visible' && !needConfig.value && !loading.value) loadSnapshot()
+  }, AUTO_INTERVAL)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
-onBeforeUnmount(() => { if (timer) clearInterval(timer) })
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible' && !needConfig.value && !loading.value) loadSnapshot()
+}
+onBeforeUnmount(() => {
+  if (timer) clearInterval(timer)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 
 // 快速添加弹窗关闭后（无论保存或取消）刷新已有链接，及时更新按钮禁用态
 watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
+
+async function runPortDiagnostic() {
+  const query = String(portCheckValue.value).trim()
+  if (!query || portCheckLoading.value) return
+  portCheckLoading.value = true
+  portCheckErrors.value = []
+  try {
+    const d = await api.monitorDiagnostics({ port: query })
+    portMatches.value = (d.port_matches || []).map((m) => ({
+      ...m,
+      networks: (m.networks || []).map((n) => n.name).join(', ') || '—',
+    }))
+    portConflict.value = (d.port_conflicts || []).map((c) => `${c.ip}:${c.port}/${c.type}`)
+    portCheckErrors.value = d.errors || []
+    showPortModal.value = true
+  } catch (e) {
+    error.value = e.message || '端口检测失败'
+  } finally {
+    portCheckLoading.value = false
+  }
+}
+
+async function runIpDiagnostic() {
+  const target = String(ipCheckValue.value || (ipPrefix.value && ipCheckOctet.value ? `${ipPrefix.value}.${ipCheckOctet.value}` : '')).trim()
+  if (!target) return
+  ipTarget.value = target
+  try {
+    const d = await api.monitorDiagnostics({ ip: target })
+    ipMatches.value = d.ip_matches || []
+  } catch (e) {
+    error.value = e.message || 'IP 检测失败'
+  }
+}
 </script>
 
 <template>
@@ -586,6 +648,10 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
         <button v-if="!needConfig" @click="showConfig = false"
           class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all">
           收起
+        </button>
+        <button @click="testConfig" :disabled="testingConfig"
+          class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all disabled:opacity-60">
+          {{ testingConfig ? '测试中…' : '测试连接' }}
         </button>
         <button @click="saveConfig" :disabled="savingConfig"
           class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all disabled:opacity-60">
@@ -716,9 +782,9 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
             </div>
             <!-- 端口检测 -->
             <div class="flex items-center gap-1 rounded-xl border border-outline-variant/40 overflow-hidden bg-surface-container">
-              <input v-model="portCheckValue" @keyup.enter="checkPort" type="text" placeholder="端口检测"
+              <input v-model="portCheckValue" @keyup.enter="runPortDiagnostic" type="text" placeholder="端口检测"
                 class="px-3 py-2 text-sm bg-transparent text-text-primary focus:outline-none w-24" />
-              <button @click="checkPort"
+              <button @click="runPortDiagnostic"
                 class="px-2.5 py-2 text-text-secondary hover:bg-surface-container-high transition-all" title="检测端口是否被占用">
                 <span class="material-symbols-outlined text-[18px]">find_in_page</span>
               </button>
@@ -907,6 +973,9 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
             <div v-if="!portMatches.length" class="text-text-secondary text-sm py-4 text-center">
               未检测到端口 {{ portCheckValue }} 被任何容器占用 ✓
             </div>
+            <div v-if="portCheckErrors.length" class="mt-3 rounded-xl bg-warning/10 border border-warning/30 p-3 text-sm text-warning">
+              部分容器端口详情获取失败，结果可能不完整：{{ portCheckErrors.length }} 个
+            </div>
             <div v-else class="space-y-3">
               <div v-for="(m, i) in portMatches" :key="i" class="rounded-xl border p-3" :class="stateCardClass(m.state)">
                 <div class="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -973,7 +1042,12 @@ watch(quickAddOpen, (v) => { if (!v) loadExistingLinks() })
                     class="flex-1 px-2 py-2 text-sm bg-transparent text-text-primary font-mono focus:outline-none" />
                 </div>
               </label>
-              <button @click="checkIp"
+              <label class="flex flex-col gap-1 flex-1">
+                <span class="text-label-sm text-text-secondary">或输入完整 IP</span>
+                <input v-model="ipCheckValue" @keyup.enter="runIpDiagnostic" type="text" placeholder="例如 172.18.0.10"
+                  class="px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono" />
+              </label>
+            <button @click="runIpDiagnostic"
                 class="sm:self-end px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all">
                 检测
               </button>

@@ -99,6 +99,7 @@ const networkOptions = computed(() => {
 })
 const ipNetwork = ref('')
 const ipOctet = ref('')
+const ipValue = ref('')
 const ipTarget = ref('')
 const ipMatches = ref([])
 const ipPrefix = computed(() => {
@@ -127,21 +128,53 @@ function checkIp() {
   }
   ipMatches.value = matches
 }
+
+async function runSharedPortCheck() {
+  const q = String(portValue.value).trim()
+  if (!q || portBusy.value) return
+  portBusy.value = true
+  loadError.value = ''
+  try {
+    const d = await api.monitorDiagnostics({ port: q })
+    portMatches.value = (d.port_matches || []).map((m) => ({
+      ...m,
+      networks: (m.networks || []).map((n) => n.name).join(', ') || '—',
+    }))
+    portConflict.value = (d.port_conflicts || []).map((c) => `${c.ip}:${c.port}/${c.type}`)
+    if (d.errors && d.errors.length) loadError.value = `部分容器端口详情获取失败：${d.errors.length} 个`
+  } catch (e) {
+    loadError.value = e.message || '端口检测失败'
+  } finally {
+    portBusy.value = false
+  }
+}
+
+async function runSharedIpCheck() {
+  const target = String(ipValue.value || (ipOctet.value && ipPrefix.value ? `${ipPrefix.value}.${ipOctet.value}` : '')).trim()
+  if (!target) return
+  ipTarget.value = target
+  try {
+    const d = await api.monitorDiagnostics({ ip: target })
+    ipMatches.value = d.ip_matches || []
+  } catch (e) {
+    loadError.value = e.message || 'IP 检测失败'
+  }
+}
 </script>
 
 <template>
   <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
-    <div class="relative bg-bg-card w-full max-w-[680px] max-h-[88vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+    <div class="relative bg-bg-card w-full max-w-[680px] max-h-[88vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30" role="dialog" aria-modal="true" aria-labelledby="network-check-title">
       <!-- Header -->
       <div class="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
             <span class="material-symbols-outlined text-[20px]">hub</span>
           </div>
-          <h2 class="font-headline-md text-headline-md text-text-primary">网络检测</h2>
+          <h2 id="network-check-title" class="font-headline-md text-headline-md text-text-primary">网络检测</h2>
         </div>
-        <button @click="close" class="text-text-secondary hover:text-text-primary transition-all">
+        <button @click="close" aria-label="关闭网络检测" class="text-text-secondary hover:text-text-primary transition-all">
           <span class="material-symbols-outlined text-[22px]">close</span>
         </button>
       </div>
@@ -157,9 +190,9 @@ function checkIp() {
             <h3 class="font-headline-sm text-headline-sm text-text-primary">端口重复性检测</h3>
           </div>
           <div class="flex items-center gap-2">
-            <input v-model="portValue" @keyup.enter="checkPort" :disabled="portBusy" type="text"
+            <input v-model="portValue" @keyup.enter="runSharedPortCheck" :disabled="portBusy" type="text"
               placeholder="输入端口号，如 3000" class="flex-1 px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60" />
-            <button @click="checkPort" :disabled="portBusy"
+            <button @click="runSharedPortCheck" :disabled="portBusy"
               class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all disabled:opacity-60">
               {{ portBusy ? '检测中…' : '检测' }}
             </button>
@@ -212,11 +245,16 @@ function checkIp() {
               <span class="text-label-sm text-text-secondary">IP 地址（前 24 位 + 末位）</span>
               <div class="flex items-center gap-0 rounded-xl border border-outline-variant/40 overflow-hidden bg-surface-container focus-within:ring-2 focus-within:ring-primary/40">
                 <span class="px-3 py-2 font-mono text-sm text-text-secondary whitespace-nowrap">{{ ipPrefix }}.</span>
-                <input v-model="ipOctet" @keyup.enter="checkIp" type="number" min="0" max="255" placeholder="末位，如 10"
+                <input v-model="ipOctet" @keyup.enter="runSharedIpCheck" type="number" min="0" max="255" placeholder="末位，如 10"
                   class="flex-1 px-2 py-2 text-sm bg-transparent text-text-primary font-mono focus:outline-none" />
               </div>
             </label>
-            <button @click="checkIp"
+            <label class="flex flex-col gap-1 flex-1">
+              <span class="text-label-sm text-text-secondary">或输入完整 IP</span>
+              <input v-model="ipValue" @keyup.enter="runSharedIpCheck" type="text" placeholder="例如 172.18.0.10"
+                class="px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono" />
+            </label>
+            <button @click="runSharedIpCheck"
               class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all">
               检测
             </button>

@@ -11,6 +11,9 @@ python tests/_e2e_normaluser.py
 python tests/_e2e_perm_visible.py
 python tests/_e2e_denied.py
 python tests/_diag.py
+
+# 标准库安全回归测试
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
 > 说明：脚本从根目录的 `backend` 包导入（`from backend.app import app, db`），故必须保持 cwd 为 `aether-nav/`。

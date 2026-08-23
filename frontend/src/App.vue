@@ -93,7 +93,7 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
     <!-- 回到顶部 FAB（桌面端显示） -->
     <button
       v-if="!isLogin && !isAdmin && !isSettings"
-      class="fixed bottom-20 lg:bottom-8 right-8 w-14 h-14 bg-[#002FA7] text-white rounded-full flex items-center justify-center shadow-[0_10px_25px_-5px_rgba(0,47,167,0.45)] hover:scale-105 hover:bg-[#00238a] transition-[transform,background-color] z-40 active:scale-95 hidden lg:flex"
+        class="ui-btn ui-btn-primary ui-icon-hover fixed bottom-20 lg:bottom-8 right-8 w-14 h-14 min-h-0 p-0 rounded-full z-40 active:scale-95 hidden lg:flex"
       @click="backToTop"
       aria-label="回到顶部"
     >
@@ -107,11 +107,16 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
     <Transition name="toast-fade">
       <div
         v-if="store.toast.text"
-        class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2 text-sm"
+        :key="store.toast.nonce"
+        class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-4 pt-3 pb-4 rounded-xl shadow-lg border flex items-center gap-2 text-sm overflow-hidden"
         :class="toastClass"
+        :style="{ '--toast-duration': `${store.toast.duration || 3200}ms` }"
+        role="status"
+        aria-live="polite"
       >
         <span class="material-symbols-outlined text-[18px]">{{ toastIcon }}</span>
         <span>{{ store.toast.text }}</span>
+        <span class="toast-progress absolute bottom-0 left-0 right-0 h-1 bg-current opacity-35" aria-hidden="true"></span>
       </div>
     </Transition>
   </div>

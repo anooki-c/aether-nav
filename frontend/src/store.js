@@ -20,11 +20,21 @@ export const COLOR_SCHEMES = [
   { id: 'berry', label: '莓果', colors: ['#C13C8A', '#FF8FB1'] },
 ]
 
+const SEARCH_ENGINE_DEFAULTS = [
+  { id: 'local', label: '站内', url: '', enabled: true },
+  { id: 'google', label: 'Google', url: 'https://www.google.com/search?q={q}', enabled: true },
+  { id: 'baidu', label: '百度', url: 'https://www.baidu.com/s?wd={q}', enabled: true },
+  { id: 'bing', label: '必应', url: 'https://www.bing.com/search?q={q}', enabled: true },
+  { id: 'ddg', label: 'DuckDuckGo', url: 'https://duckduckgo.com/?q={q}', enabled: true },
+  { id: 'brave', label: 'Brave', url: 'https://search.brave.com/search?q={q}', enabled: true },
+]
+
 function readToken() {
-  const token = localStorage.getItem(LS.token)
+  const token = sessionStorage.getItem(LS.token) || localStorage.getItem(LS.token)
   if (!token) return ''
   const expiry = localStorage.getItem(LS.tokenExpiry)
   if (expiry && Date.now() > Number(expiry)) {
+    sessionStorage.removeItem(LS.token)
     localStorage.removeItem(LS.token)
     localStorage.removeItem(LS.tokenExpiry)
     return ''
@@ -42,6 +52,11 @@ export const store = reactive({
   linksVersion: 0, // 链接列表变更计数（创建链接后自增，首页监听刷新）
   dragSortEnabled: true, // 站点设置：主页拖拽排序是否开启（PRD item 6）
   searchBoxPos: 'fixed', // 站点设置：搜索框位置 fixed=固定顶部 / scrolling=随内容滚动
+  searchEngines: [
+    ...SEARCH_ENGINE_DEFAULTS,
+  ],
+  defaultSearchEngine: 'local',
+  searchQuery: '',
   // 站点「显示设置」默认值（作用于首页卡片布局）
   columns: 4, // 桌面端每行列数 2~8
   compactMode: false, // 紧凑模式
@@ -78,7 +93,7 @@ export const store = reactive({
   scrollNonce: 0, // 触发主页滚动到分类区域
   weatherCity: localStorage.getItem('zn_weather_city') || '北京', // 天气城市（个人偏好）
   searchNonce: 0, // 触发搜索框聚焦（移动端底栏"搜索"按钮）
-  toast: { text: '', type: 'info', nonce: 0 }, // 全局轻提示
+  toast: { text: '', type: 'info', nonce: 0, duration: 0 }, // 全局轻提示
 })
 
 export function bumpLinks() {
@@ -89,10 +104,10 @@ let toastTimer = null
 // 全局轻提示：type = info | success | warn | error
 export function showToast(text, type = 'info', duration = 3200) {
   if (!text) return
-  store.toast = { text, type, nonce: store.toast.nonce + 1 }
+  store.toast = { text, type, nonce: store.toast.nonce + 1, duration }
   if (toastTimer) clearTimeout(toastTimer)
   toastTimer = setTimeout(() => {
-    store.toast = { text: '', type: 'info', nonce: store.toast.nonce }
+    store.toast = { text: '', type: 'info', nonce: store.toast.nonce, duration: 0 }
   }, duration)
 }
 
@@ -116,6 +131,20 @@ export async function loadSettings() {
     const data = await api.getSettings()
     store.dragSortEnabled = !!data.drag_sort_enabled
     store.searchBoxPos = data.search_box_pos || 'fixed'
+    const configuredEngines = Array.isArray(data.search_engines) && data.search_engines.length
+      ? data.search_engines.filter((item) => item && item.id)
+      : SEARCH_ENGINE_DEFAULTS
+    const configuredIds = new Set(configuredEngines.map((item) => item.id))
+    // 保留后台返回的自定义项和排序，同时兼容旧后端只返回前三个内置引擎的情况。
+    const mergedEngines = [
+      ...configuredEngines,
+      ...SEARCH_ENGINE_DEFAULTS.filter((item) => !configuredIds.has(item.id)),
+    ]
+    store.searchEngines = mergedEngines.filter((item) => item.enabled !== false)
+    const configuredDefault = String(data.default_engine || 'local').toLowerCase()
+    store.defaultSearchEngine = store.searchEngines.some((item) => item.id === configuredDefault && item.id !== 'local')
+      ? configuredDefault
+      : (store.searchEngines.find((item) => item.id !== 'local')?.id || 'google')
     // 显示设置（首页卡片布局）
     if (typeof data.columns === 'number') store.columns = data.columns
     else if (data.columns) store.columns = Number(data.columns) || 4
@@ -322,7 +351,9 @@ export function setAuth(token, user, remember = false) {
   store.token = token
   store.user = user
   if (token) {
-    localStorage.setItem(LS.token, token)
+    sessionStorage.removeItem(LS.token)
+    localStorage.removeItem(LS.token)
+    ;(remember ? localStorage : sessionStorage).setItem(LS.token, token)
     if (remember) {
       // 记住我：30 天免登录
       localStorage.setItem(LS.tokenExpiry, String(Date.now() + 30 * 24 * 3600 * 1000))
@@ -330,6 +361,7 @@ export function setAuth(token, user, remember = false) {
       localStorage.removeItem(LS.tokenExpiry)
     }
   } else {
+    sessionStorage.removeItem(LS.token)
     localStorage.removeItem(LS.token)
     localStorage.removeItem(LS.tokenExpiry)
   }
@@ -337,6 +369,12 @@ export function setAuth(token, user, remember = false) {
 
 export function logout() {
   setAuth('', null)
+  store.theme = 'light'
+  store.network = 'external'
+  store.weatherCity = '北京'
+  localStorage.removeItem(LS.theme)
+  localStorage.removeItem(LS.network)
+  localStorage.removeItem('zn_weather_city')
 }
 
 // ---------- 首页可编辑状态 + 全局链接弹窗 ----------

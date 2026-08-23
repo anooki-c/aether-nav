@@ -2,15 +2,19 @@
 import base64
 import datetime
 import json
+import logging
 import os
 import re
 import random
+import ipaddress
+import socket
 import threading
 import time
+from collections import defaultdict, deque
 from urllib.parse import urlparse
 
 import requests
-from werkzeug.utils import secure_filename
+from werkzeug.utils import secure_filename, safe_join
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -49,10 +53,61 @@ from backend.models import (
 )
 
 app = Flask(__name__, static_folder=None)
+logger = logging.getLogger(__name__)
+
+SEARCH_ENGINE_DEFAULTS = [
+    {"id": "local", "label": "站内", "url": ""},
+    {"id": "google", "label": "Google", "url": "https://www.google.com/search?q={q}"},
+    {"id": "baidu", "label": "百度", "url": "https://www.baidu.com/s?wd={q}"},
+    {"id": "bing", "label": "必应", "url": "https://www.bing.com/search?q={q}"},
+    {"id": "ddg", "label": "DuckDuckGo", "url": "https://duckduckgo.com/?q={q}"},
+    {"id": "brave", "label": "Brave", "url": "https://search.brave.com/search?q={q}"},
+]
+
+
+def search_engine_settings():
+    """返回经过校验、保留自定义项和顺序的搜索引擎配置。"""
+    raw = Setting.get("search_engines", "")
+    configured = None
+    try:
+        parsed = json.loads(raw) if raw else None
+        if isinstance(parsed, list):
+            configured = parsed
+    except (TypeError, ValueError):
+        configured = None
+    by_id = {item["id"]: item for item in SEARCH_ENGINE_DEFAULTS}
+    result = []
+    seen = set()
+    for item in configured or SEARCH_ENGINE_DEFAULTS:
+        if not isinstance(item, dict):
+            continue
+        engine_id = str(item.get("id", "")).strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,31}", engine_id) or engine_id in seen:
+            continue
+        if engine_id in by_id:
+            base = by_id[engine_id]
+        else:
+            label = str(item.get("label", "")).strip()
+            url = str(item.get("url", "")).strip()
+            parsed = urlparse(url)
+            if not label or len(label) > 40 or len(url) > 2048 or "{q}" not in url or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                continue
+            base = {"id": engine_id, "label": label, "url": url}
+        result.append({**base, "enabled": bool(item.get("enabled", True))})
+        seen.add(engine_id)
+    for item in SEARCH_ENGINE_DEFAULTS:
+        if item["id"] not in seen:
+            result.append({**item, "enabled": True})
+    enabled = [item for item in result if item["enabled"]]
+    if not any(item["id"] == "local" for item in enabled):
+        next(item for item in result if item["id"] == "local")["enabled"] = True
+    return result
 app.config.from_object(Config)
+if Config.ENV == "production" and (not Config.SECRET_KEY or not Config.TOKEN_SECRET):
+    raise RuntimeError("生产环境必须设置 SECRET_KEY 和 TOKEN_SECRET")
 # 开发期：禁止前端静态资源缓存，避免 vite build 后浏览器沿用旧 chunk 导致白屏
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-CORS(app, supports_credentials=True, origins="*")
+CORS(app, supports_credentials=True, origins=Config.CORS_ORIGINS or ["http://localhost:5001"])
 db.init_app(app)
 
 # 启动时幂等迁移（新增列等），确保 gunicorn 直启实例也能补齐 schema
@@ -60,6 +115,65 @@ from backend.migrate import run_migrations
 run_migrations(app)
 
 serializer = URLSafeTimedSerializer(Config.TOKEN_SECRET)
+
+_rate_limit_events = defaultdict(deque)
+_rate_limit_lock = threading.Lock()
+
+
+def _client_key():
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    return (forwarded.split(",")[0].strip() or request.remote_addr or "unknown")[:128]
+
+
+def rate_limited(bucket, limit, window=60, identity=None):
+    """轻量进程内限流；生产环境可在反向代理层再配置集中式限流。"""
+    now = time.monotonic()
+    key = f"{bucket}:{identity or _client_key()}"
+    with _rate_limit_lock:
+        events = _rate_limit_events[key]
+        while events and now - events[0] >= window:
+            events.popleft()
+        if len(events) >= limit:
+            return True
+        events.append(now)
+    return False
+
+
+def valid_password(value):
+    return isinstance(value, str) and 8 <= len(value) <= 256
+
+
+def validate_http_url(raw_url, allow_private=None):
+    """校验可由服务端访问的 URL，阻止危险协议和本机/链路本地地址。"""
+    raw = (raw_url or "").strip()
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+        return None, "仅支持不含账号信息的 http/https URL"
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError:
+        return None, "URL 端口格式无效"
+    if not 1 <= port <= 65535:
+        return None, "URL 端口范围无效"
+    host = parsed.hostname.strip("[]").lower()
+    try:
+        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        addresses = []
+    if not addresses:
+        return None, "主机名无法解析"
+    allow_private = Config.ALLOW_PRIVATE_NETWORK_CHECKS if allow_private is None else allow_private
+    for addr in {item[4][0] for item in addresses}:
+        try:
+            ip = ipaddress.ip_address(addr)
+            blocked = ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified
+            if str(ip) == "169.254.169.254":
+                blocked = True
+            if blocked or (not allow_private and ip.is_private):
+                return None, "不允许访问本机、链路本地或受限网络地址"
+        except ValueError:
+            continue
+    return parsed, None
 
 
 def token_max_age_seconds():
@@ -124,6 +238,7 @@ def audit(operator, action, target_type, target_id=None, target_name=None, detai
         db.session.commit()
     except Exception:
         db.session.rollback()
+        logger.exception("audit log write failed")
 
 
 def _cleanup_access_logs():
@@ -134,10 +249,13 @@ def _cleanup_access_logs():
         days = 90
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=days)
     try:
-        AccessLog.query.filter(AccessLog.created_at < cutoff).delete()
+        old_ids = [row.id for row in AccessLog.query.with_entities(AccessLog.id).filter(AccessLog.created_at < cutoff).limit(5000).all()]
+        if old_ids:
+            AccessLog.query.filter(AccessLog.id.in_(old_ids)).delete(synchronize_session=False)
         db.session.commit()
     except Exception:
         db.session.rollback()
+        logger.exception("access log write failed")
 
 
 def log_access(user, action, link_id=None):
@@ -157,6 +275,7 @@ def log_access(user, action, link_id=None):
             _cleanup_access_logs()
     except Exception:
         db.session.rollback()
+        logger.exception("access log write failed")
 
 
 def auth_required(f):
@@ -188,6 +307,8 @@ def health():
 
 @app.route("/api/auth/login", methods=["POST"])
 def login():
+    if rate_limited("login", 10, 300):
+        return jsonify({"error": "尝试次数过多，请稍后再试"}), 429
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
@@ -245,8 +366,8 @@ def update_me(user):
         if not user.check_password(data["current_password"]):
             return jsonify({"error": "当前密码错误"}), 400
         new_pw = data.get("new_password", "")
-        if not new_pw or len(new_pw) < 6:
-            return jsonify({"error": "新密码至少 6 位"}), 400
+        if not valid_password(new_pw):
+            return jsonify({"error": "新密码长度需为 8-256 位"}), 400
         user.set_password(new_pw)
         changed.append("password")
 
@@ -281,6 +402,8 @@ def track_link(user, link_id):
     link = Link.query.get(link_id)
     if not link or link.is_active is False:
         return jsonify({"error": "链接不存在"}), 404
+    if link not in visible_links_for(user):
+        return jsonify({"error": "无权访问该链接"}), 403
     log_access(user, "click", link_id=link_id)
     return jsonify({"ok": True})
 
@@ -295,8 +418,8 @@ def register():
     password = data.get("password") or ""
     if not username or not password:
         return jsonify({"error": "用户名与密码必填"}), 400
-    if len(password) < 6:
-        return jsonify({"error": "密码至少 6 位"}), 400
+    if not valid_password(password):
+        return jsonify({"error": "密码长度需为 8-256 位"}), 400
     if User.query.filter_by(username=username).first():
         return jsonify({"error": "用户名已存在"}), 400
     # 新用户默认角色由站点设置决定（缺省 member）
@@ -315,16 +438,24 @@ def register():
 
 @app.route("/api/auth/reset-password", methods=["POST"])
 def reset_password():
+    if rate_limited("reset-password", 5, 600):
+        return jsonify({"error": "尝试次数过多，请稍后再试"}), 429
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
+    current_pw = data.get("current_password") or ""
     new_pw = data.get("new_password") or ""
-    if not username or not new_pw:
-        return jsonify({"error": "用户名与新密码必填"}), 400
+    if not username or not valid_password(new_pw):
+        return jsonify({"error": "用户名必填，新密码长度需为 8-256 位"}), 400
     u = User.query.filter_by(username=username).first()
     if not u:
-        return jsonify({"error": "用户不存在"}), 404
+        return jsonify({"error": "用户名或验证信息错误"}), 400
+    requester = current_user()
+    if not current_pw or not u.check_password(current_pw):
+        if not requester or requester.role != "admin":
+            return jsonify({"error": "需要当前密码，或由管理员执行重置"}), 403
     u.set_password(new_pw)
     db.session.commit()
+    audit(requester or u, "password_reset", "user", u.id, u.username, "通过当前密码/管理员授权重置")
     return jsonify({"ok": True})
 
 
@@ -357,14 +488,16 @@ def categories_tree():
     """
     user = current_user()
     linked_cats = {l.category_id for l in visible_links_for(user)}
+    count_rows = db.session.query(Link.category_id, db.func.count(Link.id)).group_by(Link.category_id).all()
+    link_counts = {category_id: count for category_id, count in count_rows}
     parents = Category.query.filter_by(parent_id=None).order_by(Category.position).all()
     tree = []
     for p in parents:
         d = p.to_dict(with_children=True)
-        d["link_count"] = Link.query.filter_by(category_id=p.id).count()
+        d["link_count"] = link_counts.get(p.id, 0)
         d["has_links"] = p.id in linked_cats
         for c in d.get("children", []):
-            c["link_count"] = Link.query.filter_by(category_id=c["id"]).count()
+            c["link_count"] = link_counts.get(c["id"], 0)
             c["has_links"] = c["id"] in linked_cats
         tree.append(d)
     return jsonify({"tree": tree})
@@ -451,6 +584,23 @@ def _host_port_key(url):
         return ""
 
 
+def validate_link_url(raw_url):
+    value = (raw_url or "").strip()
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+        return "链接地址必须是 http:// 或 https://，且不能包含账号信息"
+    if len(value) > 2048:
+        return "链接地址不能超过 2048 个字符"
+    try:
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
+            return "链接端口范围无效"
+    except ValueError:
+        return "链接端口格式无效"
+    return None
+
+
 @app.route("/api/links", methods=["POST"])
 @auth_required
 def create_link(user):
@@ -462,6 +612,10 @@ def create_link(user):
     category_id = data.get("category_id")
     if not category_id:
         return jsonify({"error": "必须选择分类"}), 400
+    for field in ("url_internal", "url_external"):
+        url_error = validate_link_url(data.get(field))
+        if url_error:
+            return jsonify({"error": url_error}), 400
     cat = Category.query.get(category_id)
     if not cat:
         return jsonify({"error": "分类不存在"}), 404
@@ -521,8 +675,15 @@ def reorder_links(user):
     data = request.get_json(silent=True) or {}
     category_id = data.get("category_id")
     ordered_ids = data.get("ordered_ids", [])
-    if not category_id or not isinstance(ordered_ids, list):
+    if not category_id or not isinstance(ordered_ids, list) or len(ordered_ids) > 500:
         return jsonify({"error": "参数错误"}), 400
+    try:
+        ordered_ids = [int(lid) for lid in ordered_ids]
+    except (TypeError, ValueError):
+        return jsonify({"error": "排序链接参数错误"}), 400
+    visible_ids = {link.id for link in visible_links_for(user) if link.category_id == category_id}
+    if set(ordered_ids) - visible_ids:
+        return jsonify({"error": "排序列表包含不可见链接"}), 403
     LinkSort.query.filter_by(user_id=user.id, category_id=category_id).delete()
     for pos, lid in enumerate(ordered_ids):
         db.session.add(LinkSort(user_id=user.id, link_id=lid, category_id=category_id, position=pos))
@@ -593,8 +754,14 @@ def update_link(user, link_id):
     if "description" in data:
         link.description = data["description"]
     if "url_internal" in data:
+        url_error = validate_link_url(data.get("url_internal"))
+        if url_error:
+            return jsonify({"error": url_error}), 400
         link.url_internal = data["url_internal"] or None
     if "url_external" in data:
+        url_error = validate_link_url(data.get("url_external"))
+        if url_error:
+            return jsonify({"error": url_error}), 400
         link.url_external = data["url_external"] or None
     icon_err = None
     if "icon" in data:
@@ -891,10 +1058,21 @@ def delete_category(user, cat_id):
 def reorder_categories(user):
     data = request.get_json(silent=True) or {}
     ordered = data.get("ordered", [])
+    if user.role != "admin" or not isinstance(ordered, list) or len(ordered) > 500:
+        return jsonify({"error": "无权限或排序参数无效"}), 403
+    seen = set()
     for item in ordered:
+        if not isinstance(item, dict):
+            return jsonify({"error": "排序参数无效"}), 400
         cat = Category.query.get(item.get("id"))
-        if cat:
-            cat.position = item.get("position", cat.position)
+        if not cat or cat.id in seen:
+            return jsonify({"error": "排序列表包含无效分类"}), 400
+        try:
+            position = int(item.get("position", 0))
+        except (TypeError, ValueError):
+            return jsonify({"error": "排序位置无效"}), 400
+        cat.position = max(0, min(position, 100000))
+        seen.add(cat.id)
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -1007,9 +1185,16 @@ def upload_icon(user):
         }.get(mime, "")
     if ext not in ALLOWED_ICON_EXT:
         return jsonify({"error": "不支持的图片格式"}), 400
+    content = f.read(Config.MAX_CONTENT_LENGTH + 1)
+    from backend.icon_utils import valid_icon_content
+    if len(content) > Config.MAX_CONTENT_LENGTH:
+        return jsonify({"error": "图标文件超过 2MB"}), 413
+    if not valid_icon_content(content, f.mimetype, f.filename):
+        return jsonify({"error": "图片内容校验失败，仅支持有效 PNG/JPG/WEBP/ICO 或安全 SVG"}), 400
     fname = f"icon_{user.id}_{int(time.time() * 1000)}{ext}"
     os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
-    f.save(os.path.join(Config.UPLOAD_FOLDER, fname))
+    with open(os.path.join(Config.UPLOAD_FOLDER, secure_filename(fname)), "wb") as out:
+        out.write(content)
     return jsonify({"path": f"/uploads/{fname}"})
 
 
@@ -1021,8 +1206,12 @@ def fetch_icon(user):
     url = data.get("url", "")
     if not url:
         return jsonify({"error": "缺少 url"}), 400
+    normalized_url = url if urlparse(url).scheme else "http://" + url
+    _, url_error = validate_http_url(normalized_url)
+    if url_error:
+        return jsonify({"error": url_error}), 400
     provider, custom = favicon_conf()
-    candidates = resolve_favicon_candidates(url, provider, custom)
+    candidates = resolve_favicon_candidates(normalized_url, provider, custom)
     if not candidates:
         return jsonify({"error": "无法解析域名"}), 400
     err = ""
@@ -1058,6 +1247,10 @@ def fetch_link_meta(user):
     url = (data.get("url") or "").strip()
     if not url:
         return jsonify({"error": "缺少 url"}), 400
+    url = url if urlparse(url).scheme else "http://" + url
+    _, url_error = validate_http_url(url)
+    if url_error:
+        return jsonify({"error": url_error}), 400
     # 局域网网段：管理员可在系统设置里追加自定义网段
     lan_cidrs_raw = Setting.get("lan_cidrs", "") or ""
     lan_cidrs = [c for c in re.split(r"[\s,;]+", lan_cidrs_raw) if c]
@@ -1073,7 +1266,7 @@ def fetch_link_meta(user):
             fetch_url,
             headers={"User-Agent": USER_AGENT},
             timeout=6,
-            allow_redirects=True,
+            allow_redirects=False,
             stream=True,
         )
         html_parts = []
@@ -1108,9 +1301,15 @@ def get_settings():
         columns = int(Setting.get("columns", "4") or 4)
     except (TypeError, ValueError):
         columns = 4
+    engines = search_engine_settings()
+    enabled_external = [item["id"] for item in engines if item["enabled"] and item["id"] != "local"]
+    configured_default = str(Setting.get("default_engine", "google") or "google").lower()
+    configured_default = {item["label"].lower(): item["id"] for item in SEARCH_ENGINE_DEFAULTS}.get(configured_default, configured_default)
+    default_engine = configured_default if configured_default in enabled_external else (enabled_external[0] if enabled_external else "google")
     return jsonify({
         "drag_sort_enabled": Setting.get("drag_sort_enabled", "true") == "true",
-        "default_engine": Setting.get("default_engine", "Google"),
+        "default_engine": default_engine,
+        "search_engines": engines,
         "open_new_tab": Setting.get("open_new_tab", "true") == "true",
         "density": Setting.get("density", "comfortable"),
         # 搜索框位置：fixed=固定顶部 / scrolling=随内容滚动
@@ -1155,7 +1354,7 @@ def update_settings(user):
         return jsonify({"error": "无权限"}), 403
     data = request.get_json(silent=True) or {}
     whitelist = {
-        "drag_sort_enabled", "default_engine", "open_new_tab", "theme",
+        "drag_sort_enabled", "default_engine", "search_engines", "open_new_tab", "theme",
         "network", "density", "search_box_pos", "columns", "compact_mode",
         "allow_home_edit", "favicon_provider", "favicon_custom_url",
         "allow_register", "default_role", "token_max_age_hours",
@@ -1164,13 +1363,73 @@ def update_settings(user):
         "site_name", "site_subtitle", "site_logo",
     }
     saved = {}
+    bool_keys = {
+        "drag_sort_enabled", "open_new_tab", "compact_mode", "allow_home_edit",
+        "allow_register", "show_personal_settings", "show_admin_console",
+        "show_password_lock", "show_category_colors",
+    }
+    int_ranges = {"columns": (1, 8), "token_max_age_hours": (1, 24 * 30), "log_retention_days": (1, 3650)}
+    enum_values = {
+        "theme": {"light", "dark", "system"}, "network": {"external", "internal"},
+        "density": {"comfortable", "compact"}, "search_box_pos": {"fixed", "scrolling"},
+        "default_role": {"admin", "member", "guest"},
+        "color_scheme": {"default", "macaron", "sunset", "mint", "cosmic", "berry"},
+    }
+    if "default_engine" in data:
+        legacy_labels = {item["label"].lower(): item["id"] for item in SEARCH_ENGINE_DEFAULTS}
+        engine = str(data["default_engine"]).strip().lower()
+        engine = legacy_labels.get(engine, engine)
+        if engine == "local" or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,31}", engine):
+            return jsonify({"error": "默认搜索引擎无效"}), 400
+        data["default_engine"] = engine
+    if "search_engines" in data:
+        incoming = data["search_engines"]
+        valid_ids = {item["id"] for item in SEARCH_ENGINE_DEFAULTS}
+        if not isinstance(incoming, list) or not incoming or len(incoming) > 50:
+            return jsonify({"error": "搜索引擎配置格式无效"}), 400
+        normalized = []
+        seen = set()
+        for item in incoming:
+            if not isinstance(item, dict):
+                return jsonify({"error": "搜索引擎配置格式无效"}), 400
+            engine_id = str(item.get("id", "")).strip().lower()
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,31}", engine_id) or engine_id in seen:
+                return jsonify({"error": "搜索引擎列表包含重复或非法项"}), 400
+            if engine_id in valid_ids:
+                label = next(base["label"] for base in SEARCH_ENGINE_DEFAULTS if base["id"] == engine_id)
+                url = next(base["url"] for base in SEARCH_ENGINE_DEFAULTS if base["id"] == engine_id)
+            else:
+                label = str(item.get("label", "")).strip()
+                url = str(item.get("url", "")).strip()
+                parsed = urlparse(url)
+                if not label or len(label) > 40 or len(url) > 2048 or "{q}" not in url or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                    return jsonify({"error": "自定义搜索引擎名称或 URL 无效，URL 必须包含 {q}"}), 400
+            normalized.append({"id": engine_id, "label": label, "url": url, "enabled": bool(item.get("enabled", True))})
+            seen.add(engine_id)
+        if not any(item["id"] == "local" and item["enabled"] for item in normalized):
+            return jsonify({"error": "站内搜索不能被关闭"}), 400
+        default_engine = str(data.get("default_engine", Setting.get("default_engine", "google"))).strip().lower()
+        default_engine = {item["label"].lower(): item["id"] for item in SEARCH_ENGINE_DEFAULTS}.get(default_engine, default_engine)
+        if not any(item["id"] == default_engine and item["enabled"] for item in normalized):
+            return jsonify({"error": "默认搜索引擎必须处于启用状态"}), 400
+        data["search_engines"] = normalized
     for k in whitelist:
         if k in data:
             val = data[k]
+            if k in bool_keys and not isinstance(val, bool):
+                return jsonify({"error": f"设置 {k} 必须是布尔值"}), 400
+            if k in int_ranges and (isinstance(val, bool) or not isinstance(val, int) or not int_ranges[k][0] <= val <= int_ranges[k][1]):
+                return jsonify({"error": f"设置 {k} 超出允许范围"}), 400
+            if k in enum_values and val not in enum_values[k]:
+                return jsonify({"error": f"设置 {k} 的值无效"}), 400
+            if k in {"site_name", "site_subtitle", "favicon_custom_url", "lan_cidrs"} and (not isinstance(val, str) or len(val) > 2048):
+                return jsonify({"error": f"设置 {k} 长度或类型无效"}), 400
             if isinstance(val, bool):
                 val = "true" if val else "false"
             elif isinstance(val, int):
                 val = str(val)
+            elif k == "search_engines":
+                val = json.dumps(val, ensure_ascii=False)
             Setting.set(k, val)
             saved[k] = data[k]
     # 账号安全相关设置变更记入审计
@@ -1807,11 +2066,14 @@ def admin_reset_user_password(user, uid):
     data = request.get_json(silent=True) or {}
     new_pw = (data.get("new_password") or "").strip()
     # 未提供则生成 12 位随机密码
+    if new_pw and not valid_password(new_pw):
+        return jsonify({"error": "新密码长度需为 8-256 位"}), 400
     if not new_pw:
         import random, string
         new_pw = "".join(random.choices(string.ascii_letters + string.digits, k=12))
     target.set_password(new_pw)
     db.session.commit()
+    audit(user, "admin_password_reset", "user", target.id, target.username, "管理员重置密码")
     return jsonify({"ok": True, "new_password": new_pw})
 
 
@@ -2151,15 +2413,22 @@ def admin_all_links(user):
     hidden_ids = {
         v.link_id for v in UserLinkVisibility.query.filter_by(user_id=user.id, show_on_home=False)
     }
+    owner_cache = {u.id: u for u in User.query.filter(User.id.in_({l.owner_id for l in links})).all()} if links else {}
+    category_cache = {c.id: c for c in Category.query.filter(Category.id.in_({l.category_id for l in links})).all()} if links else {}
+    password_ids = {row.link_id for row in LinkPassword.query.filter(
+        LinkPassword.user_id == user.id,
+        LinkPassword.link_id.in_([l.id for l in links]),
+    ).all()} if links else set()
     out = []
     for l in links:
         d = l.to_dict(user=user)
         d["is_active"] = l.is_active
         d["is_owner"] = (l.owner_id == user.id)
         d["can_edit"] = (user.role == "admin" or l.owner_id == user.id)
-        owner = User.query.get(l.owner_id)
+        l._has_password_cached = l.id in password_ids
+        owner = owner_cache.get(l.owner_id)
         d["owner_name"] = owner.username if owner else "?"
-        cat = Category.query.get(l.category_id)
+        cat = category_cache.get(l.category_id)
         d["category_name"] = cat.name if cat else ""
         d["parent_category_name"] = cat.parent.name if (cat and cat.parent_id) else ""
         # 编辑弹窗需要原始内外网地址
@@ -2181,7 +2450,8 @@ def serve_upload(filename):
 @app.route("/<path:path>")
 def serve_frontend(path):
     dist = os.path.join(Config.FRONTEND_DIST)
-    if path and os.path.exists(os.path.join(dist, path)):
+    asset = safe_join(dist, path) if path else None
+    if asset and os.path.isfile(asset):
         return send_from_directory(dist, path)
     index = os.path.join(dist, "index.html")
     if os.path.exists(index):
@@ -2199,6 +2469,9 @@ def _no_cache_frontend(resp):
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         resp.headers['Pragma'] = 'no-cache'
         resp.headers['Expires'] = '0'
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
+    resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
     return resp
 
 
@@ -2278,7 +2551,7 @@ def admin_ping_links(user):
 
 
 # ---------- 群晖监控（DSM API） ----------
-from backend.syno import SynoClient, load_config, SynoError
+from backend.syno import load_config, config_key, get_client, clear_client_cache, SynoError
 
 
 @app.route("/api/monitor/config")
@@ -2310,18 +2583,61 @@ def monitor_config_save(user):
     https = bool(data.get("https"))
     if not host or not suser:
         return jsonify({"error": "主机地址和账号不能为空"}), 400
+    if host.startswith(("http://", "https://")) or "/" in host or " " in host:
+        return jsonify({"error": "主机地址只填写 IP 或域名，不要包含协议和路径"}), 400
+    try:
+        port = int(port) if port not in (None, "") else (5001 if https else 5000)
+    except (TypeError, ValueError):
+        return jsonify({"error": "端口必须是数字"}), 400
+    if not 1 <= port <= 65535:
+        return jsonify({"error": "端口范围必须是 1-65535"}), 400
     Setting.set("syno_host", host)
-    Setting.set("syno_port", str(port) if port else "")
+    Setting.set("syno_port", str(port))
     Setting.set("syno_user", suser)
     if password:
         Setting.set("syno_pass", password)
     Setting.set("syno_https", "1" if https else "0")
+    clear_client_cache()
+    _MONITOR_CACHE.update({"ts": 0.0, "data": None})
     return jsonify({"ok": True})
+
+
+@app.route("/api/monitor/config/test", methods=["POST"])
+@auth_required
+def monitor_config_test(user):
+    if user.role != "admin":
+        return jsonify({"error": "无权限"}), 403
+    data = request.get_json(silent=True) or {}
+    host = (data.get("host") or "").strip()
+    username = (data.get("user") or "").strip()
+    password = data.get("password") or ""
+    https = bool(data.get("https"))
+    if not host or not username or not password:
+        return jsonify({"error": "测试连接需要主机、账号和密码"}), 400
+    try:
+        port = int(data.get("port") or (5001 if https else 5000))
+    except (TypeError, ValueError):
+        return jsonify({"error": "端口必须是数字"}), 400
+    if not 1 <= port <= 65535:
+        return jsonify({"error": "端口范围必须是 1-65535"}), 400
+    cfg = {"host": host, "port": port, "user": username, "password": password, "https": https}
+    try:
+        client = get_client(cfg)
+        health = client.get_system_health()
+        containers = client.get_containers()
+        return jsonify({
+            "ok": True,
+            "hostname": health.get("hostname"),
+            "container_count": len(containers),
+            "message": "连接成功",
+        })
+    except SynoError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
 
 
 # 监控快照短期缓存：避免前端每 15s 轮询都狠打 DSM 多个接口，
 # 同时让慢响应期间的重复请求直接命中缓存（秒级返回）。
-_MONITOR_CACHE = {"ts": 0.0, "data": None}
+_MONITOR_CACHE = {"key": None, "ts": 0.0, "data": None}
 _MONITOR_TTL = 10  # 秒
 
 
@@ -2335,16 +2651,20 @@ def monitor_snapshot(user):
         return jsonify({"error": "尚未配置群晖连接", "need_config": True}), 400
     if not cfg["password"]:
         return jsonify({"error": "群晖密码未配置", "need_config": True}), 400
+    cache_key = config_key(cfg)
     # 命中缓存（手动刷新带 ?force=1 绕过）
     force = request.args.get("force") == "1"
     now = time.time()
+    if _MONITOR_CACHE["key"] != cache_key:
+        _MONITOR_CACHE.update({"key": cache_key, "ts": 0.0, "data": None})
     if not force and _MONITOR_CACHE["data"] and (now - _MONITOR_CACHE["ts"]) < _MONITOR_TTL:
         return jsonify(_MONITOR_CACHE["data"])
     try:
-        client = SynoClient(cfg)
+        client = get_client(cfg)
         snap = client.snapshot(force=force)
     except SynoError as e:
         return jsonify({"error": str(e)}), 502
+    _MONITOR_CACHE["key"] = cache_key
     _MONITOR_CACHE["ts"] = time.time()
     _MONITOR_CACHE["data"] = snap
     return jsonify(snap)
@@ -2361,8 +2681,8 @@ def monitor_container_action(user):
     if not cid or action not in ("start", "stop", "restart"):
         return jsonify({"error": "参数无效"}), 400
     try:
-        client = SynoClient()
-        client.container_action(cid, action)
+        client = get_client()
+        client.container_action(data.get("name") or cid, action, cid=cid)
     except SynoError as e:
         return jsonify({"error": str(e)}), 502
     return jsonify({"ok": True, "action": action})
@@ -2379,13 +2699,141 @@ def monitor_container_detail(user):
     if not name and not cid:
         return jsonify({"error": "缺少 name 或 id 参数"}), 400
     try:
-        client = SynoClient()
+        client = get_client()
         detail = client.get_container_detail(name=name or None, cid=cid or None)
     except SynoError as e:
         return jsonify({"error": str(e)}), 502
     if not detail:
         return jsonify({"error": "未找到该容器（请确认名称/ID）"}), 404
     return jsonify(detail)
+
+
+def _port_query(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        if "-" in raw:
+            start, end = [int(v.strip()) for v in raw.split("-", 1)]
+            if 1 <= start <= end <= 65535:
+                return (start, end)
+        port = int(raw)
+        if 1 <= port <= 65535:
+            return (port, port)
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def _port_matches(port, query):
+    if not query:
+        return False
+    for value in (port.get("host"), port.get("container")):
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if query[0] <= number <= query[1]:
+            return True
+    return False
+
+
+@app.route("/api/monitor/diagnostics", methods=["POST"])
+@auth_required
+def monitor_diagnostics(user):
+    """One shared source of truth for Docker IP/port diagnostics."""
+    if user.role != "admin":
+        return jsonify({"error": "无权限"}), 403
+    data = request.get_json(silent=True) or {}
+    port_query = _port_query(data.get("port")) if data.get("port") not in (None, "") else None
+    target_ip = str(data.get("ip") or "").strip()
+    if data.get("port") and not port_query:
+        return jsonify({"error": "端口必须是 1-65535，或使用端口范围，例如 3000-3010"}), 400
+    if target_ip:
+        try:
+            ipaddress.ip_address(target_ip)
+        except ValueError:
+            return jsonify({"error": "IP 地址格式无效"}), 400
+    try:
+        client = get_client()
+        containers = client.get_containers()
+        details = client.get_container_ports_batch(containers)
+    except SynoError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+    port_matches = []
+    host_owners = {}
+    ip_matches = []
+    diagnostics_errors = []
+    for container in containers:
+        key = container.get("id") or container.get("name")
+        detail = details.get(key) or {"ports": [], "ok": False, "error": "未返回容器详情"}
+        if not detail.get("ok"):
+            diagnostics_errors.append({"container": container.get("name"), "error": detail.get("error")})
+        ports = detail.get("ports") or []
+        if port_query:
+            matched_ports = [p for p in ports if _port_matches(p, port_query)]
+            if matched_ports:
+                for port in matched_ports:
+                    if port.get("host") not in (None, "", "None"):
+                        owner_key = (port.get("ip") or "0.0.0.0", str(port.get("host")), port.get("type") or "tcp")
+                        host_owners.setdefault(owner_key, set()).add(container.get("name"))
+                port_matches.append({
+                    "name": container.get("name"),
+                    "id": container.get("id"),
+                    "state": container.get("state"),
+                    "networks": container.get("networks") or [],
+                    "ports": [{**p,
+                        "hostMatch": p.get("host") not in (None, "", "None") and _port_matches({"host": p.get("host")}, port_query),
+                        "contMatch": p.get("container") not in (None, "") and _port_matches({"container": p.get("container")}, port_query),
+                    } for p in matched_ports],
+                    "host_hit": any(p.get("host") not in (None, "", "None") for p in matched_ports),
+                    "container_hit": any(p.get("container") not in (None, "") for p in matched_ports),
+                })
+        if target_ip:
+            matches = [n for n in (container.get("networks") or []) if n.get("ip") == target_ip]
+            if matches:
+                ip_matches.append({
+                    "name": container.get("name"),
+                    "id": container.get("id"),
+                    "state": container.get("state"),
+                    "networks": container.get("networks") or [],
+                })
+
+    conflicts = [
+        {"ip": key[0], "port": key[1], "type": key[2], "containers": sorted(owners)}
+        for key, owners in host_owners.items() if len(owners) > 1
+    ]
+    return jsonify({
+        "checked_at": int(time.time()),
+        "port_query": data.get("port") or None,
+        "ip_query": target_ip or None,
+        "port_matches": port_matches,
+        "port_conflicts": conflicts,
+        "ip_matches": ip_matches,
+        "errors": diagnostics_errors,
+        "container_count": len(containers),
+    })
+
+
+@app.route("/api/network/check", methods=["POST"])
+@auth_required
+def network_check(user):
+    """Validate a URL and optionally check its TCP endpoint from the server."""
+    data = request.get_json(silent=True) or {}
+    raw_url = (data.get("url") or "").strip()
+    parsed, url_error = validate_http_url(raw_url, allow_private=True)
+    if url_error:
+        return jsonify({"error": url_error}), 400
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    result = {"url": raw_url, "hostname": parsed.hostname, "port": port, "valid": True, "reachable": None, "error": None}
+    try:
+        with socket.create_connection((parsed.hostname, port), timeout=2.5):
+            result["reachable"] = True
+    except (OSError, ValueError) as exc:
+        result["reachable"] = False
+        result["error"] = str(exc)
+    return jsonify(result)
 
 
 # ---------------------------------------------------------------------------
@@ -2423,7 +2871,7 @@ def _ghcr_latest_revision():
     def fetch(url, accept):
         headers = {"Accept": accept}
         try:
-            r = sess.get(url, headers=headers, timeout=12, verify=False)
+             r = sess.get(url, headers=headers, timeout=12, verify=True)
         except (requests.exceptions.SSLError, requests.exceptions.ConnectionError,
                 urllib3.exceptions.SSLError) as exc:
             raise RuntimeError("无法连接 ghcr.io（%s）" % str(exc)) from exc
@@ -2442,9 +2890,9 @@ def _ghcr_latest_revision():
                 params.append("scope=" + scope.group(1))
             if params:
                 token_url += "?" + "&".join(params)
-            tok = sess.get(token_url, timeout=12, verify=False).json().get("token") or \
-                sess.get(token_url, timeout=12, verify=False).json().get("access_token")
-            r = sess.get(url, headers={**headers, "Authorization": "Bearer " + tok}, timeout=12, verify=False)
+            tok = sess.get(token_url, timeout=12, verify=True).json().get("token") or \
+                sess.get(token_url, timeout=12, verify=True).json().get("access_token")
+            r = sess.get(url, headers={**headers, "Authorization": "Bearer " + tok}, timeout=12, verify=True)
         return r
 
     manifest = fetch(

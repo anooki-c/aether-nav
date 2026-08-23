@@ -151,7 +151,8 @@ class Link(db.Model):
             net = "external" if self.url_external else "internal"
         has_pwd = False
         if user is not None:
-            has_pwd = LinkPassword.query.filter_by(link_id=self.id, user_id=user.id).first() is not None
+            cached = getattr(self, "_has_password_cached", None)
+            has_pwd = cached if cached is not None else LinkPassword.query.filter_by(link_id=self.id, user_id=user.id).first() is not None
         return {
             "id": self.id,
             "title": self.title,
@@ -343,7 +344,17 @@ def visible_links_for(user):
             (deny_role if p.deny else grant_role).add(p.link_id)
 
     result = []
-    for l in Link.query.filter_by(is_active=True).all():
+    links = Link.query.filter_by(is_active=True).all()
+    if uid is not None and links:
+        password_ids = {
+            row.link_id for row in LinkPassword.query.filter(
+                LinkPassword.user_id == uid,
+                LinkPassword.link_id.in_([link.id for link in links]),
+            ).all()
+        }
+        for link in links:
+            link._has_password_cached = link.id in password_ids
+    for l in links:
         # L1a 分类全局隐藏：对所有人生效，含管理员；即使有 grant 也无法复活
         if l.category_id in hidden_cat:
             continue
