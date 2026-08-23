@@ -2050,7 +2050,7 @@ onMounted(async () => {
             <div class="bg-surface rounded-2xl p-6 shadow-sm border border-surface-variant">
             <div class="grid grid-cols-1 md:grid-cols-3 items-stretch gap-6 md:gap-0 divide-y divide-outline-variant/50 md:divide-y-0 md:divide-x md:divide-outline-variant/50">
 
-              <!-- 左列：账号安全 + 局域网 + 搜索偏好 -->
+              <!-- 左列：账号安全 + 局域网网段 + 代理网络 + 网络模式 -->
               <div class="settings-column flex h-full flex-col gap-0 md:pr-6">
 
                 <!-- 账号与安全 -->
@@ -2110,6 +2110,109 @@ onMounted(async () => {
                     class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
                     placeholder="每行一个，如 192.168.1.0/24&#10;10.0.0.0/8&#10;172.16.0.0/12（留空则使用 RFC1918 私有段 + 本机 + 链路本地）"></textarea>
                   <p class="font-label-xs text-[11px] text-on-surface-variant mt-1.5 leading-tight">用于快速添加时判断粘贴的地址属于局域网还是互联网；命中即识别为内网并填入内网 URL。</p>
+                </div>
+
+                <!-- 代理网络 -->
+                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
+                  <div class="flex items-center gap-2.5 pb-3">
+                    <span class="material-symbols-outlined text-primary text-[20px]">lan</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">代理网络</h3>
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">代理地址（可选）</label>
+                    <input v-model="proxyUrl" type="text"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      placeholder="如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080" />
+                    <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅作为兜底：只在「获取图标失败」或「连通性检测不通」时走代理重试；页面加载、更新检测等其他请求均不使用。留空则始终直连。</p>
+                  </div>
+                </div>
+
+                <!-- 网络模式 -->
+                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
+                  <div class="flex items-center gap-2.5 pb-3">
+                    <span class="material-symbols-outlined text-primary text-[20px]">router</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">网络模式</h3>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">默认网络</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">新用户与未单独设置的用户的默认展示网络；「自动判断」按访问者所在网络（命中局域网网段则内网）自动选择</div>
+                    </div>
+                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'internal' ? 'bg-info text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'internal'">内网</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'external' ? 'bg-success text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'external'">外网</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'auto' ? 'bg-tertiary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'auto'">自动判断</button>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- 中列：主页管理 + 主页入口 + 密码锁标识 + 搜索偏好 -->
+              <div class="settings-column flex h-full flex-col gap-0 md:px-6">
+
+                <!-- 主页管理 -->
+                <div class="flex flex-col">
+                  <div class="flex items-center gap-2.5 pb-3">
+                    <span class="material-symbols-outlined text-primary text-[20px]">home_app_logo</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">主页管理</h3>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 pt-2">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">允许主页内容编辑</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">允许用户自定义其主页导航链接</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="allowHomeEdit" class="sr-only peer">
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- 主页入口 -->
+                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
+                  <div class="flex items-center gap-2.5 pb-3">
+                    <span class="material-symbols-outlined text-primary text-[20px]">menu_open</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">主页入口</h3>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">显示「个人设置」</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">关闭后主页侧边栏与头像菜单均隐藏该入口</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="showPersonalSettings" class="sr-only peer">
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">显示「管理后台」</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅对管理员生效，关闭后入口隐藏</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="showAdminConsole" class="sr-only peer">
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- 密码锁标识 -->
+                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
+                  <div class="flex items-center gap-2.5 pb-3">
+                    <span class="material-symbols-outlined text-primary text-[20px]">lock</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">密码锁标识</h3>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">显示密码锁标识</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">关闭后带密码的链接不再显示 lock 角标</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="showPasswordLock" class="sr-only peer">
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
                 </div>
 
                 <!-- 搜索偏好 -->
@@ -2186,96 +2289,11 @@ onMounted(async () => {
 
               </div>
 
-              <!-- 中列：主页管理 + 主页入口 + 网络模式 -->
-              <div class="settings-column flex h-full flex-col gap-0 md:px-6">
+              <!-- 右列：站点品牌 + 显示设置 + 外观设置 -->
+              <div class="settings-column flex h-full flex-col gap-0 md:pl-6">
 
-                <!-- 主页管理 -->
+                <!-- 站点品牌 -->
                 <div class="flex flex-col">
-                  <div class="flex items-center gap-2.5 pb-3">
-                    <span class="material-symbols-outlined text-primary text-[20px]">home_app_logo</span>
-                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">主页管理</h3>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 pt-2">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">允许主页内容编辑</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">允许用户自定义其主页导航链接</div>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input type="checkbox" v-model="allowHomeEdit" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                    </label>
-                  </div>
-                </div>
-
-                <!-- 主页入口 -->
-                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
-                  <div class="flex items-center gap-2.5 pb-3">
-                    <span class="material-symbols-outlined text-primary text-[20px]">menu_open</span>
-                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">主页入口</h3>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">显示「个人设置」</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">关闭后主页侧边栏与头像菜单均隐藏该入口</div>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input type="checkbox" v-model="showPersonalSettings" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                    </label>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">显示「管理后台」</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅对管理员生效，关闭后入口隐藏</div>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input type="checkbox" v-model="showAdminConsole" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                    </label>
-                  </div>
-                </div>
-
-                <!-- 网络模式 -->
-                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
-                  <div class="flex items-center gap-2.5 pb-3">
-                    <span class="material-symbols-outlined text-primary text-[20px]">router</span>
-                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">网络模式</h3>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">默认网络</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">新用户与未单独设置的用户的默认展示网络；「自动判断」按访问者所在网络（命中局域网网段则内网）自动选择</div>
-                    </div>
-                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'internal' ? 'bg-info text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'internal'">内网</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'external' ? 'bg-success text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'external'">外网</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'auto' ? 'bg-tertiary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'auto'">自动判断</button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 密码锁标识 -->
-                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
-                  <div class="flex items-center gap-2.5 pb-3">
-                    <span class="material-symbols-outlined text-primary text-[20px]">lock</span>
-                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">密码锁标识</h3>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
-                    <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">显示密码锁标识</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">关闭后带密码的链接不再显示 lock 角标</div>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input type="checkbox" v-model="showPasswordLock" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                    </label>
-                  </div>
-                </div>
-
-              </div>
-
-                <!-- 站点品牌（从右列移至第二列） -->
-                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
                   <div class="flex items-center gap-2.5 pb-3">
                     <span class="material-symbols-outlined text-primary text-[20px]">badge</span>
                     <h3 class="font-title-md text-[15px] font-semibold text-on-surface">站点品牌</h3>
@@ -2319,9 +2337,6 @@ onMounted(async () => {
                     <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">显示在名称下方；留空则不显示。</p>
                   </div>
                 </div>
-
-              <!-- 右列：显示 / 外观 -->
-              <div class="settings-column flex h-full flex-col gap-0 md:pl-6">
 
                 <!-- 显示设置 -->
                 <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
@@ -2411,21 +2426,6 @@ onMounted(async () => {
                       <input type="checkbox" v-model="showCategoryColors" class="sr-only peer">
                       <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                     </label>
-                  </div>
-                </div>
-
-                <!-- 代理网络 -->
-                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
-                  <div class="flex items-center gap-2.5 pb-3">
-                    <span class="material-symbols-outlined text-primary text-[20px]">lan</span>
-                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">代理网络</h3>
-                  </div>
-                  <div class="flex flex-col gap-1.5">
-                    <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">代理地址（可选）</label>
-                    <input v-model="proxyUrl" type="text"
-                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
-                      placeholder="如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080" />
-                    <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅作为兜底：只在「获取图标失败」或「连通性检测不通」时走代理重试；页面加载、更新检测等其他请求均不使用。留空则始终直连。</p>
                   </div>
                 </div>
 
