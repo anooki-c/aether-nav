@@ -2684,16 +2684,33 @@ def start_ping_scheduler():
     t.start()
 
 
+# 后台 ping 全局锁：避免「重新探测」按钮重复点击时叠加多个探测线程
+_ping_running = False
+
+
 @app.route("/api/admin/links/ping", methods=["POST"])
 @auth_required
 def admin_ping_links(user):
     if user.role != "admin":
         return jsonify({"error": "无权限"}), 403
-    try:
-        changed = ping_all_links()
-        return jsonify({"changed": changed, "message": "已完成链接可达性探测"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    global _ping_running
+    if _ping_running:
+        return jsonify({"started": False, "message": "探测已在后台进行中，请稍候刷新"}), 200
+    _ping_running = True
+
+    def _run():
+        global _ping_running
+        try:
+            # 批量网络探测耗时可能很久（每条最长 12s），放后台线程执行，
+            # 接口立即返回，避免前端 HTTP 请求超时
+            ping_all_links()
+        except Exception:
+            pass
+        finally:
+            _ping_running = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"started": True, "message": "已在后台开始探测，完成后请刷新查看结果"})
 
 
 # ---------- 群晖监控（DSM API） ----------

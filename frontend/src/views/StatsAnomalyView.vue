@@ -16,6 +16,7 @@
     </header>
 
     <p v-if="error" class="mb-4 rounded-lg bg-error-container px-4 py-3 text-body-md text-on-error-container">{{ error }}</p>
+    <p v-if="notice" class="mb-4 rounded-lg bg-primary-container px-4 py-3 text-body-md text-on-primary-container">{{ notice }}</p>
 
     <!-- 三个可点击卡片 -->
     <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -79,7 +80,7 @@
                 <td class="py-2 pr-4 text-on-surface-variant">{{ l.category_name || '-' }}</td>
                 <td class="py-2 pr-4 text-on-surface-variant">{{ permLabel(l.permission) }}</td>
                 <td class="py-2 pr-4 text-on-surface-variant">{{ fmtDate(l.created_at) }}</td>
-                <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin">去管理</button></td>
+                <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('links')">去管理</button></td>
               </tr>
             </tbody>
           </table>
@@ -113,7 +114,7 @@
                 <td class="py-2 pr-4 text-on-surface-variant">{{ c.parent_name || '-' }}</td>
                 <td class="py-2 pr-4 text-on-surface-variant">{{ permLabel(c.permission) }}</td>
                 <td class="py-2 pr-4 text-on-surface-variant">{{ c.visible ? '显示' : '隐藏' }}</td>
-                <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin">去管理</button></td>
+                <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('categories')">去管理</button></td>
               </tr>
             </tbody>
           </table>
@@ -153,7 +154,7 @@
                 <td class="py-2 pr-4 max-w-[220px] truncate text-on-surface-variant"><a :href="l.url" target="_blank" class="hover:text-primary hover:underline">{{ l.url || '-' }}</a></td>
                 <td class="py-2 pr-4 text-on-surface-variant">{{ l.category_name || '-' }}</td>
                 <td class="py-2 pr-4 text-on-surface-variant">{{ fmtDate(l.ping_at) }}</td>
-                <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin">去管理</button></td>
+                <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('links')">去管理</button></td>
               </tr>
             </tbody>
           </table>
@@ -166,12 +167,12 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { api } from '../api/client'
-import { useRouter } from 'vue-router'
 
-const router = useRouter()
+const emit = defineEmits(['gotoManage'])
 const loading = ref(false)
 const pinging = ref(false)
 const error = ref('')
+const notice = ref('')
 const selected = ref(null)
 const data = ref({ zero_click_links: [], empty_categories: [], unreachable_links: [] })
 
@@ -224,9 +225,15 @@ async function load() {
 
 async function repPing() {
   pinging.value = true
+  error.value = ''
+  notice.value = ''
   try {
     await api.pingLinks()
+    // 后端在后台线程异步探测（接口立即返回，避免 HTTP 长请求超时）
+    notice.value = '已在后台开始探测，完成后自动刷新…'
+    await new Promise((r) => setTimeout(r, 3500))
     await load()
+    notice.value = ''
   } catch (e) {
     error.value = '探测失败：' + (e && e.message ? e.message : e)
   } finally {
@@ -234,8 +241,9 @@ async function repPing() {
   }
 }
 
-function goAdmin() {
-  router.push('/admin')
+// 通知管理后台切换 tab：链接类异常 → 链接管理；分类类异常 → 分类管理
+function goAdmin(target) {
+  emit('gotoManage', target)
 }
 
 onMounted(load)

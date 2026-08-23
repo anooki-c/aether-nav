@@ -2446,7 +2446,7 @@ onMounted(async () => {
             <MonitorView />
           </section>
           <section v-else-if="isAdmin && tab === 'anomalies'">
-            <StatsAnomalyView />
+            <StatsAnomalyView @goto-manage="(t) => (tab = t)" />
           </section>
         </div>
       </main>
