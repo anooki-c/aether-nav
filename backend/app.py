@@ -1955,6 +1955,76 @@ def stats_dashboard(user):
     })
 
 
+# ---------- 异常数据明细（零点击 / 空壳分类 / 无法访问） ----------
+
+@app.route("/api/admin/stats/anomalies")
+@auth_required
+def stats_anomalies(user):
+    if user.role != "admin":
+        return jsonify({"error": "无权限"}), 403
+    cats = {c.id: c for c in Category.query.all()}
+    active_links = Link.query.filter_by(is_active=True).all()
+    child_with_links = set(l.category_id for l in active_links)
+
+    # 零点击链接：从未被点击过的活跃链接
+    ever_clicked = set(r[0] for r in db.session.query(AccessLog.link_id)
+                       .filter(AccessLog.action == "click", AccessLog.link_id.isnot(None)).distinct().all())
+    zero_click_links = []
+    for l in active_links:
+        if l.id in ever_clicked:
+            continue
+        cat = cats.get(l.category_id)
+        zero_click_links.append({
+            "id": l.id,
+            "title": l.title,
+            "url": l.url_external or l.url_internal,
+            "category_id": l.category_id,
+            "category_name": cat.name if cat else "",
+            "permission": l.permission or "all",
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+        })
+
+    # 空壳子分类：子分类（有父级）且没有任何活跃链接
+    empty_categories = []
+    for c in Category.query.filter(Category.parent_id.isnot(None), Category.archived.is_(False)).all():
+        if c.id in child_with_links:
+            continue
+        parent = cats.get(c.parent_id)
+        empty_categories.append({
+            "id": c.id,
+            "name": c.name,
+            "parent_id": c.parent_id,
+            "parent_name": parent.name if parent else "",
+            "icon": c.icon,
+            "permission": c.permission or "all",
+            "visible": c.visible is not False,
+        })
+
+    # 无法访问的链接：ping 状态为 unreachable
+    unreachable_links = []
+    for l in Link.query.filter_by(is_active=True, ping_status="unreachable").all():
+        cat = cats.get(l.category_id)
+        unreachable_links.append({
+            "id": l.id,
+            "title": l.title,
+            "url": l.url_external or l.url_internal,
+            "category_id": l.category_id,
+            "category_name": cat.name if cat else "",
+            "ping_at": l.ping_at.isoformat() if l.ping_at else None,
+        })
+
+    return jsonify({
+        "zero_click_links": zero_click_links,
+        "empty_categories": empty_categories,
+        "unreachable_links": unreachable_links,
+        "counts": {
+            "zero_click": len(zero_click_links),
+            "empty_category": len(empty_categories),
+            "unreachable": len(unreachable_links),
+        },
+    })
+
+
 # ---------- 单日明细（热力图点击日期切换） ----------
 @app.route("/api/admin/stats/day-detail")
 @auth_required

@@ -6,7 +6,7 @@ import ResetPassword from './views/ResetPassword.vue'
 import { store, loadMe } from './store'
 
 // 需要登录才能访问的路由
-const PROTECTED = ['admin', 'settings', 'network-check']
+const PROTECTED = ['admin', 'settings', 'network-check', 'anomalies']
 
 const routes = [
   { path: '/', name: 'home', component: Home },
@@ -28,6 +28,12 @@ const routes = [
     path: '/network-check',
     name: 'network-check',
     component: () => import('./views/NetworkCheckView.vue'),
+    meta: { requiresAdmin: true },
+  },
+  {
+    path: '/anomalies',
+    name: 'anomalies',
+    component: () => import('./views/StatsAnomalyView.vue'),
     meta: { requiresAdmin: true },
   },
 ]

@@ -162,6 +162,8 @@ export const api = {
   },
   // 单日明细（热力图点击日期切换）：返回该日 24h 点击 / 登录分布
   statsDayDetail: (date) => request(`/admin/stats/day-detail?date=${encodeURIComponent(date)}`),
+  // 异常数据明细：零点击链接 / 空壳子分类 / 无法访问链接
+  statsAnomalies: () => request('/admin/stats/anomalies'),
   // 手动触发链接可达性探测（系统也会定时自动 ping）
   pingLinks: () => request('/admin/links/ping', { method: 'POST' }),
 
