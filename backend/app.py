@@ -121,9 +121,33 @@ _rate_limit_events = defaultdict(deque)
 _rate_limit_lock = threading.Lock()
 
 
-def _client_key():
+def _client_ip():
+    """取访问者真实 IP（信任反向代理的第一跳 X-Forwarded-For），无法识别返回 'unknown'。"""
     forwarded = request.headers.get("X-Forwarded-For", "")
-    return (forwarded.split(",")[0].strip() or request.remote_addr or "unknown")[:128]
+    return (forwarded.split(",")[0].strip() or request.remote_addr or "unknown")
+
+
+def _client_in_lan():
+    """根据访问者源 IP 是否命中局域网网段（默认 RFC1918 + 管理员自定义 lan_cidrs），
+    返回 True/False；IP 无法解析时返回 None（调用方回落默认外网）。"""
+    ip_str = _client_ip()
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return None
+    raw = Setting.get("lan_cidrs", "") or ""
+    cidrs = DEFAULT_LAN_CIDRS + [c for c in re.split(r"[\s,;]+", raw) if c]
+    for cidr in cidrs:
+        try:
+            if ip in ipaddress.ip_network(cidr, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _client_key():
+    return _client_ip()[:128]
 
 
 def rate_limited(bucket, limit, window=60, identity=None):
@@ -505,7 +529,10 @@ def categories_tree():
 def list_links():
     """返回当前用户可见的链接，按分类分组；支持网络模式与搜索过滤。"""
     user = current_user()
-    network = request.args.get("network", "external")
+    network = request.args.get("network") or Setting.get("network", "auto") or "auto"
+    if network == "auto":
+        # 自动判断：访问者源 IP 命中局域网网段则默认内网，否则外网
+        network = "internal" if _client_in_lan() is True else "external"
     q = request.args.get("q", "").strip().lower()
 
     links = visible_links_for(user)
@@ -1337,7 +1364,7 @@ def get_settings():
         "default_role": Setting.get("default_role", "member"),
         # 站点默认主题 / 网络（无个人偏好时的兜底默认值）
         "theme": Setting.get("theme", "light"),
-        "network": Setting.get("network", "external"),
+        "network": Setting.get("network", "auto"),
         # 站点默认配色方案（accent palette）：default / macaron / sunset / mint / cosmic / berry
         "color_scheme": Setting.get("color_scheme", "default"),
         # 站点级开关：是否将分类颜色应用到首页图标
@@ -1384,7 +1411,7 @@ def update_settings(user):
     }
     int_ranges = {"columns": (1, 8), "token_max_age_hours": (1, 24 * 30), "log_retention_days": (1, 3650)}
     enum_values = {
-        "theme": {"light", "dark", "system"}, "network": {"external", "internal"},
+        "theme": {"light", "dark", "system"}, "network": {"external", "internal", "auto"},
         "density": {"comfortable", "compact"}, "search_box_pos": {"fixed", "scrolling"},
         "default_role": {"admin", "member", "guest"},
         "color_scheme": {"default", "macaron", "sunset", "mint", "cosmic", "berry"},

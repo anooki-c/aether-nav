@@ -58,7 +58,8 @@ function resetForm() {
   form.display_name = u.display_name || ''
   form.avatar = u.avatar || ''
   form.weather_city = p.weather_city || store.weatherCity || ''
-  form.network = p.network || store.network || 'external'
+  // 个人未选网络时：站点默认 auto 则按实际生效模式（effectiveNetwork）预选，避免把 auto 存成个人偏好
+  form.network = p.network || (store.network === 'auto' ? store.effectiveNetwork : store.network) || 'external'
   form.theme = p.theme || store.theme || 'light'
   form.color_scheme = p.color_scheme || store.siteColorScheme || 'default'
 }

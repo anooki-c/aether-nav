@@ -46,7 +46,7 @@ export const store = reactive({
   token: readToken(),
   user: null,
   theme: localStorage.getItem(LS.theme) || 'light',
-  network: localStorage.getItem(LS.network) || 'external', // external | internal
+  network: localStorage.getItem(LS.network) || 'auto', // external | internal | auto（auto=按访问者网络自动判断）
   drawerOpen: false, // 移动端侧边栏抽屉
   tree: [], // 分类树（全局）
   linksVersion: 0, // 链接列表变更计数（创建链接后自增，首页监听刷新）
@@ -62,7 +62,9 @@ export const store = reactive({
   compactMode: false, // 紧凑模式
   density: 'comfortable', // comfortable | compact 卡片密度
   // 站点级默认值（系统设置中配置），作为无个人偏好的新用户/访客的兜底
-  siteNetwork: 'external', // 默认网络：external | internal
+  siteNetwork: 'auto', // 默认网络：external | internal | auto（auto=按访问者网络自动判断）
+  // 实际生效网络（external | internal）：network='auto' 时由后端按访问者 IP 判断后回填，供 UI 高亮展示
+  effectiveNetwork: 'external',
   siteTheme: 'light', // 默认主题：light | dark | system
   // 站点默认配色方案（accent palette）：default=当前紫，其余见 COLOR_SCHEMES
   siteColorScheme: 'default',
@@ -151,7 +153,7 @@ export async function loadSettings() {
     store.compactMode = !!data.compact_mode
     store.density = data.density || 'comfortable'
     // 站点级默认值（无个人偏好时使用）
-    store.siteNetwork = data.network || 'external'
+    store.siteNetwork = data.network || 'auto'
     store.siteTheme = data.theme || 'light'
     store.siteColorScheme = data.color_scheme || 'default'
     store.showCategoryColors = data.show_category_colors === true
@@ -370,7 +372,8 @@ export function setAuth(token, user, remember = false) {
 export function logout() {
   setAuth('', null)
   store.theme = 'light'
-  store.network = 'external'
+  store.network = 'auto'
+  store.effectiveNetwork = 'external'
   store.weatherCity = '北京'
   localStorage.removeItem(LS.theme)
   localStorage.removeItem(LS.network)

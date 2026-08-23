@@ -141,7 +141,7 @@ const editCardPreview = computed(() => {
   const hasInt = !!f.url_internal.trim()
   const hasExt = !!f.url_external.trim()
   let net = 'internal'
-  if (hasInt && hasExt) net = store.network === 'internal' ? 'internal' : 'external'
+  if (hasInt && hasExt) net = store.effectiveNetwork === 'internal' ? 'internal' : 'external'
   else if (hasInt) net = 'internal'
   else if (hasExt) net = 'external'
   return {
@@ -1004,7 +1004,7 @@ async function fetchSettings() {
     defaultRole.value = data.default_role || 'member'
     tokenMaxAgeHours.value = Number(data.token_max_age_hours) || 168
     logRetentionDays.value = Number(data.log_retention_days) || 90
-    defaultNetwork.value = data.network || 'external'
+    defaultNetwork.value = data.network || 'auto'
     showPersonalSettings.value = data.show_personal_settings !== false
     showAdminConsole.value = data.show_admin_console !== false
     showPasswordLock.value = data.show_password_lock !== false
@@ -2244,11 +2244,12 @@ onMounted(async () => {
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
                     <div class="min-w-0">
                       <div class="font-body-sm text-body-sm text-on-surface">默认网络</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">新用户与未单独设置的用户的默认展示网络</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">新用户与未单独设置的用户的默认展示网络；「自动判断」按访问者所在网络（命中局域网网段则内网）自动选择</div>
                     </div>
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
                       <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'internal' ? 'bg-info text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'internal'">内网</button>
                       <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'external' ? 'bg-success text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'external'">外网</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'auto' ? 'bg-tertiary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'auto'">自动判断</button>
                     </div>
                   </div>
                 </div>

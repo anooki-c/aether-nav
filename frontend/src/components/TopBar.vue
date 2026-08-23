@@ -51,7 +51,7 @@ function onSearch({ engine, q }) {
       <div class="network-switch flex items-center bg-surface-container-highest rounded-full p-1 gap-1">
         <button
           class="flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-label-sm transition-[transform,background-color,color] duration-200 ease-spring active:scale-95"
-          :class="store.network === 'internal' ? 'bg-brand text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
+          :class="store.effectiveNetwork === 'internal' ? 'bg-brand text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
           @click="pick('internal')"
         >
           <span class="material-symbols-outlined text-[16px]">home</span>
@@ -59,7 +59,7 @@ function onSearch({ engine, q }) {
         </button>
         <button
           class="flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-label-sm transition-[transform,background-color,color] duration-200 ease-spring active:scale-95"
-          :class="store.network === 'external' ? 'bg-brand text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
+          :class="store.effectiveNetwork === 'external' ? 'bg-brand text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
           @click="pick('external')"
         >
           <span class="material-symbols-outlined text-[16px]">public</span>

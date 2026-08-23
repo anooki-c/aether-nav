@@ -190,7 +190,7 @@ const cardPreview = computed(() => {
   const hasInt = !!f.url_internal.trim()
   const hasExt = !!f.url_external.trim()
   let net = 'internal'
-  if (hasInt && hasExt) net = store.network === 'internal' ? 'internal' : 'external'
+  if (hasInt && hasExt) net = store.effectiveNetwork === 'internal' ? 'internal' : 'external'
   else if (hasInt) net = 'internal'
   else if (hasExt) net = 'external'
   return {

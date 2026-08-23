@@ -91,6 +91,8 @@ async function load(query) {
     const data = await api.links(store.network, query || '')
     if (sequence !== loadSequence) return
     groups.value = data.groups || []
+    // 后端返回实际生效的网络模式（auto 时由后端按访问者 IP 判断），同步给 UI 高亮
+    if (data && data.network) store.effectiveNetwork = data.network
   } catch (e) {
     if (sequence === loadSequence) groups.value = []
   } finally {
