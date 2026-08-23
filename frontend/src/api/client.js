@@ -166,6 +166,8 @@ export const api = {
   statsAnomalies: () => request('/admin/stats/anomalies'),
   // 手动触发链接可达性探测（系统也会定时自动 ping）
   pingLinks: () => request('/admin/links/ping', { method: 'POST' }),
+  // 探测进度：{ running, total, done }
+  pingProgress: () => request('/admin/links/ping/progress'),
 
   // ---------- 群晖监控（DSM API） ----------
   monitorConfig: () => request('/monitor/config'),

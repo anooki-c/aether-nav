@@ -133,7 +133,7 @@
             :disabled="pinging"
           >
             <span class="material-symbols-outlined text-[18px]" :class="pinging ? 'animate-spin' : ''">radar</span>
-            <span>{{ pinging ? '探测中' : '重新探测' }}</span>
+            <span>{{ pinging ? '探测中' + progressText : '重新探测' }}</span>
           </button>
         </div>
         <div v-if="!data.unreachable_links.length" class="py-8 text-center text-body-md text-on-surface-variant">暂无异常 🎉</div>
@@ -173,6 +173,7 @@ const loading = ref(false)
 const pinging = ref(false)
 const error = ref('')
 const notice = ref('')
+const progress = ref(null) // 探测进度 { done, total }，null 表示无进行中探测
 const selected = ref(null)
 const data = ref({ zero_click_links: [], empty_categories: [], unreachable_links: [] })
 
@@ -207,6 +208,13 @@ function countOf(key) {
   return data.value.unreachable_links.length
 }
 
+const progressText = computed(() => {
+  const p = progress.value
+  if (!p) return ''
+  if (!p.total) return ' …'
+  return ` ${p.done}/${p.total}`
+})
+
 function toggle(key) {
   selected.value = selected.value === key ? null : key
 }
@@ -224,19 +232,37 @@ async function load() {
 }
 
 async function repPing() {
+  if (pinging.value) return
   pinging.value = true
   error.value = ''
   notice.value = ''
+  progress.value = { done: 0, total: 0 }
   try {
-    await api.pingLinks()
-    // 后端在后台线程异步探测（接口立即返回，避免 HTTP 长请求超时）
-    notice.value = '已在后台开始探测，完成后自动刷新…'
-    await new Promise((r) => setTimeout(r, 3500))
-    await load()
-    notice.value = ''
+    const res = await api.pingLinks()
+    if (res && res.message) notice.value = res.message
+    // 后端在后台线程异步探测（接口立即返回，避免 HTTP 长请求超时）；
+    // 每秒轮询一次进度，探测完成后再刷新明细列表
+    const timer = setInterval(async () => {
+      try {
+        const p = await api.pingProgress()
+        progress.value = { done: p.done || 0, total: p.total || 0 }
+        if (!p.running || (p.total && p.done >= p.total)) {
+          clearInterval(timer)
+          await load()
+          progress.value = null
+          notice.value = ''
+          pinging.value = false
+        }
+      } catch (e) {
+        clearInterval(timer)
+        progress.value = null
+        notice.value = ''
+        pinging.value = false
+      }
+    }, 1000)
   } catch (e) {
     error.value = '探测失败：' + (e && e.message ? e.message : e)
-  } finally {
+    progress.value = null
     pinging.value = false
   }
 }
