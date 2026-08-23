@@ -31,6 +31,7 @@ from backend.icon_utils import (
     download_icon,
     localize_icon,
     probe_icon,
+    resolve_addrinfo,
     resolve_favicon_candidates,
     resolve_favicon_url,
 )
@@ -156,10 +157,7 @@ def validate_http_url(raw_url, allow_private=None):
     if not 1 <= port <= 65535:
         return None, "URL 端口范围无效"
     host = parsed.hostname.strip("[]").lower()
-    try:
-        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    except socket.gaierror:
-        addresses = []
+    addresses = resolve_addrinfo(host, port)  # 带 5s 超时，避免 DNS 挂起卡死 gunicorn worker
     if not addresses:
         return None, "主机名无法解析"
     allow_private = Config.ALLOW_PRIVATE_NETWORK_CHECKS if allow_private is None else allow_private

@@ -39,5 +39,8 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=3)"
 
 # 首次启动建表+注入示例数据，再用 gunicorn 运行；entrypoint 会先处理 bind mount 权限并降权
+# 单 worker + 4 线程：create_app() 在模块导入时启动 ping 调度线程，多 worker 会重复调度；
+# --threads 让慢请求（DNS/图标探测）不再阻塞其他请求；--timeout 120 配合后端 5s DNS 超时兜底，
+# 避免「WORKER TIMEOUT」导致 worker 被 SIGKILL。
 ENTRYPOINT ["/usr/local/bin/aether-nav-entrypoint"]
-CMD ["sh", "-c", "cd /app && python -m backend.seed && gunicorn -b 0.0.0.0:5000 backend.app:app"]
+CMD ["sh", "-c", "cd /app && python -m backend.seed && gunicorn -b 0.0.0.0:5000 --timeout 120 --threads 4 backend.app:app"]

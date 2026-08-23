@@ -9,6 +9,7 @@ import ipaddress
 import os
 import re
 import socket
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -251,6 +252,29 @@ def resolve_favicon_candidates(page_url, provider=None, custom_template="", size
     return [primary] if primary == direct else [primary, direct]
 
 
+def resolve_addrinfo(host, port, timeout=5):
+    """带超时的 DNS 解析，返回地址列表；超时或失败返回 []。
+
+    ``socket.getaddrinfo`` 本身没有超时参数，在 DNS 无响应时可能阻塞远超
+    gunicorn 的 worker timeout（默认 30s）导致 worker 被强杀。这里放到
+    守护线程中执行并 ``join(timeout)`` 兜底，超时即视为不可解析。
+    """
+    holder = {}
+
+    def _run():
+        try:
+            holder["addrs"] = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        except Exception:
+            holder["addrs"] = []
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        return []
+    return holder.get("addrs") or []
+
+
 def _proxy_from_setting():
     """读取系统设置中的代理地址，返回 ``{"http": url, "https": url}`` 或 None。
 
@@ -272,12 +296,14 @@ def _probe_once(url, timeout, proxies):
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return None, "", "图标地址不是有效的 http/https URL"
     try:
-        addresses = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+        addresses = resolve_addrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+        if not addresses:
+            return None, "", "图标主机无法解析"
         for item in {entry[4][0] for entry in addresses}:
             ip = ipaddress.ip_address(item)
             if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
                 return None, "", "不允许访问本机或链路本地地址"
-    except (socket.gaierror, ValueError, OSError):
+    except (ValueError, OSError):
         return None, "", "图标主机无法解析"
     try:
         handlers = []
