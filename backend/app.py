@@ -2619,26 +2619,50 @@ def _do_ping(url, timeout=6):
 
 
 def ping_all_links():
-    """遍历活跃链接探测可达性，更新 ping_status / ping_at。返回变更数。"""
+    """遍历活跃链接探测可达性，更新 ping_status / ping_at。返回变更数。
+
+    重要：探测是网络请求（每条最长可达 12s），**绝不能持有 DB 事务/锁去发请求**。
+    若在持锁事务里逐个探测，会长时间占用 SQLite 锁，导致其它请求
+    （登录更新 last_seen、点击计数、链接增删改等）写库等待超时，报
+    ``database is locked``。因此这里先快照目标并释放读锁，再在无锁状态下探测，
+    全部探测完成后用一个短事务批量写回。
+    """
     with app.app_context():
         links = Link.query.filter_by(is_active=True).all()
         now = datetime.datetime.utcnow()
-        changed = 0
-        for l in links:
-            url = _link_ping_url(l)
+        # 快照探测目标（id + url）后立即结束读事务，释放 SQLite 共享锁
+        targets = [(l.id, _link_ping_url(l)) for l in links]
+        db.session.expunge_all()
+        db.session.rollback()
+
+        # 无锁状态下逐个探测（不触碰 DB）
+        pending = []  # (link_id, status)
+        for lid, url in targets:
             if url and (url.startswith("http://") or url.startswith("https://")):
                 status = _do_ping(url)
             elif url:
                 status = "ok"  # 内部路由不对外探测，视为可达
             else:
                 status = None
-            if status is None:
-                continue
-            if l.ping_status != status:
-                l.ping_status = status
-                changed += 1
-            l.ping_at = now
-        db.session.commit()
+            if status is not None:
+                pending.append((lid, status))
+
+        # 探测全部完成后，开一个短事务批量写回
+        changed = 0
+        if pending:
+            try:
+                for lid, status in pending:
+                    l = db.session.get(Link, lid)
+                    if l is None:
+                        continue
+                    if l.ping_status != status:
+                        l.ping_status = status
+                        changed += 1
+                    l.ping_at = now
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                raise
         return changed
 
 
@@ -3147,6 +3171,19 @@ def api_check_update(user):
 
 def create_app():
     with app.app_context():
+        # SQLite 并发增强：WAL 让读写不再互相阻塞；busy_timeout=30s 降低写锁等待超时
+        # （配合 ping_all_links 无锁探测，避免后台探测期间其它请求报 database is locked）
+        from sqlalchemy import event as sa_event
+
+        @sa_event.listens_for(db.engine, "connect")
+        def _set_sqlite_pragmas(dbapi_conn, _record):
+            cur = dbapi_conn.cursor()
+            try:
+                cur.execute("PRAGMA journal_mode=WAL")
+                cur.execute("PRAGMA busy_timeout=30000")
+            finally:
+                cur.close()
+
         db.create_all()
         # 增量迁移：为 users 表补充 preferences 列（SQLite 下 create_all 不会自动加列）
         try:
