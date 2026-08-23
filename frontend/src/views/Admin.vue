@@ -8,6 +8,7 @@ import PermissionEditModal from '../components/PermissionEditModal.vue'
 import LinkPermissionMatrixModal from '../components/LinkPermissionMatrixModal.vue'
 import StatsView from './StatsView.vue'
 import MonitorView from './MonitorView.vue'
+import StatsAnomalyView from './StatsAnomalyView.vue'
 import EntityIcon from '../components/EntityIcon.vue'
 import LinkCard from '../components/LinkCard.vue'
 import UserMenu from '../components/UserMenu.vue'
@@ -1135,6 +1136,7 @@ const navItems = [
   { k: 'settings', label: '系统设置', icon: 'settings_applications' },
   { k: 'stats', label: '数据统计', icon: 'insights' },
   { k: 'monitor', label: '群晖监控', icon: 'monitoring' },
+  { k: 'anomalies', label: '异常数据', icon: 'monitor_heart' },
 ]
 // 普通用户仅可见「链接管理」「分类管理」；其余页面（用户/审计/设置/统计）仅管理员
 const visibleNav = computed(() =>
@@ -2422,6 +2424,9 @@ onMounted(async () => {
           </section>
           <section v-else-if="isAdmin && tab === 'monitor'">
             <MonitorView />
+          </section>
+          <section v-else-if="isAdmin && tab === 'anomalies'">
+            <StatsAnomalyView />
           </section>
         </div>
       </main>

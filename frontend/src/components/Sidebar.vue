@@ -190,9 +190,6 @@ function onSettings() {
 function onAdmin() {
   router.push('/admin')
 }
-function onAnomalies() {
-  router.push('/anomalies')
-}
 function onSignOut() {
   logout()
   router.push('/login')
@@ -326,16 +323,6 @@ function onLogin() {
               >
                 <span class="material-symbols-outlined text-[20px]">admin_panel_settings</span>
                 <span class="font-body-md text-body-md" :class="collapsed ? 'hidden' : ''">管理后台</span>
-              </a>
-            </li>
-            <li v-if="isAdmin && store.showAdminConsole">
-              <a
-                class="nav-item flex items-center rounded-lg hover:bg-surface-variant dark:hover:bg-surface-container-highest cursor-pointer transition-colors text-on-surface-variant"
-                :class="collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-3 py-2'"
-                @click="onAnomalies"
-              >
-                <span class="material-symbols-outlined text-[20px]">monitor_heart</span>
-                <span class="font-body-md text-body-md" :class="collapsed ? 'hidden' : ''">异常数据</span>
               </a>
             </li>
             <li v-if="store.user && store.showPersonalSettings">
