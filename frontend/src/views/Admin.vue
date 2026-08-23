@@ -944,11 +944,13 @@ const showCategoryColors = ref(false)
 
 // 局域网网段（快速添加时用于识别内网地址，缺省走 RFC1918 私有段）
 const lanCidrs = ref('')
-// 站点品牌（第三列「站点品牌」分组）：logo / 名称 / 副标题
+// 站点品牌（第二列「站点品牌」分组）：logo / 名称 / 副标题
 const siteName = ref('云航导航')
 const siteSubtitle = ref('')
 const siteLogo = ref('')
 const logoUploading = ref(false)
+// 代理网络（第三列「代理网络」分组）：仅用于获取图标与检测链接连通性
+const proxyUrl = ref('')
 
 // ---------- 编辑链接弹窗：图标接口选择（下拉 + 获取） ----------
 const editIconProviders = ref([])        // /api/icon/providers 返回的清单
@@ -1012,6 +1014,7 @@ async function fetchSettings() {
     siteName.value = data.site_name || '云航导航'
     siteSubtitle.value = data.site_subtitle || ''
     siteLogo.value = data.site_logo || ''
+    proxyUrl.value = data.proxy_url || ''
   } catch (e) {
     // 接口读取失败时也保留可用的默认引擎，避免下拉框为空
     if (!searchEngines.value.length) searchEngines.value = cloneDefaultSearchEngines()
@@ -1048,6 +1051,7 @@ async function saveSettings() {
       site_name: siteName.value,
       site_subtitle: siteSubtitle.value,
       site_logo: siteLogo.value,
+      proxy_url: proxyUrl.value,
     })
     // 同步到全局 store，前台无需刷新即可生效（如搜索框位置）
     await loadSettings()
@@ -2269,11 +2273,8 @@ onMounted(async () => {
 
               </div>
 
-              <!-- 右列：显示 / 外观 -->
-              <div class="settings-column flex h-full flex-col gap-0 md:pl-6">
-
-                <!-- 站点品牌 -->
-                <div class="flex flex-col">
+                <!-- 站点品牌（从右列移至第二列） -->
+                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
                   <div class="flex items-center gap-2.5 pb-3">
                     <span class="material-symbols-outlined text-primary text-[20px]">badge</span>
                     <h3 class="font-title-md text-[15px] font-semibold text-on-surface">站点品牌</h3>
@@ -2317,6 +2318,9 @@ onMounted(async () => {
                     <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">显示在名称下方；留空则不显示。</p>
                   </div>
                 </div>
+
+              <!-- 右列：显示 / 外观 -->
+              <div class="settings-column flex h-full flex-col gap-0 md:pl-6">
 
                 <!-- 显示设置 -->
                 <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
@@ -2406,6 +2410,21 @@ onMounted(async () => {
                       <input type="checkbox" v-model="showCategoryColors" class="sr-only peer">
                       <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                     </label>
+                  </div>
+                </div>
+
+                <!-- 代理网络 -->
+                <div class="flex flex-col pt-5 mt-5 border-t border-outline-variant/40">
+                  <div class="flex items-center gap-2.5 pb-3">
+                    <span class="material-symbols-outlined text-primary text-[20px]">lan</span>
+                    <h3 class="font-title-md text-[15px] font-semibold text-on-surface">代理网络</h3>
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">代理地址（可选）</label>
+                    <input v-model="proxyUrl" type="text"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      placeholder="如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080" />
+                    <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅用于「获取图标」与「检测链接连通性」两类请求；页面加载、更新检测等其他请求均不使用代理。留空则直连。</p>
                   </div>
                 </div>
 

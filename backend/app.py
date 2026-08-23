@@ -629,7 +629,7 @@ def create_link(user):
             if ek:
                 return jsonify({"error": f"该地址（域名+端口）已存在链接：{existing.title or '未命名'}（{sorted(ek)[0]}）"}), 409
     # 图标：按输入框里的地址（网址 / 本地文件路径）落地到本地，失败则留空由展示层兜底
-    icon_value, icon_err = localize_icon(data.get("icon"), user.id)
+    icon_value, icon_err = localize_icon(data.get("icon"), user.id, proxies=outbound_proxy())
     link = Link(
         title=title,
         description=data.get("description", ""),
@@ -768,7 +768,7 @@ def update_link(user, link_id):
         # 依据输入框中的地址重新落地图标；与原值相同则不重复下载
         new_icon = (data["icon"] or "").strip()
         if new_icon != (link.icon or ""):
-            link.icon, icon_err = localize_icon(new_icon, user.id)
+            link.icon, icon_err = localize_icon(new_icon, user.id, proxies=outbound_proxy())
     if "category_id" in data and data["category_id"]:
         cat = Category.query.get(data["category_id"])
         if not cat:
@@ -1089,6 +1089,20 @@ def favicon_conf():
     )
 
 
+def outbound_proxy():
+    """返回供「获取图标 / 检测链接连通性」使用的代理字典；未配置则返回 None。
+
+    仅以下两类出站请求使用该代理：
+    - 获取图标（probe_icon / 图标接口测试 / 快速添加识别）
+    - 检测链接连通性（链接可达性探测 / 快速添加端口检测）
+    其它请求（如页面加载、ghcr.io 更新检测等）一律不使用代理。
+    """
+    url = (Setting.get("proxy_url") or "").strip()
+    if not url:
+        return None
+    return {"http": url, "https": url}
+
+
 @app.route("/api/icon/providers")
 def icon_providers():
     """图标获取接口清单（供新增/编辑链接弹窗里的下拉选择，含占位符说明）。"""
@@ -1121,7 +1135,7 @@ def resolve_icon(user):
         return jsonify({"error": "无法从该 URL 解析出域名"}), 400
     last_err = ""
     for idx, url in enumerate(candidates):
-        _, _, err = probe_icon(url, timeout=6)
+        _, _, err = probe_icon(url, timeout=6, proxies=outbound_proxy())
         if not err:
             return jsonify({"icon_url": url, "provider": provider, "fallback": idx > 0})
         last_err = err
@@ -1148,7 +1162,7 @@ def test_icon_provider(user):
     if not icon_url:
         return jsonify({"ok": False, "error": "无法从该地址解析出域名"}), 400
     started = time.time()
-    content, ct, err = probe_icon(icon_url)
+    content, ct, err = probe_icon(icon_url, proxies=outbound_proxy())
     elapsed = int((time.time() - started) * 1000)
     if err:
         return jsonify({"ok": False, "icon_url": icon_url, "elapsed_ms": elapsed, "error": err})
@@ -1268,6 +1282,7 @@ def fetch_link_meta(user):
             timeout=6,
             allow_redirects=False,
             stream=True,
+            proxies=outbound_proxy(),
         )
         html_parts = []
         total = 0
@@ -1337,10 +1352,12 @@ def get_settings():
         "show_password_lock": Setting.get("show_password_lock", "true") == "true",
         # 局域网网段（自定义，用于快速添加时识别内网地址）
         "lan_cidrs": Setting.get("lan_cidrs", "") or "",
-        # 站点品牌（自定义 logo / 名称 / 副标题，系统设置第三列「站点品牌」）
+        # 站点品牌（自定义 logo / 名称 / 副标题，系统设置第二列「站点品牌」）
         "site_name": Setting.get("site_name", "云航导航") or "云航导航",
         "site_subtitle": Setting.get("site_subtitle", "") or "",
         "site_logo": Setting.get("site_logo", "") or "",
+        # 代理网络（仅用于获取图标与检测链接连通性，其它请求不使用）
+        "proxy_url": Setting.get("proxy_url", "") or "",
         "token_max_age_hours": int(Setting.get("token_max_age_hours", "168") or 168),
         # 访问日志保留天数（用于统计页数据清理）
         "log_retention_days": int(Setting.get("log_retention_days", "90") or 90),
@@ -1360,7 +1377,7 @@ def update_settings(user):
         "allow_register", "default_role", "token_max_age_hours",
         "log_retention_days", "show_personal_settings", "show_admin_console",
         "lan_cidrs", "show_password_lock", "color_scheme", "show_category_colors",
-        "site_name", "site_subtitle", "site_logo",
+        "site_name", "site_subtitle", "site_logo", "proxy_url",
     }
     saved = {}
     bool_keys = {
@@ -2557,9 +2574,10 @@ def _link_ping_url(link):
 def _do_ping(url, timeout=6):
     """返回 'ok' 或 'unreachable'。仅对 http(s) 外部链接做实际探测。"""
     try:
-        r = requests.head(url, timeout=timeout, allow_redirects=True)
+        proxies = outbound_proxy()
+        r = requests.head(url, timeout=timeout, allow_redirects=True, proxies=proxies)
         if r.status_code == 405:  # 部分服务不支持 HEAD，回退 GET
-            r = requests.get(url, timeout=timeout, allow_redirects=True, stream=True)
+            r = requests.get(url, timeout=timeout, allow_redirects=True, stream=True, proxies=proxies)
             r.close()
         return "ok" if r.status_code < 400 else "unreachable"
     except Exception:
@@ -2888,6 +2906,57 @@ def monitor_diagnostics(user):
 
 @app.route("/api/network/check", methods=["POST"])
 @auth_required
+def _tcp_reachable(hostname, port, timeout=2.5, proxy=None):
+    """TCP 端口可达性检测；配置 http/https 代理时走 CONNECT 隧道，socks 代理需 PySocks。"""
+    if proxy:
+        p = urlparse(proxy)
+        if p.scheme in ("http", "https"):
+            try:
+                psock = socket.create_connection((p.hostname, p.port or 80), timeout=timeout)
+            except (OSError, ValueError):
+                return False
+            try:
+                req = "CONNECT %s:%d HTTP/1.1\r\nHost: %s:%d\r\n\r\n" % (hostname, port, hostname, port)
+                psock.sendall(req.encode())
+                resp = b""
+                while b"\r\n\r\n" not in resp:
+                    chunk = psock.recv(4096)
+                    if not chunk:
+                        break
+                    resp += chunk
+                return resp.startswith(b"HTTP/1.1 200") or resp.startswith(b"HTTP/1.0 200")
+            except (OSError, ValueError):
+                return False
+            finally:
+                try:
+                    psock.close()
+                except Exception:
+                    pass
+        # socks 等：有 PySocks 时可用，否则回退直连
+        try:
+            import socks
+            s = socks.socksocket()
+            if p.scheme == "socks5":
+                s.set_proxy(socks.SOCKS5, p.hostname, p.port or 1080)
+            elif p.scheme == "socks4":
+                s.set_proxy(socks.SOCKS4, p.hostname, p.port or 1080)
+            else:
+                s.set_proxy(socks.SOCKS5, p.hostname, p.port or 1080)
+            s.settimeout(timeout)
+            s.connect((hostname, port))
+            s.close()
+            return True
+        except ImportError:
+            pass
+        except (OSError, ValueError):
+            return False
+    try:
+        with socket.create_connection((hostname, port), timeout=timeout):
+            return True
+    except (OSError, ValueError):
+        return False
+
+
 def network_check(user):
     """Validate a URL and optionally check its TCP endpoint from the server."""
     data = request.get_json(silent=True) or {}
@@ -2897,9 +2966,12 @@ def network_check(user):
         return jsonify({"error": url_error}), 400
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     result = {"url": raw_url, "hostname": parsed.hostname, "port": port, "valid": True, "reachable": None, "error": None}
+    proxy = outbound_proxy()
+    proxy_url = None
+    if proxy:
+        proxy_url = proxy.get("https") or proxy.get("http")
     try:
-        with socket.create_connection((parsed.hostname, port), timeout=2.5):
-            result["reachable"] = True
+        result["reachable"] = _tcp_reachable(parsed.hostname, port, timeout=2.5, proxy=proxy_url)
     except (OSError, ValueError) as exc:
         result["reachable"] = False
         result["error"] = str(exc)

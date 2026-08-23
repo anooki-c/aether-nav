@@ -251,8 +251,11 @@ def resolve_favicon_candidates(page_url, provider=None, custom_template="", size
     return [primary] if primary == direct else [primary, direct]
 
 
-def probe_icon(url, timeout=8):
-    """探测图标地址是否可用，返回 ``(内容字节, Content-Type, 错误信息)``，不落地。"""
+def probe_icon(url, timeout=8, proxies=None):
+    """探测图标地址是否可用，返回 ``(内容字节, Content-Type, 错误信息)``，不落地。
+
+    ``proxies`` 为 ``{"http": ..., "https": ...}`` 时通过代理发起请求（用于图标获取）。
+    """
     parsed = urlparse((url or "").strip())
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return None, "", "图标地址不是有效的 http/https URL"
@@ -265,8 +268,13 @@ def probe_icon(url, timeout=8):
     except (socket.gaierror, ValueError, OSError):
         return None, "", "图标主机无法解析"
     try:
+        handlers = []
+        if proxies:
+            handlers.append(urllib.request.ProxyHandler(proxies))
+        opener = urllib.request.build_opener(*handlers) if handlers else None
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        ctx = opener if opener else urllib.request
+        with ctx.urlopen(req, timeout=timeout) as resp:
             content = resp.read(MAX_ICON_BYTES + 1)
             ct = resp.headers.get("Content-Type", "")
     except urllib.error.HTTPError as exc:
@@ -304,9 +312,9 @@ def valid_icon_content(content, content_type="", url=""):
     return False
 
 
-def download_icon(user_id, url):
+def download_icon(user_id, url, proxies=None):
     """下载远程图标并落地，返回 ``(本地路径, 错误信息)``。"""
-    content, ct, err = probe_icon(url)
+    content, ct, err = probe_icon(url, proxies=proxies)
     if err:
         return "", f"图标获取失败（{err}），已改用默认图标"
     try:
@@ -345,7 +353,7 @@ def _copy_local_icon(user_id, src, allow_passthrough, original):
         return "", "本地图标读取失败（无访问权限？），已改用默认图标"
 
 
-def localize_icon(value, user_id):
+def localize_icon(value, user_id, proxies=None):
     """把「图标输入框」中的地址落地为本地文件，返回 ``(icon 值, 错误信息)``。
 
     - 空值 / Material Symbols 名称 / emoji → 原样保留
@@ -353,13 +361,15 @@ def localize_icon(value, user_id):
     - ``http(s)://...`` → 下载并保存到本地
     - ``file://`` 或本地绝对路径 → 读取并复制到本地
     落地失败时返回 ``("", 错误信息)``，图标交由展示层按标题自动匹配。
+
+    ``proxies`` 仅用于下载远程 http(s) 图标（与请求侧代理保持一致）。
     """
     v = (value or "").strip()
     if not v or v.startswith("/uploads/"):
         return v, None
 
     if v.startswith("http://") or v.startswith("https://"):
-        return _download_icon(user_id, v)
+        return _download_icon(user_id, v, proxies=proxies)
 
     src = v
     is_file_scheme = v.lower().startswith("file://")
