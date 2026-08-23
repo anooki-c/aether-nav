@@ -21,6 +21,7 @@ RUN useradd --create-home --uid 10001 appuser
 COPY backend/ /app/backend/
 COPY VERSION /app/VERSION
 COPY --from=fe /app/frontend/dist /app/frontend/dist
+COPY docker-entrypoint.sh /usr/local/bin/aether-nav-entrypoint
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 # 注入构建版本信息（CI 通过 build-arg 传入 github.sha 与构建时间）；
 # 开发环境未传入时回落为 unknown，后端 /api/version 据此标识为开发版。
@@ -30,12 +31,13 @@ RUN VT=$(cat /app/VERSION 2>/dev/null | tr -d '[:space:]'); \
     printf '{"commit":"%s","tag":"%s","build_time":"%s","source":"docker"}' "$BUILD_COMMIT" "$VT" "$BUILD_TIME" > /app/version.json
 
 RUN chown -R appuser:appuser /app
-USER appuser
+RUN chmod 755 /usr/local/bin/aether-nav-entrypoint
 
 # 持久化数据库与上传图标
 VOLUME ["/app/backend/instance", "/app/backend/uploads"]
 EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=3)"
 
-# 首次启动建表+注入示例数据，再用 gunicorn 运行
+# 首次启动建表+注入示例数据，再用 gunicorn 运行；entrypoint 会先处理 bind mount 权限并降权
+ENTRYPOINT ["/usr/local/bin/aether-nav-entrypoint"]
 CMD ["sh", "-c", "cd /app && python -m backend.seed && gunicorn -b 0.0.0.0:5000 backend.app:app"]
