@@ -76,6 +76,16 @@ function containerAddUrl(c) {
   return `http://${ip}:${port}`
 }
 
+// 端口外链：群晖宿主 IP + docker 发布到宿主机的「外部端口」（host 优先，回退 container）
+function portExternalUrl(c, p) {
+  const ip = synologyHostIp()
+  if (!ip || !p) return ''
+  const ext = (p.host && p.host !== 'None' && String(p.host).trim()) ||
+    (p.container && String(p.container).trim())
+  if (!ext) return ''
+  return `http://${ip}:${ext}`
+}
+
 async function openAddConnection(c) {
   if (c.state !== 'running') return
   // 端口未加载则先拉取，确保能算出正确的内网 URL（去重判定依赖它）
@@ -859,10 +869,11 @@ async function runIpDiagnostic() {
                     <div v-else-if="portCache[c.id].error" class="text-error text-xs">{{ portCache[c.id].error }}</div>
                     <div v-else-if="!filteredPorts(c.id).length" class="text-text-secondary text-xs">无</div>
                     <div v-else class="flex flex-wrap gap-1.5 items-center">
-                      <span v-for="(p, i) in filteredPorts(c.id)" :key="i"
-                        class="px-1.5 py-0.5 rounded-lg bg-surface-container text-text-primary font-mono text-[11px] border border-outline-variant/40">
-                        {{ fmtPort(p) }}
-                      </span>
+                      <template v-for="(p, i) in filteredPorts(c.id)" :key="i">
+                        <a v-if="portExternalUrl(c, p)" :href="portExternalUrl(c, p)" target="_blank" rel="noopener"
+                          class="px-1.5 py-0.5 rounded-lg font-mono text-[11px] text-text-primary hover:bg-surface-container hover:border hover:border-outline-variant/40 hover:text-primary transition-all">{{ fmtPort(p) }}</a>
+                        <span v-else class="px-1.5 py-0.5 rounded-lg font-mono text-[11px] text-text-primary">{{ fmtPort(p) }}</span>
+                      </template>
                       <button @click.stop="refreshContainerPorts(c)" class="text-text-secondary hover:text-primary" title="刷新端口">
                         <span class="material-symbols-outlined text-[14px]" :class="portCache[c.id].loading ? 'animate-spin' : ''">refresh</span>
                       </button>
@@ -940,10 +951,11 @@ async function runIpDiagnostic() {
               <div v-else-if="portCache[c.id].error" class="text-error text-[11px]">{{ portCache[c.id].error }}</div>
               <div v-else-if="!filteredPorts(c.id).length" class="text-text-secondary text-[11px]">无端口</div>
               <div v-else class="flex flex-wrap gap-1">
-                <span v-for="(p, i) in filteredPorts(c.id)" :key="i"
-                  class="px-1.5 py-0.5 rounded bg-surface-container text-text-primary font-mono text-[10px] border border-outline-variant/40">
-                  {{ fmtPort(p) }}
-                </span>
+                <template v-for="(p, i) in filteredPorts(c.id)" :key="i">
+                  <a v-if="portExternalUrl(c, p)" :href="portExternalUrl(c, p)" target="_blank" rel="noopener"
+                    class="px-1.5 py-0.5 rounded font-mono text-[10px] text-text-primary hover:bg-surface-container hover:border hover:border-outline-variant/40 hover:text-primary transition-all">{{ fmtPort(p) }}</a>
+                  <span v-else class="px-1.5 py-0.5 rounded font-mono text-[10px] text-text-primary">{{ fmtPort(p) }}</span>
+                </template>
               </div>
             </div>
           </div>
