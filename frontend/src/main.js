@@ -32,3 +32,13 @@ window.addEventListener('error', (e) => showErrorOverlay((e.error && e.error.sta
 window.addEventListener('unhandledrejection', (e) => showErrorOverlay('Promise: ' + ((e.reason && e.reason.stack) || e.reason)))
 
 app.use(router).mount('#app')
+
+// PWA：生产环境注册 Service Worker（开发环境跳过，避免拦截 Vite HMR）
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      // 静默失败：不影响主流程，浏览器无 SW 时仍可正常使用
+      console.warn('[pwa] service worker registration failed:', err)
+    })
+  })
+}

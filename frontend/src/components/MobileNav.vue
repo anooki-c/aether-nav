@@ -6,7 +6,7 @@ const emit = defineEmits(['search', 'profile', 'add-link'])
 
 <template>
   <nav
-    class="bg-surface-container-highest dark:bg-inverse-surface border-t border-outline-variant/30 backdrop-blur-lg shadow-2xl shadow-primary/15 fixed bottom-0 left-0 w-full z-50 lg:hidden rounded-t-xl"
+    class="site-mobilenav bg-surface-container-highest dark:bg-inverse-surface border-t border-outline-variant/30 backdrop-blur-lg shadow-2xl shadow-primary/15 fixed bottom-0 left-0 w-full z-50 lg:hidden rounded-t-xl"
   >
     <div class="flex justify-around items-center h-16 px-4">
       <a

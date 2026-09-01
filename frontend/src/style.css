@@ -519,3 +519,45 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   --c-inverse-primary: 240 140 196;
   --c-surface-tint: 193 60 138;
 }
+
+/* ============================================================
+ * PWA / 移动端安全区与触控优化
+ * ============================================================ */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+/* 顶栏：在 PWA standalone / 沉浸式 Web App 下避开状态栏。
+ * height: auto + min-height 4rem 覆盖 Tailwind h-16，让 padding-top 把内容下移。 */
+.site-topbar {
+  height: auto;
+  min-height: 4rem;
+  padding-top: var(--sat);
+}
+
+/* 移动端底部导航：避开手势条 / Home indicator */
+.site-mobilenav {
+  padding-bottom: var(--sab);
+}
+
+/* 移动端主滚动区：为 MobileNav + 安全区留出底部留白。
+ * 桌面端 (≥1024px) 不留，避免空白条。 */
+@media (max-width: 1023px) {
+  #main-scroll {
+    padding-bottom: calc(5rem + var(--sab));
+  }
+}
+
+/* 消除双击缩放/双击高亮延迟（移动浏览器 300ms tap delay 已基本消除，这里再加一层保险） */
+button, a, [role="button"], label, summary {
+  touch-action: manipulation;
+}
+
+/* 选区色：与品牌色统一 */
+::selection {
+  background: rgb(var(--c-primary) / 0.28);
+  color: rgb(var(--c-on-background));
+}

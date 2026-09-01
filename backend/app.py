@@ -2563,6 +2563,12 @@ def serve_frontend(path):
     dist = os.path.join(Config.FRONTEND_DIST)
     asset = safe_join(dist, path) if path else None
     if asset and os.path.isfile(asset):
+        # PWA manifest 需显式 application/manifest+json；Python 内置 mimetypes 表
+        # 在部分镜像（slim/alpine）缺少该注册，会被 send_from_directory 猜成 text/plain。
+        if path.endswith(".webmanifest"):
+            resp = send_from_directory(dist, path)
+            resp.mimetype = "application/manifest+json"
+            return resp
         return send_from_directory(dist, path)
     index = os.path.join(dist, "index.html")
     if os.path.exists(index):
