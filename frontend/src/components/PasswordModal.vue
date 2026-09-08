@@ -44,7 +44,7 @@ async function submit() {
       <div class="absolute inset-0 bg-black/30 backdrop-blur-md" @click="close"></div>
 
       <!-- Modal Card -->
-      <div class="modal-panel relative w-full max-w-md bg-surface rounded-2xl shadow-[0_20px_40px_-15px_rgba(108,92,231,0.15)] border border-outline-variant/30 overflow-hidden flex flex-col">
+      <div class="modal-panel responsive-modal-panel relative w-full max-w-md bg-surface rounded-2xl shadow-[0_20px_40px_-15px_rgba(108,92,231,0.15)] border border-outline-variant/30 overflow-hidden flex flex-col">
       <!-- Header with ambient glow -->
       <div class="relative pt-10 pb-6 px-8 flex flex-col items-center text-center bg-gradient-to-b from-surface-container-low to-surface">
         <div class="absolute top-8 w-24 h-24 bg-primary/10 rounded-full blur-xl mix-blend-multiply"></div>

@@ -120,14 +120,14 @@ async function confirm() {
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="cancel"></div>
 
       <!-- 弹窗主体 -->
-      <div class="relative w-full max-w-md bg-surface rounded-2xl shadow-[0_20px_40px_-15px_rgba(108,92,231,0.25)] border border-outline-variant/30 overflow-hidden flex flex-col">
+      <div class="relative responsive-modal-panel w-full max-w-md bg-surface rounded-2xl shadow-[0_20px_40px_-15px_rgba(108,92,231,0.25)] border border-outline-variant/30 overflow-hidden flex flex-col">
         <div class="px-6 py-4 border-b border-outline-variant/40">
           <h3 class="font-headline-sm text-headline-sm text-text-primary">调整头像</h3>
           <p class="text-label-sm text-text-secondary mt-1">拖动图片、滚轮或下方按钮缩放，圆形区域即为头像在各页面的显示效果</p>
         </div>
 
         <!-- 裁剪区：固定高度，叠一个圆形预览遮罩 -->
-        <div class="relative h-[340px] bg-black/5 overflow-hidden">
+        <div class="relative h-[340px] max-h-[42vh] min-h-[220px] bg-black/5 overflow-hidden">
           <img ref="imgEl" :src="image" class="block max-w-none" alt="待裁剪" />
           <!-- 圆形预览：圈内清晰、圈外压暗，与头像实际显示一致 -->
           <div

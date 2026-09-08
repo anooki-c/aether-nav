@@ -216,7 +216,7 @@ async function save() {
   <transition name="modal" appear>
     <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
-      <div class="modal-panel relative bg-bg-card w-full max-w-[640px] max-h-[90vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+      <div class="modal-panel responsive-modal-panel relative bg-bg-card w-full max-w-[640px] max-h-[90vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
       <!-- Header -->
       <div class="px-7 py-5 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">

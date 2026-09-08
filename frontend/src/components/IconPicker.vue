@@ -206,7 +206,7 @@ function close() {
   <transition name="modal" appear>
   <div v-if="open" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
-    <div class="relative bg-bg-card modal-panel w-full max-w-3xl max-h-[85vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+    <div class="relative bg-bg-card modal-panel responsive-modal-panel w-full max-w-3xl max-h-[85vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
       <!-- Header -->
       <div class="px-6 py-4 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">

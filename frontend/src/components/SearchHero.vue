@@ -72,8 +72,8 @@ watch(
       <button
         v-for="e in engines"
         :key="e.id"
-        class="px-3 py-1.5 rounded-full font-label-sm text-label-sm border transition-[transform,background-color,color,border-color] active:scale-95"
-        :class="engine === e.id ? 'bg-primary-fixed text-primary border-primary/40' : 'bg-surface-container text-on-surface-variant border-transparent hover:bg-surface-variant hover:border-outline-variant'"
+        class="search-engine-pill box-border px-3 py-1.5 rounded-full font-label-sm text-label-sm border border-transparent transition-[transform,background-color,color,box-shadow] active:scale-95"
+        :class="engine === e.id ? 'bg-primary-fixed text-primary ring-1 ring-inset ring-primary/40' : 'bg-surface-container text-on-surface-variant hover:bg-surface-variant hover:border-outline-variant'"
         @click="pickEngine(e.id)"
       >
         {{ e.label }}

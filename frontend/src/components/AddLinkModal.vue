@@ -331,7 +331,7 @@ async function onUpload(e) {
   <transition name="modal" appear>
     <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
-      <div class="modal-panel relative bg-bg-card w-full max-w-[880px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+      <div class="modal-panel responsive-modal-panel add-link-modal relative bg-bg-card w-full max-w-[880px] max-h-[calc(100dvh-2rem)] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
       <!-- Header -->
       <div class="px-8 py-5 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
         <div class="flex items-center gap-3">
@@ -575,5 +575,25 @@ async function onUpload(e) {
 .modal-leave-to .modal-panel {
   transform: scale(0.96) translateY(14px);
   opacity: 0;
+}
+@media (max-width: 767px) {
+  .add-link-modal > .flex-1 {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .add-link-modal > .flex-1 > .w-\[52\%\],
+  .add-link-modal > .flex-1 > .w-\[48\%\] {
+    width: 100%;
+    padding: 1.25rem;
+    overflow: visible;
+  }
+  .add-link-modal > .flex-1 > .w-\[52\%\] {
+    border-right: 0;
+    border-bottom: 1px solid rgb(var(--c-outline-variant) / 0.15);
+  }
+  .add-link-modal > .px-8 {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
 }
 </style>

@@ -2047,7 +2047,7 @@ onMounted(async () => {
             </div>
 
             <!-- 单卡片容器 + 三列分组（列间竖线分隔） -->
-            <div class="bg-surface rounded-2xl p-6 shadow-sm border border-surface-variant">
+            <div class="bg-surface rounded-2xl p-4 sm:p-6 shadow-sm border border-surface-variant">
             <div class="grid grid-cols-1 md:grid-cols-3 items-stretch gap-6 md:gap-0 divide-y divide-outline-variant/50 md:divide-y-0 md:divide-x md:divide-outline-variant/50">
 
               <!-- 左列：账号安全 + 局域网网段 + 代理网络 + 网络模式 -->
@@ -2453,9 +2453,9 @@ onMounted(async () => {
     </div>
 
     <!-- Add user modal -->
-    <div v-if="showUserModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div v-if="showUserModal" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showUserModal = false"></div>
-      <div class="relative bg-bg-card w-full max-w-md rounded-[16px] shadow-lg overflow-hidden flex flex-col">
+      <div class="responsive-modal-panel relative bg-bg-card w-full max-w-md rounded-[16px] shadow-lg overflow-hidden flex flex-col">
         <div class="p-6 border-b border-outline-variant/30 flex justify-between items-center">
           <h2 class="font-headline-md text-headline-md text-on-surface">添加新用户</h2>
           <button class="text-outline hover:text-primary transition-colors" @click="showUserModal = false"><span class="material-symbols-outlined">close</span></button>
@@ -2496,9 +2496,9 @@ onMounted(async () => {
     <PasswordModal v-model:open="adminPwdOpen" :link="adminPwdLink" />
 
     <!-- 密码设置 / 修改弹窗 -->
-    <div v-if="pwdModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div v-if="pwdModal" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="pwdModal = null"></div>
-      <div class="relative bg-bg-card w-full max-w-md rounded-[16px] shadow-lg overflow-hidden flex flex-col">
+      <div class="responsive-modal-panel relative bg-bg-card w-full max-w-md rounded-[16px] shadow-lg overflow-hidden flex flex-col">
         <div class="px-6 py-4 border-b border-outline-variant/30 flex justify-between items-center">
           <h2 class="font-headline-md text-headline-md text-on-surface">{{ pwdModal.mode === 'set' ? '设置链接密码' : '修改链接密码' }}</h2>
           <button class="text-outline hover:text-primary transition-colors" @click="pwdModal = null"><span class="material-symbols-outlined">close</span></button>
@@ -2529,9 +2529,9 @@ onMounted(async () => {
     </div>
 
     <!-- 编辑链接弹窗（左右分栏） -->
-    <div v-if="showEdit" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div v-if="showEdit" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showEdit = false"></div>
-      <div class="relative bg-bg-card w-full max-w-[880px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+      <div class="responsive-modal-panel admin-edit-modal relative bg-bg-card w-full max-w-[880px] max-h-[calc(100dvh-2rem)] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
         <!-- Header -->
         <div class="px-8 py-5 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
           <div class="flex items-center gap-3">
@@ -2806,6 +2806,39 @@ onMounted(async () => {
   .category-drag-ghost,
   .category-drag-chosen {
     transition: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .admin-edit-modal > .flex-1 {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .admin-edit-modal > .flex-1 > .w-\[52\%\],
+  .admin-edit-modal > .flex-1 > .w-\[48\%\] {
+    width: 100%;
+    padding: 1.25rem;
+    overflow: visible;
+  }
+  .admin-edit-modal > .flex-1 > .w-\[52\%\] {
+    border-right: 0;
+    border-bottom: 1px solid rgb(var(--c-outline-variant) / 0.15);
+  }
+  .admin-edit-modal > .px-8 {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+  .settings-column .flex.items-center.justify-between.gap-3 {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .settings-column .flex.items-center.justify-between.gap-3 > .relative {
+    width: 100%;
+  }
+  .settings-column .flex.items-center.justify-between.gap-3 > .flex {
+    align-self: flex-start;
+    max-width: 100%;
+    flex-wrap: wrap;
   }
 }
 </style>

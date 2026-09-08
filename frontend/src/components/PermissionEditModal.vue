@@ -92,7 +92,7 @@ function close() {
   <div v-if="open && user" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
 
-    <div class="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-surface-container-lowest rounded-xl shadow-2xl border border-outline-variant/30 overflow-hidden">
+    <div class="relative responsive-modal-panel w-full max-w-4xl max-h-[90vh] flex flex-col bg-surface-container-lowest rounded-xl shadow-2xl border border-outline-variant/30 overflow-hidden">
       <!-- Header -->
       <div class="flex items-start justify-between p-6 border-b border-outline-variant/30">
         <div>

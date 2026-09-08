@@ -196,8 +196,8 @@ async function savePassword() {
     <!-- 主列 -->
     <div class="flex-1 flex flex-col min-w-0">
       <!-- 顶栏 -->
-      <header class="flex justify-between items-center px-grid-gutter py-3 bg-surface shadow-sm z-30">
-        <div class="font-headline-md text-headline-md font-bold text-primary">个人设置</div>
+      <header class="flex justify-between items-center gap-3 px-4 sm:px-grid-gutter py-3 bg-surface shadow-sm z-30">
+        <div class="font-headline-md text-headline-md font-bold text-primary truncate">个人设置</div>
         <div class="flex items-center gap-2">
           <span class="text-body-sm text-on-surface-variant hidden sm:block">{{ store.user?.display_name || store.user?.username }}</span>
           <button
@@ -273,12 +273,12 @@ async function savePassword() {
             <h2 class="font-headline-sm text-headline-sm text-text-primary mb-5">个人偏好</h2>
 
             <!-- 默认网络模式 -->
-            <div class="flex items-center justify-between py-3 border-b border-surface-variant/40">
+            <div class="flex flex-col items-stretch gap-3 py-3 border-b border-surface-variant/40 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div class="text-body-md text-text-primary">默认网络模式</div>
                 <div class="text-label-sm text-text-secondary">首页与链接默认展示外网还是内网地址</div>
               </div>
-              <div class="flex items-center bg-surface-container-highest rounded-full p-1 gap-1 shrink-0">
+              <div class="flex items-center self-start bg-surface-container-highest rounded-full p-1 gap-1 shrink-0 max-w-full overflow-x-auto">
                 <button class="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
                   :class="form.network === 'external' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
                   @click="form.network = 'external'">
@@ -293,12 +293,12 @@ async function savePassword() {
             </div>
 
             <!-- 界面主题 -->
-            <div class="flex items-center justify-between py-3 border-b border-surface-variant/40">
+            <div class="flex flex-col items-stretch gap-3 py-3 border-b border-surface-variant/40 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div class="text-body-md text-text-primary">界面主题</div>
                 <div class="text-label-sm text-text-secondary">浅色 / 深色 / 跟随系统</div>
               </div>
-              <div class="flex items-center bg-surface-container-highest rounded-full p-1 gap-1 shrink-0">
+              <div class="flex items-center self-start bg-surface-container-highest rounded-full p-1 gap-1 shrink-0 max-w-full overflow-x-auto">
                 <button v-for="t in [{k:'light',l:'浅色',i:'light_mode'},{k:'dark',l:'深色',i:'dark_mode'},{k:'system',l:'跟随系统',i:'auto_mode'}]"
                   :key="t.k" class="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
                   :class="form.theme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
@@ -309,12 +309,12 @@ async function savePassword() {
             </div>
 
             <!-- 配色方案 -->
-            <div class="flex items-center justify-between py-3 border-b border-surface-variant/40">
+            <div class="flex flex-col items-stretch gap-3 py-3 border-b border-surface-variant/40 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div class="text-body-md text-text-primary">配色方案</div>
                 <div class="text-label-sm text-text-secondary">全站强调色，覆盖系统默认</div>
               </div>
-              <div class="flex items-center bg-surface-container-highest rounded-full p-1 gap-1 shrink-0 flex-wrap justify-end max-w-[300px]">
+              <div class="flex items-center self-start bg-surface-container-highest rounded-full p-1 gap-1 shrink-0 flex-wrap justify-start max-w-full sm:justify-end sm:max-w-[300px]">
                 <button v-for="s in COLOR_SCHEMES" :key="s.id" type="button" class="px-2.5 py-1.5 rounded-full text-sm font-semibold transition-all inline-flex items-center gap-1" :class="form.color_scheme === s.id ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="form.color_scheme = s.id">
                   <span class="inline-flex gap-0.5">
                     <span v-for="(cc, ci) in s.colors.slice(0,2)" :key="ci" class="w-2.5 h-2.5 rounded-full" :style="{ background: cc }"></span>
@@ -324,12 +324,12 @@ async function savePassword() {
             </div>
 
             <!-- 天气城市 -->
-            <div class="flex items-center justify-between py-3">
+            <div class="flex flex-col items-stretch gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div class="text-body-md text-text-primary">天气城市</div>
                 <div class="text-label-sm text-text-secondary">首页天气小组件展示的城市</div>
               </div>
-              <input v-model="form.weather_city" type="text" class="w-40 px-4 py-2 rounded-xl bg-surface-container border border-outline-variant/60 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" placeholder="如：北京" />
+              <input v-model="form.weather_city" type="text" class="w-full sm:w-40 px-4 py-2 rounded-xl bg-surface-container border border-outline-variant/60 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" placeholder="如：北京" />
             </div>
 
             <div class="flex justify-end mt-5">
