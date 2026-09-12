@@ -143,6 +143,7 @@
               <tr class="border-b border-outline-variant text-on-surface-variant">
                 <th class="py-2 pr-4 font-medium">标题</th>
                 <th class="py-2 pr-4 font-medium">地址</th>
+                <th class="py-2 pr-4 font-medium">不可达范围</th>
                 <th class="py-2 pr-4 font-medium">分类</th>
                 <th class="py-2 pr-4 font-medium">最近探测</th>
                 <th class="py-2 font-medium">操作</th>
@@ -152,6 +153,9 @@
               <tr v-for="l in data.unreachable_links" :key="l.id" class="border-b border-outline-variant/60">
                 <td class="py-2 pr-4 text-on-surface">{{ l.title }}</td>
                 <td class="py-2 pr-4 max-w-[220px] truncate text-on-surface-variant"><a :href="l.url" target="_blank" class="hover:text-primary hover:underline">{{ l.url || '-' }}</a></td>
+                <td class="py-2 pr-4">
+                  <span class="text-[11px] px-[7px] py-[2px] rounded-md font-semibold bg-error-container text-on-error-container">{{ l.network_scope || '外网' }}</span>
+                </td>
                 <td class="py-2 pr-4 text-on-surface-variant">{{ l.category_name || '-' }}</td>
                 <td class="py-2 pr-4 text-on-surface-variant">{{ fmtDate(l.ping_at) }}</td>
                 <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('links')">去管理</button></td>

@@ -2041,14 +2041,30 @@ def stats_anomalies(user):
             "visible": c.visible is not False,
         })
 
-    # 无法访问的链接：ping 状态为 unreachable
+    # 无法访问的链接：综合 ping 状态为 unreachable（任一地址不可达即计入）
     unreachable_links = []
     for l in Link.query.filter_by(is_active=True, ping_status="unreachable").all():
         cat = cats.get(l.category_id)
+        # 标注究竟哪个地址不可达：内网/外网/两者都不可达，
+        # 便于管理员判断是「只有外部访问挂了」还是「服务整体挂了」。
+        bad_scopes = []
+        if l.url_internal and (l.ping_status_internal or l.ping_status) == "unreachable":
+            bad_scopes.append("内网")
+        if l.url_external and (l.ping_status_external or l.ping_status) == "unreachable":
+            bad_scopes.append("外网")
+        if len(bad_scopes) == 2:
+            bad_url = l.url_external or l.url_internal
+        elif bad_scopes == ["内网"]:
+            bad_url = l.url_internal
+        elif bad_scopes == ["外网"]:
+            bad_url = l.url_external
+        else:
+            bad_url = l.url_external or l.url_internal
         unreachable_links.append({
             "id": l.id,
             "title": l.title,
-            "url": l.url_external or l.url_internal,
+            "url": bad_url,
+            "network_scope": "与".join(bad_scopes),
             "category_id": l.category_id,
             "category_name": cat.name if cat else "",
             "ping_at": l.ping_at.isoformat() if l.ping_at else None,
@@ -2598,34 +2614,117 @@ _PING_SCHEDULER_STARTED = False
 
 
 def _link_ping_url(link):
+    """兼容旧调用：优先外网地址。"""
     return link.url_external or link.url_internal
 
 
-def _ping_once(url, timeout, proxies=None):
-    """单次连通性探测（不含兜底），返回 'ok' 或 'unreachable'。"""
+def _ping_url_status(url):
+    """探测单个地址；返回 'ok' / 'unreachable' / None（无地址或非 http(s) 不探测）。"""
+    if not url:
+        return None
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return None  # 内部路由等非 http(s) 地址不对外探测，交由展示层兜底
+    return _do_ping(url)
+
+
+# 网关类错误码：反代背后的真实服务不可用（点开也是错误页），应判为不可达
+_PING_GATEWAY_ERRORS = (502, 503, 504)
+
+try:  # verify=False 兜底探测会触发 InsecureRequestWarning，这里静音避免刷日志
+    import urllib3
+
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+except Exception:
+    pass
+
+
+def _is_private_host(url):
+    """地址是否指向内网/本机（私网 IP、localhost、无点的主机名、.local/.lan 等）。
+
+    用于两件事：
+    1. 内网地址禁用环境变量代理（否则会被送到外网代理，必然探测失败）；
+    2. 内网地址不做「出站代理兜底」。
+    """
     try:
-        r = requests.head(url, timeout=timeout, allow_redirects=True, proxies=proxies)
-        if r.status_code == 405:  # 部分服务不支持 HEAD，回退 GET
-            r = requests.get(url, timeout=timeout, allow_redirects=True, stream=True, proxies=proxies)
-            r.close()
-        return "ok" if r.status_code < 400 else "unreachable"
+        host = (urlparse(url).hostname or "").lower()
     except Exception:
+        return False
+    if not host:
+        return False
+    if host == "localhost" or host.endswith((".local", ".lan", ".internal")) or "." not in host:
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local
+
+
+def _probe_http(url, timeout, proxies, verify):
+    """发一次探活请求，返回 HTTP 状态码（异常向上抛出）。
+
+    部分服务/反代不支持 HEAD（405/501）或直接拒绝 HEAD（400/403），
+    此时回退 GET 取真实状态，避免把「不支持 HEAD」误判成服务不可用。
+    """
+    session = requests.Session()
+    try:
+        # 内网地址禁用环境变量代理；外网地址保持原行为（容器可能依赖环境变量代理）
+        if _is_private_host(url):
+            session.trust_env = False
+        kwargs = dict(timeout=timeout, allow_redirects=True, proxies=proxies, verify=verify)
+        r = session.request("HEAD", url, **kwargs)
+        if r.status_code in (400, 403, 405, 501):
+            r = session.request("GET", url, stream=True, **kwargs)
+            r.close()
+        return r.status_code
+    finally:
+        session.close()
+
+
+def _ping_once(url, timeout=6, proxies=None):
+    """单次连通性探测（不含代理兜底），返回 'ok' 或 'unreachable'。
+
+    判定原则：**服务有响应即视为可达**。只有连接层失败（超时 / DNS / 拒绝 / 证书）
+    或网关类错误（502/503/504，说明反代背后的服务真的挂了）才判不可达。
+    401/403/404 等状态码表示服务在线（只是需要登录或路径不存在），点开链接
+    依然能打开，不应标红。
+    """
+    status = None
+    for verify in (True, False):
+        try:
+            status = _probe_http(url, timeout, proxies, verify)
+            break
+        except requests.exceptions.SSLError:
+            # 内网服务常配自签证书，或「域名/IP 与证书不匹配」（Lucky、DSM 反代等），
+            # 校验证书会直接失败。既然只是探活，降级为不校验证书再试一次。
+            continue
+        except Exception:
+            return "unreachable"
+    if status is None:
         return "unreachable"
+    return "unreachable" if status in _PING_GATEWAY_ERRORS else "ok"
 
 
 def _do_ping(url, timeout=6):
-    """返回 'ok' 或 'unreachable'。仅对 http(s) 外部链接做实际探测。
+    """返回 'ok' 或 'unreachable'。仅对 http(s) 地址做实际探测。
 
-    先直连；直连不通且配置了代理时，以代理作为兜底再探测一次。
+    先直连；直连不通且配置了出站代理时，以代理兜底再探一次。
+    内网地址不做代理兜底——外网代理访问内网必然失败，只会浪费时间并掩盖真实原因。
     """
     result = _ping_once(url, timeout)
-    if result == "unreachable" and outbound_proxy():
+    if result == "unreachable" and outbound_proxy() and not _is_private_host(url):
         result = _ping_once(url, timeout, outbound_proxy())
     return result
 
 
+
 def ping_all_links(progress=None):
-    """遍历活跃链接探测可达性，更新 ping_status / ping_at。返回变更数。
+    """遍历活跃链接探测可达性，更新按 URL 维度的探测状态。返回变更数。
+
+    内网与外部地址分别探测并分别落库（ping_status_internal / ping_status_external），
+    这样前端可以按「当前生效的 URL」精确判断是否需要标红——例如双地址链接
+    内网通、外网不通时，内网模式不标红、外网模式才标红。
+    综合字段 ping_status（任一不可达即 unreachable）继续维护，供统计/异常页聚合使用。
 
     重要：探测是网络请求（每条最长可达 12s），**绝不能持有 DB 事务/锁去发请求**。
     若在持锁事务里逐个探测，会长时间占用 SQLite 锁，导致其它请求
@@ -2639,8 +2738,8 @@ def ping_all_links(progress=None):
     with app.app_context():
         links = Link.query.filter_by(is_active=True).all()
         now = datetime.datetime.utcnow()
-        # 快照探测目标（id + url）后立即结束读事务，释放 SQLite 共享锁
-        targets = [(l.id, _link_ping_url(l)) for l in links]
+        # 快照探测目标（id + 内外网两个地址）后立即结束读事务，释放 SQLite 共享锁
+        targets = [(l.id, l.url_internal, l.url_external) for l in links]
         if progress is not None:
             progress["total"] = len(targets)
             progress["done"] = 0
@@ -2648,29 +2747,38 @@ def ping_all_links(progress=None):
         db.session.rollback()
 
         # 无锁状态下逐个探测（不触碰 DB）
-        pending = []  # (link_id, status)
-        for lid, url in targets:
-            if url and (url.startswith("http://") or url.startswith("https://")):
-                status = _do_ping(url)
-            elif url:
-                status = "ok"  # 内部路由不对外探测，视为可达
-            else:
-                status = None
+        pending = []  # (link_id, status_internal, status_external)
+        for lid, url_in, url_ex in targets:
+            st_in = _ping_url_status(url_in)
+            st_ex = _ping_url_status(url_ex)
+            # 只有非 http(s) 的本地路由（如 /xxx）找不到可探测目标时，才视为可达，
+            # 避免这类链接永远停留在「未检测」而被统计页遗漏。
+            if st_in is None and url_in and not url_in.startswith(("http://", "https://")):
+                st_in = "ok"
+            if st_ex is None and url_ex and not url_ex.startswith(("http://", "https://")):
+                st_ex = "ok"
             if progress is not None:
                 progress["done"] += 1
-            if status is not None:
-                pending.append((lid, status))
+            if st_in is not None or st_ex is not None:
+                pending.append((lid, st_in, st_ex))
 
         # 探测全部完成后，开一个短事务批量写回
         changed = 0
         if pending:
             try:
-                for lid, status in pending:
+                for lid, st_in, st_ex in pending:
                     l = db.session.get(Link, lid)
                     if l is None:
                         continue
-                    if l.ping_status != status:
-                        l.ping_status = status
+                    for attr, status in (("ping_status_internal", st_in), ("ping_status_external", st_ex)):
+                        if status is not None and getattr(l, attr) != status:
+                            setattr(l, attr, status)
+                            changed += 1
+                    # 综合状态：任一已探测地址不可达即 unreachable，否则 ok
+                    probed = [s for s in (st_in, st_ex) if s is not None]
+                    overall = "unreachable" if "unreachable" in probed else ("ok" if probed else None)
+                    if overall is not None and l.ping_status != overall:
+                        l.ping_status = overall
                         changed += 1
                     l.ping_at = now
                 db.session.commit()
@@ -2678,6 +2786,7 @@ def ping_all_links(progress=None):
                 db.session.rollback()
                 raise
         return changed
+
 
 
 def _ping_scheduler_loop():
@@ -3222,27 +3331,60 @@ def create_app():
                 cur.close()
 
         db.create_all()
-        # 增量迁移：为 users 表补充 preferences 列（SQLite 下 create_all 不会自动加列）
-        try:
-            from sqlalchemy import inspect, text
-            insp = inspect(db.engine)
-            cols = [c["name"] for c in insp.get_columns("users")]
-            if "preferences" not in cols:
+        # 增量迁移：SQLite 下 create_all 不会为已存在的表补列，需手工 ALTER。
+        # 每列独立 try：单列失败不影响其它列；失败必须打印，不能静默吞掉
+        # （曾因静默 except 导致新增列长期未落地，前端一直拿到 undefined）。
+        def _add_column(table, col, ddl_type):
+            from sqlalchemy import inspect as _inspect, text as _text
+            try:
+                insp = _inspect(db.engine)
+                existing = [c["name"] for c in insp.get_columns(table)]
+                if col in existing:
+                    return True
+            except Exception as exc:
+                print(f"[migrate] inspect {table} failed: {exc}", flush=True)
+            try:
                 with db.engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN preferences TEXT"))
+                    conn.execute(_text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl_type}"))
                     conn.commit()
+                # 释放连接池：避免后续 inspect 命中旧的表结构缓存
+                db.engine.dispose()
+                print(f"[migrate] added {table}.{col}", flush=True)
+                return True
+            except Exception as exc:
+                print(f"[migrate] FAILED to add {table}.{col}: {exc}", flush=True)
+                return False
+
+        try:
+            _add_column("users", "preferences", "TEXT")
             # links 表增量迁移：可达性探测字段
-            link_cols = [c["name"] for c in insp.get_columns("links")]
-            # Many SQLAlchemy versions return Column objects, normalize to names
-            link_col_names = [c["name"] if isinstance(c, dict) else getattr(c, "name", None) for c in link_cols]
-            link_col_names = [n for n in link_col_names if n]
-            for col in ("ping_status", "ping_at"):
-                if col not in link_col_names:
-                    with db.engine.connect() as conn:
-                        conn.execute(text(f"ALTER TABLE links ADD COLUMN {col} {'TEXT' if col == 'ping_status' else 'DATETIME'}"))
-                        conn.commit()
-        except Exception:
-            pass
+            # ping_status = 综合状态（任一地址不可达即 unreachable，供统计页聚合）
+            # ping_status_internal / ping_status_external = 按 URL 维度分别记录，
+            #   用于区分「内网通、外网不通」，让主页面板按当前生效 URL 精确标红
+            _add_column("links", "ping_status", "TEXT")
+            _add_column("links", "ping_at", "DATETIME")
+            _add_column("links", "ping_status_internal", "TEXT")
+            _add_column("links", "ping_status_external", "TEXT")
+            # 旧数据回填：拆分前只有综合 ping_status，按「链接实际拥有的地址」把它
+            # 写到对应的内/外网列，避免升级后已探测过的链接丢失状态而重新标红。
+            try:
+                from sqlalchemy import text as _text
+                with db.engine.connect() as conn:
+                    conn.execute(_text(
+                        "UPDATE links SET ping_status_internal = ping_status "
+                        "WHERE ping_status IS NOT NULL AND ping_status_internal IS NULL "
+                        "AND url_internal IS NOT NULL AND url_internal != ''"
+                    ))
+                    conn.execute(_text(
+                        "UPDATE links SET ping_status_external = ping_status "
+                        "WHERE ping_status IS NOT NULL AND ping_status_external IS NULL "
+                        "AND url_external IS NOT NULL AND url_external != ''"
+                    ))
+                    conn.commit()
+            except Exception as exc:
+                print(f"[migrate] backfill ping status failed: {exc}", flush=True)
+        except Exception as exc:
+            print(f"[migrate] unexpected error: {exc}", flush=True)
     # 启动链接可达性定时探测（后台守护线程，首次探测在后台异步执行）
     start_ping_scheduler()
     return app

@@ -128,8 +128,14 @@ class Link(db.Model):
     permission = db.Column(db.String(16), default="all")
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     # 可达性探测（系统定时 ping）：ok=可达 / unreachable=无法访问 / None=尚未检测
+    # ping_status 为「综合状态」：内外网任一 URL 不可达即 unreachable，供统计/异常页聚合；
+    # 主页面板需按当前生效的 URL 精确判断，故内外网分别记录（见下两列）。
     ping_status = db.Column(db.String(16), default=None, index=True)
     ping_at = db.Column(db.DateTime, default=None)
+    # 按 URL 维度分别记录探测结果，用于区分「内网通、外网不通」这类场景：
+    # 前端显示内网 URL 时不标红，切到外网 URL 才标红。
+    ping_status_internal = db.Column(db.String(16), default=None)
+    ping_status_external = db.Column(db.String(16), default=None)
 
     def set_link_password(self, pw):
         self.password_hash = generate_password_hash(pw)
@@ -140,7 +146,11 @@ class Link(db.Model):
 
     def to_dict(self, network="external", user=None):
         """网络模式决定返回哪个 URL（item 8 单 URL 始终显示规则在 API 层处理）。
-        has_password 按当前访问用户各自独立判断（每个用户可设置自己的访问密码）。"""
+        has_password 按当前访问用户各自独立判断（每个用户可设置自己的访问密码）。
+
+        可达性按「本次实际返回的那个 URL」判定：配了内外网双地址时，内网通、外网不通，
+        则外网模式下 unreachable=True 而内网模式为 False（反之亦然）。
+        """
         internal_only = bool(self.url_internal) and not self.url_external
         external_only = bool(self.url_external) and not self.url_internal
         if network == "internal":
@@ -149,6 +159,13 @@ class Link(db.Model):
         else:
             url = self.url_external or self.url_internal
             net = "external" if self.url_external else "internal"
+        # 取与 net 对应的那份探测结果；旧数据可能只有综合 ping_status，做一次兜底
+        if net == "internal":
+            status = self.ping_status_internal
+        else:
+            status = self.ping_status_external
+        if status is None:
+            status = self.ping_status
         has_pwd = False
         if user is not None:
             cached = getattr(self, "_has_password_cached", None)
@@ -160,6 +177,9 @@ class Link(db.Model):
             "url": url,
             "network": net,
             "network_locked": not (internal_only or external_only),  # 双 URL 时随模式切换
+            # 当前生效 URL 是否不可达（仅 unreachable 为真；None=尚未检测，不标红）
+            "unreachable": status == "unreachable",
+            "ping_status": status,
             "icon": self.icon,
             "has_password": has_pwd,
             "owner_id": self.owner_id,

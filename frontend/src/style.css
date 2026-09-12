@@ -320,6 +320,27 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   box-shadow: 0 8px 22px -16px rgb(0 0 0 / 0.8), inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
 
+/* 不可达链接卡片（danger）：常驻红色边框 + 淡红底。
+   必须用「.glass-card.card-danger」这种双类选择器显式提高特异性来覆盖下面这些规则：
+     .glass-card        -> border / background
+     .glass-card:hover  -> border-color（品牌色）
+     .dark .glass-card  -> background / border-color
+   原因：@tailwind utilities 在文件第 3 行，而 .glass-card 规则在本文件靠后位置，
+   Tailwind 的 border-error / bg-error-container 等工具类与 .glass-card 同优先级
+   (0,1,0)、但声明在前，会被后置的 .glass-card 覆盖 —— 表现为「只有 hover 时才显红」。
+   这里用 0,2,0 / 0,3,0 的特异性，无需 !important 即可稳定生效。 */
+.glass-card.card-danger,
+.glass-card.card-danger:hover {
+  border-color: rgb(var(--c-error));
+  background: rgb(var(--c-error-container) / 0.3);
+}
+
+.dark .glass-card.card-danger,
+.dark .glass-card.card-danger:hover {
+  border-color: rgb(var(--c-error));
+  background: rgb(var(--c-error-container) / 0.22);
+}
+
 /* 搜索框聚焦高亮 */
 .search-focus:focus-within {
   box-shadow: none;

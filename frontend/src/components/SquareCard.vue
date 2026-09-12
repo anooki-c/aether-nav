@@ -40,13 +40,20 @@ const catIconStyle = computed(() =>
 function onCardClick() {
   emit('open', props.link)
 }
+
+// 当前生效 URL 不可达（按当前内/外网模式判定；未检测为 null 不标红）
+const isUnreachable = computed(() => props.link.unreachable === true)
 </script>
 
 <template>
   <!-- 移动端方形卡：1:1，仅图标 + 标题（对齐 square_cards 原型） -->
   <a
-    class="aspect-square rounded-xl glass-card flex flex-col items-center justify-center gap-2 p-2 relative cursor-pointer active:scale-95 transition-[transform,box-shadow] duration-200 ease-spring overflow-hidden"
-    :class="editable ? 'ring-1 ring-brand/40' : ''"
+    class="aspect-square rounded-xl glass-card flex flex-col items-center justify-center gap-2 p-2 relative cursor-pointer active:scale-95 transition-[transform,box-shadow] duration-200 ease-spring overflow-hidden border"
+    :class="[
+      editable ? 'ring-1 ring-brand/40' : '',
+      isUnreachable ? 'card-danger' : 'border-transparent',
+    ]"
+    :title="isUnreachable ? '该链接当前无法访问' : null"
     @click.prevent="onCardClick"
   >
     <!-- 可编辑：编辑按钮（纯图标，移动端无 hover 常驻显示） -->
@@ -60,11 +67,18 @@ function onCardClick() {
       <span class="material-symbols-outlined text-[18px]">edit</span>
     </button>
 
-    <!-- 网络标识：右上角小圆点（外网=绿 / 内网=橙） -->
+    <!-- 内外网标识：右上角图标徽章（外网=地球/绿，内网=房子/橙）。
+         用「颜色 + 形状」双重编码，替代原先仅靠颜色的 2.5px 小圆点——
+         圆点尺寸过小且绿橙明度接近，移动端扫视时几乎读不出信息。 -->
     <span
-      class="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full"
-      :class="link.network === 'external' ? 'bg-success' : 'bg-warning'"
-    ></span>
+      class="absolute top-1 right-1 z-20 w-[18px] h-[18px] rounded-[5px] flex items-center justify-center"
+      :class="link.network === 'external' ? 'bg-success/15 text-success' : 'bg-warning/20 text-warning'"
+      :title="link.network === 'external' ? '外网链接' : '内网链接'"
+    >
+      <span class="material-symbols-outlined text-[12px] leading-none">
+        {{ link.network === 'external' ? 'public' : 'home' }}
+      </span>
+    </span>
 
     <!-- 加密标识：右下角（移动端缩小至 50%） -->
     <span
