@@ -40,9 +40,6 @@ const catIconStyle = computed(() =>
 function onCardClick() {
   emit('open', props.link)
 }
-
-// 当前生效 URL 不可达（按当前内/外网模式判定；未检测为 null 不标红）
-const isUnreachable = computed(() => props.link.unreachable === true)
 </script>
 
 <template>
@@ -51,9 +48,8 @@ const isUnreachable = computed(() => props.link.unreachable === true)
     class="aspect-square rounded-xl glass-card flex flex-col items-center justify-center gap-2 p-2 relative cursor-pointer active:scale-95 transition-[transform,box-shadow] duration-200 ease-spring overflow-hidden border"
     :class="[
       editable ? 'ring-1 ring-brand/40' : '',
-      isUnreachable ? 'card-danger' : 'border-transparent',
+      'border-transparent',
     ]"
-    :title="isUnreachable ? '该链接当前无法访问' : null"
     @click.prevent="onCardClick"
   >
     <!-- 可编辑：编辑按钮（纯图标，移动端无 hover 常驻显示） -->

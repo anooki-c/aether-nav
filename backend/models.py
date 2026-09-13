@@ -248,6 +248,21 @@ class UserLinkVisibility(db.Model):
     __table_args__ = (db.UniqueConstraint("user_id", "link_id"),)
 
 
+class UserFavorite(db.Model):
+    """快捷访问（收藏）链接，按用户独立一份：首页卡片区最上方的置顶快捷入口。
+
+    position 决定快捷访问区内的排列顺序（支持拖拽自定义），越小越靠前。
+    """
+
+    __tablename__ = "user_favorites"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    link_id = db.Column(db.Integer, db.ForeignKey("links.id"), nullable=False, index=True)
+    position = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "link_id"),)
+
+
 class LinkSort(db.Model):
     """主页卡片排序，按用户独立（PRD item 6）。"""
 

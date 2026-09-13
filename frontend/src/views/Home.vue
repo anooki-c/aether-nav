@@ -5,12 +5,15 @@ import { api } from '../api/client'
 import SearchHero from '../components/SearchHero.vue'
 import LinkCard from '../components/LinkCard.vue'
 import SquareCard from '../components/SquareCard.vue'
+import QuickAccess from '../components/QuickAccess.vue'
 import EntityIcon from '../components/EntityIcon.vue'
 import PasswordModal from '../components/PasswordModal.vue'
 import draggable from 'vuedraggable'
 import { hexToRgba } from '../utils/color'
 
 const groups = ref([])
+// 快捷访问区（收藏）链接：与 /api/links 同一次请求返回，按当前用户的 position 排序
+const favorites = ref([])
 const loading = ref(false)
 const pendingLink = ref(null)
 const showPwd = ref(false)
@@ -91,12 +94,15 @@ async function load(query) {
     const data = await api.links(store.network, query || '')
     if (sequence !== loadSequence) return
     groups.value = data.groups || []
+    favorites.value = data.favorites || []
     // 后端返回实际生效的网络模式（auto 时由后端按访问者 IP 判断），同步给 UI 高亮
     if (data && data.network) store.effectiveNetwork = data.network
   } catch (e) {
-    if (sequence === loadSequence) groups.value = []
-  } finally {
-    if (sequence === loadSequence) loading.value = false
+    if (sequence === loadSequence) {
+      groups.value = []
+      favorites.value = []
+    }
+  } finally {    if (sequence === loadSequence) loading.value = false
     // 首次数据就绪后，下一帧标记入场完成，后续加载不再重放动画
     if (!entranceDone.value) await nextTick().then(() => (entranceDone.value = true))
   }
@@ -156,6 +162,15 @@ async function onDragEnd(group) {
   }
 }
 
+// 快捷访问区拖拽结束：保存当前用户自己的收藏顺序
+async function onFavoriteDragEnd(ids) {
+  try {
+    await api.reorderFavorites(ids)
+  } catch (e) {
+    // 保存失败时保留本地顺序，下次加载会回到库中顺序
+  }
+}
+
 onMounted(() => load(store.searchQuery))
 // 内外网模式切换 / 链接变更后刷新
 watch(() => store.network, () => load())
@@ -195,6 +210,15 @@ watch(() => store.scrollNonce, async () => {
     </div>
 
       <div v-else key="content">
+      <!-- 快捷访问（收藏）：置顶于所有分类卡片之上，只显示图标；登录用户可拖拽排序 -->
+      <QuickAccess
+        v-if="store.showQuickAccess && favorites.length"
+        :links="favorites"
+        :sortable="!!store.token"
+        @open="openLink"
+        @reorder="onFavoriteDragEnd"
+      />
+
       <section
         v-for="(g, gi) in orderedGroups"
       :key="g.category.id"

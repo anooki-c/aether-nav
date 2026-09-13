@@ -44,10 +44,6 @@ const catIconStyle = computed(() =>
 function onCardClick() {
   emit('open', props.link)
 }
-
-// 当前生效 URL 不可达（后端按实际显示的内/外网地址分别判定；未检测为 null 不标红）。
-// 配了双地址但只有外网挂了时：内网模式不标红，切到外网模式才标红。
-const isUnreachable = computed(() => props.link.unreachable === true)
 </script>
 
 <template>
@@ -56,14 +52,9 @@ const isUnreachable = computed(() => props.link.unreachable === true)
     :class="[
       draggable ? 'cursor-grab active:cursor-grabbing' : '',
       compact ? 'p-3 h-20 gap-3' : 'p-4 h-24 gap-4',
-      // 不可达：danger 常驻红色边框 + 淡红底（样式定义在 style.css 的
-      // .glass-card.card-danger，需用双类选择器才能盖过 .glass-card 的基础边框）
-      isUnreachable
-        ? 'card-danger'
-        : 'border-transparent hover:border-brand',
+      'border-transparent hover:border-brand',
       editable ? 'ring-1 ring-brand/30' : '',
     ]"
-    :title="isUnreachable ? '该链接当前无法访问' : null"
     @click.prevent="onCardClick"
   >
     <!-- 拖拽手柄（仅拖拽时显示；vuedraggable 以 .drag-handle 为拖拽触发区，避免与卡片点击打开链接冲突） -->

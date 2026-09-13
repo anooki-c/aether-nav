@@ -45,6 +45,7 @@ from backend.models import (
     LinkSort,
     Setting,
     User,
+    UserFavorite,
     UserLinkVisibility,
     check_user_link_password,
     clear_user_link_password,
@@ -548,6 +549,23 @@ def list_links():
         }
         links = [l for l in links if l.id not in hidden]
 
+    # 快捷访问（收藏）区：取当前用户收藏、且在以上可见性过滤后依然可见的链接，
+    # 按用户自定义 position 排序（支持前端拖拽调整）。
+    # 刻意放在「搜索过滤」之前——快捷访问是常驻置顶入口，站内搜索时不应跟着结果一起变少。
+    favorites = []
+    if user is not None:
+        order = [
+            r.link_id
+            for r in UserFavorite.query.filter_by(user_id=user.id)
+            .order_by(UserFavorite.position, UserFavorite.id)
+            .all()
+        ]
+        if order:
+            by_id = {l.id: l for l in links}
+            favorites = [
+                by_id[lid].to_dict(network=network, user=user) for lid in order if lid in by_id
+            ]
+
     # 搜索过滤（站内）
     if q:
         links = [l for l in links if q in (l.title or "").lower() or q in (l.description or "").lower()]
@@ -576,7 +594,12 @@ def list_links():
         )
     # 父分类在前
     result.sort(key=lambda g: (g["category"]["parent_id"] or 0, g["category"].get("position", 0)))
-    return jsonify({"groups": result, "network": network, "count": sum(len(g["links"]) for g in result)})
+    return jsonify({
+        "groups": result,
+        "favorites": favorites,
+        "network": network,
+        "count": sum(len(g["links"]) for g in result),
+    })
 
 
 @app.route("/api/search")
@@ -730,6 +753,57 @@ def toggle_visibility(user, link_id):
     row.show_on_home = show
     db.session.commit()
     return jsonify({"ok": True, "show_on_home": show})
+
+
+@app.route("/api/links/<int:link_id>/favorite", methods=["POST"])
+@auth_required
+def toggle_favorite(user, link_id):
+    """快捷访问（收藏）开关：按当前用户独立存储，点击即时生效。
+
+    body: { favorite?: bool } —— 省略时为「取反」（前端点击一次即切换）；
+    显式传值便于前端重试或幂等设置。新收藏追加到末尾，顺序可通过
+    POST /api/favorites/reorder 拖拽调整。
+    """
+    link = Link.query.get_or_404(link_id)
+    if user.role != "admin":
+        # 普通用户只能收藏自己可见的链接（与首页同源权限模型）
+        if link.id not in {l.id for l in visible_links_for(user)}:
+            return jsonify({"error": "无权收藏该链接"}), 403
+    data = request.get_json(silent=True) or {}
+    want = data.get("favorite")
+    row = UserFavorite.query.filter_by(user_id=user.id, link_id=link_id).first()
+    next_state = (row is None) if want is None else bool(want)
+    if next_state and row is None:
+        max_pos = db.session.query(db.func.max(UserFavorite.position)).filter_by(user_id=user.id).scalar()
+        row = UserFavorite(user_id=user.id, link_id=link_id, position=int(max_pos or 0) + 1)
+        db.session.add(row)
+    elif not next_state and row is not None:
+        db.session.delete(row)
+    db.session.commit()
+    return jsonify({"ok": True, "is_favorite": next_state})
+
+
+@app.route("/api/favorites/reorder", methods=["POST"])
+@auth_required
+def reorder_favorites(user):
+    """快捷访问区拖拽排序：按传入 id 顺序重写当前用户的 position（仅本人数据）。"""
+    data = request.get_json(silent=True) or {}
+    ordered = data.get("ordered_ids")
+    if not isinstance(ordered, list):
+        return jsonify({"error": "参数无效"}), 400
+    rows = {r.link_id: r for r in UserFavorite.query.filter_by(user_id=user.id).all()}
+    pos = 0
+    for raw in ordered:
+        try:
+            lid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        row = rows.get(lid)
+        if row is not None:
+            row.position = pos
+            pos += 1
+    db.session.commit()
+    return jsonify({"ok": True, "count": pos})
 
 
 def _can_edit_link(user, link):
@@ -1369,6 +1443,9 @@ def get_settings():
         "color_scheme": Setting.get("color_scheme", "default"),
         # 站点级开关：是否将分类颜色应用到首页图标
         "show_category_colors": Setting.get("show_category_colors", "false") == "true",
+        # 快捷访问区（收藏）：是否在首页卡片区最上方显示 + 卡片尺寸 small/medium/large
+        "show_quick_access": Setting.get("show_quick_access", "true") == "true",
+        "quick_access_size": Setting.get("quick_access_size", "medium"),
         # 主页侧边栏是否显示「个人设置 / 管理后台」入口（点击头像菜单也会用到）
         "show_personal_settings": Setting.get("show_personal_settings", "true") == "true",
         "show_admin_console": Setting.get("show_admin_console", "true") == "true",
@@ -1402,12 +1479,13 @@ def update_settings(user):
         "log_retention_days", "show_personal_settings", "show_admin_console",
         "lan_cidrs", "show_password_lock", "color_scheme", "show_category_colors",
         "site_name", "site_subtitle", "site_logo", "proxy_url",
+        "show_quick_access", "quick_access_size",
     }
     saved = {}
     bool_keys = {
         "drag_sort_enabled", "open_new_tab", "compact_mode", "allow_home_edit",
         "allow_register", "show_personal_settings", "show_admin_console",
-        "show_password_lock", "show_category_colors",
+        "show_password_lock", "show_category_colors", "show_quick_access",
     }
     int_ranges = {"columns": (1, 8), "token_max_age_hours": (1, 24 * 30), "log_retention_days": (1, 3650)}
     enum_values = {
@@ -1415,6 +1493,7 @@ def update_settings(user):
         "density": {"comfortable", "compact"}, "search_box_pos": {"fixed", "scrolling"},
         "default_role": {"admin", "member", "guest"},
         "color_scheme": {"default", "macaron", "sunset", "mint", "cosmic", "berry"},
+        "quick_access_size": {"small", "medium", "large"},
     }
     if "default_engine" in data:
         legacy_labels = {item["label"].lower(): item["id"] for item in SEARCH_ENGINE_DEFAULTS}
@@ -2546,10 +2625,13 @@ def admin_all_links(user):
         LinkPassword.user_id == user.id,
         LinkPassword.link_id.in_([l.id for l in links]),
     ).all()} if links else set()
+    # 快捷访问（收藏）：每人独立，仅回传当前用户自己的收藏状态
+    favorite_ids = {r.link_id for r in UserFavorite.query.filter_by(user_id=user.id).all()}
     out = []
     for l in links:
         d = l.to_dict(user=user)
         d["is_active"] = l.is_active
+        d["is_favorite"] = l.id in favorite_ids
         d["is_owner"] = (l.owner_id == user.id)
         d["can_edit"] = (user.role == "admin" or l.owner_id == user.id)
         l._has_password_cached = l.id in password_ids

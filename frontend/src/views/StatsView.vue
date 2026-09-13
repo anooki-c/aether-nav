@@ -655,7 +655,7 @@ onBeforeUnmount(() => { destroyCharts() })
         <div class="flex items-start justify-between mb-1 flex-wrap gap-2">
           <div>
             <h2 class="font-headline-sm text-headline-sm text-text-primary">链接健康度</h2>
-            <p class="text-label-sm text-text-secondary">长尾、空壳与可达性（系统每 10 分钟自动 ping 探测）</p>
+            <p class="text-label-sm text-text-secondary">长尾与空壳分类统计（系统每 10 分钟自动 ping 探测）</p>
           </div>
           <button @click="recheckLinks" :disabled="pinging"
             class="px-3 py-1.5 rounded-lg text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all flex items-center gap-1 disabled:opacity-60">
@@ -667,7 +667,7 @@ onBeforeUnmount(() => { destroyCharts() })
           最近探测：{{ linkPing.last_ping_at ? linkPing.last_ping_at.slice(0, 16).replace('T', ' ') : '尚未探测' }}
           <span class="ml-2">已探测 {{ linkPing.reachable + linkPing.unreachable }} · 未探测 {{ linkPing.unchecked }}</span>
         </p>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="rounded-xl bg-surface-container p-4">
             <div class="text-label-sm text-text-secondary">零点击链接</div>
             <div class="font-headline-md text-headline-md text-warning mt-1">{{ health.zero_click_links }}</div>
@@ -687,11 +687,6 @@ onBeforeUnmount(() => { destroyCharts() })
             <div class="text-label-sm text-text-secondary">子分类总数</div>
             <div class="font-headline-md text-headline-md text-text-primary mt-1">{{ health.categories_total }}</div>
             <div class="text-label-sm text-text-secondary mt-1">含链接 {{ health.categories_total - health.empty_categories }}</div>
-          </div>
-          <div class="rounded-xl bg-surface-container p-4 border border-error/30">
-            <div class="text-label-sm text-text-secondary">无法访问</div>
-            <div class="font-headline-md text-headline-md mt-1" :class="linkPing.unreachable > 0 ? 'text-error' : 'text-success'">{{ linkPing.unreachable }}</div>
-            <div class="text-label-sm text-text-secondary mt-1">可达 {{ linkPing.reachable }}</div>
           </div>
         </div>
       </div>

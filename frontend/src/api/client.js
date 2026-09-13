@@ -75,6 +75,10 @@ export const api = {
   // ---------- 链接：排序 / 显隐 / 改删 ----------
   reorderLinks: (categoryId, orderedIds) => request('/links/reorder', json({ category_id: categoryId, ordered_ids: orderedIds })),
   setVisibility: (linkId, show) => request(`/links/${linkId}/visibility`, json({ show_on_home: show })),
+  // 快捷访问（收藏）开关：每人独立，点击即时生效；省略 favorite 时为取反
+  setFavorite: (linkId, favorite) => request(`/links/${linkId}/favorite`, json({ favorite })),
+  // 快捷访问区拖拽排序：按传入 id 顺序重写当前用户的 position
+  reorderFavorites: (orderedIds) => request('/favorites/reorder', json({ ordered_ids: orderedIds })),
   getLink: (id) => request(`/links/${id}`),
   updateLink: (id, payload) => request(`/links/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
   deleteLink: (id) => request(`/links/${id}`, { method: 'DELETE' }),

@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { store, bumpLinks, loadSettings, COLOR_SCHEMES } from '../store'
+import { store, bumpLinks, loadSettings, applyTheme, COLOR_SCHEMES } from '../store'
 import { api } from '../api/client'
 import AddLinkModal from '../components/AddLinkModal.vue'
 import PermissionEditModal from '../components/PermissionEditModal.vue'
@@ -89,6 +89,8 @@ const filterPwd = ref('') // '' | 'set' | 'unset'
 const filterPerm = ref('') // '' | 'all' | 'registered' | 'admin' | 'self'
 // 标题关键字筛选
 const filterTitle = ref('')
+// 快捷访问（收藏）筛选：'' | 'yes' | 'no'
+const filterFav = ref('')
 const linkSubTab = ref('all') // all | archived
 const linksPage = ref(1)
 const linksPageSize = ref(10)
@@ -197,6 +199,9 @@ const filteredLinks = computed(() => {
     if (filterPwd.value === 'unset' && l.has_password) return false
     // 权限筛选
     if (filterPerm.value && l.permission !== filterPerm.value) return false
+    // 快捷访问（收藏）筛选
+    if (filterFav.value === 'yes' && !l.is_favorite) return false
+    if (filterFav.value === 'no' && l.is_favorite) return false
     // 标题关键字筛选
     if (filterTitle.value && !(l.title || '').toLowerCase().includes(filterTitle.value.trim().toLowerCase())) return false
     return true
@@ -314,9 +319,26 @@ async function toggleHome(l) {
   }
 }
 
+// Material Symbols 星标：收藏后通过 FILL 轴切换为实心（项目内既有写法）
+function favStarStyle(isFav) {
+  return isFav ? { fontVariationSettings: "'FILL' 1" } : null
+}
+
+// 快捷访问（收藏）开关：点击星标即时生效，按当前登录用户独立存储
+async function toggleFav(l) {  const next = !l.is_favorite
+  l.is_favorite = next // 乐观更新
+  try {
+    const res = await api.setFavorite(l.id, next)
+    if (res && typeof res.is_favorite === 'boolean') l.is_favorite = res.is_favorite
+    bumpLinks() // 首页快捷访问区随之刷新
+  } catch (e) {
+    l.is_favorite = !next // 失败回滚
+    msg.value = e.message
+  }
+}
+
 // ---------- 编辑链接 ----------
-function openEdit(l) {
-  editTarget.value = l
+function openEdit(l) {  editTarget.value = l
   // 确定分类的父级
   let parentId = ''
   for (const p of store.tree) {
@@ -903,7 +925,7 @@ function addCustomSearchEngine() {
   searchEngines.value.push({ id, label, url, enabled: true })
   newEngineLabel.value = ''
   newEngineUrl.value = ''
-  msg.value = '已添加自定义搜索引擎，请保存更改'
+  msg.value = '已添加自定义搜索引擎'
 }
 
 function removeSearchEngine(engine) {
@@ -941,6 +963,16 @@ const showPasswordLock = ref(true)
 const siteColorScheme = ref('default')
 const colorSchemeOpen = ref(false)
 const showCategoryColors = ref(false)
+// 快捷访问区（收藏）：是否显示 + 卡片尺寸 small | medium | large
+const showQuickAccess = ref(true)
+const quickAccessSize = ref('medium')
+// 站点默认主题（全站生效，与管理员本机主题 store.theme 分开）——实时保存到 theme
+const siteDefaultTheme = ref('light')
+const THEME_OPTIONS = [
+  { k: 'light', l: '浅色', i: 'light_mode' },
+  { k: 'dark', l: '深色', i: 'dark_mode' },
+  { k: 'system', l: '跟随系统', i: 'auto_mode' },
+]
 
 // 局域网网段（快速添加时用于识别内网地址，缺省走 RFC1918 私有段）
 const lanCidrs = ref('')
@@ -980,6 +1012,7 @@ function onPickEditIcon(name) {
 
 // 进入设置页时回填已保存的站点设置（否则永远显示默认值）
 async function fetchSettings() {
+  hydrating = true // 回填期间抑制自动保存，避免把回填当成用户修改又写回去
   try {
     const data = await api.getSettings()
     const configuredEngines = Array.isArray(data.search_engines) && data.search_engines.length
@@ -1010,54 +1043,223 @@ async function fetchSettings() {
     showPasswordLock.value = data.show_password_lock !== false
     siteColorScheme.value = data.color_scheme || 'default'
     showCategoryColors.value = data.show_category_colors === true
+    showQuickAccess.value = data.show_quick_access !== false
+    quickAccessSize.value = data.quick_access_size || 'medium'
     lanCidrs.value = data.lan_cidrs || ''
     siteName.value = data.site_name || '云航导航'
     siteSubtitle.value = data.site_subtitle || ''
     siteLogo.value = data.site_logo || ''
     proxyUrl.value = data.proxy_url || ''
+    // 站点默认主题：与「我的界面主题」分开——前者全站生效，后者只影响本人
+    siteDefaultTheme.value = data.theme || 'light'
+    // 记录基准值：自动保存的「无变化不发请求」判断与保存失败回滚都依赖它
+    Object.entries(AUTO_KEYS).forEach(([key, [source]]) => {
+      const v = normalizeSetting(key, source.value)
+      if (v !== undefined) {
+        lastGood[key] = v
+        lastSent[key] = v
+      }
+    })
+    const sp = searchEnginePayload()
+    lastGood.search_engines = sp.search_engines
+    lastSent.search_engines = sp.search_engines
+    lastGood.default_engine = sp.default_engine
+    lastSent.default_engine = sp.default_engine
   } catch (e) {
     // 接口读取失败时也保留可用的默认引擎，避免下拉框为空
     if (!searchEngines.value.length) searchEngines.value = cloneDefaultSearchEngines()
+  } finally {
+    // 等本次回填触发的 watcher 跑完再开闸，否则会把回填值当成用户修改写回去
+    nextTick(() => { hydrating = false })
   }
 }
 
-async function saveSettings() {
-  try {
-    const enabledExternal = searchEngines.value.filter((item) => item.enabled !== false && item.id !== 'local')
-    if (!enabledExternal.some((item) => item.id === defaultEngine.value)) {
-      defaultEngine.value = enabledExternal[0]?.id || 'google'
-    }
-    await api.updateSettings({
-      default_engine: defaultEngine.value,
-      search_engines: searchEngines.value.map(({ id, label, url, enabled }) => ({ id, label, url, enabled: enabled !== false })),
-      open_new_tab: openNewTab.value,
-      theme: store.theme,
-      density: density.value,
-      search_box_pos: searchBoxPos.value,
-      columns: columns.value,
-      compact_mode: compactMode.value,
-      allow_home_edit: allowHomeEdit.value,
-      allow_register: allowRegister.value,
-      default_role: defaultRole.value,
-      token_max_age_hours: Number(tokenMaxAgeHours.value) || 168,
-      log_retention_days: Number(logRetentionDays.value) || 90,
-      network: defaultNetwork.value,
-      show_personal_settings: showPersonalSettings.value,
-      show_admin_console: showAdminConsole.value,
-      show_password_lock: showPasswordLock.value,
-      color_scheme: siteColorScheme.value,
-      show_category_colors: showCategoryColors.value,
-      lan_cidrs: lanCidrs.value,
-      site_name: siteName.value,
-      site_subtitle: siteSubtitle.value,
-      site_logo: siteLogo.value,
-      proxy_url: proxyUrl.value,
-    })
-    // 同步到全局 store，前台无需刷新即可生效（如搜索框位置）
-    await loadSettings()
-    msg.value = '设置已保存'
-  } catch (e) { msg.value = e.message }
+// ==================== 站点设置：实时保存引擎 ====================
+// 设置页不再需要「保存更改」：控件改动后自动 PUT 对应字段并立即生效。
+// 后端 PUT /api/admin/settings 本就支持部分更新（只写请求体里出现的 key），
+// 所以这里每次只发变化的那一个（或一组）字段。约定：
+//   - 开关 / 分段 / 下拉：改动即保存
+//   - 文本框与滑块：防抖后保存，避免每敲一个字就写库
+//   - 搜索清单与默认引擎强耦合（停用/删除默认引擎时后端会拒绝）→ 组合提交
+//   - 保存失败：界面回滚到上一次成功落库的值，并提示原因
+//   - 保存成功：底部给 6 秒「撤销」窗口——站点设置对所有人生效，误触代价高
+let hydrating = false // fetchSettings 回填期间抑制自动保存
+const suppress = new Set() // 回滚 / 撤销期间的抑制标记（按字段）
+const lastGood = {} // 字段 -> 最近一次成功落库的值（回滚 / 撤销基准）
+const lastSent = {} // 字段 -> 最近一次发起或在途的值（去重用，避免在途时重复提交）
+const saveTimers = new Map() // 字段 -> 防抖定时器
+const savingCount = ref(0) // 进行中的保存请求数
+const lastUndo = ref(null) // 最近一次保存的撤销快照
+let undoTimer = null
+
+// 字段 -> [数据源 ref, 防抖毫秒]。未列入的字段（搜索清单）走专用组合提交。
+const AUTO_KEYS = {
+  allow_home_edit: [allowHomeEdit, 0],
+  allow_register: [allowRegister, 0],
+  default_role: [defaultRole, 0],
+  network: [defaultNetwork, 0],
+  show_personal_settings: [showPersonalSettings, 0],
+  show_admin_console: [showAdminConsole, 0],
+  show_password_lock: [showPasswordLock, 0],
+  open_new_tab: [openNewTab, 0],
+  search_box_pos: [searchBoxPos, 0],
+  density: [density, 0],
+  compact_mode: [compactMode, 0],
+  color_scheme: [siteColorScheme, 0],
+  theme: [siteDefaultTheme, 0], // 站点默认主题（不是管理员本机主题）
+  show_category_colors: [showCategoryColors, 0],
+  show_quick_access: [showQuickAccess, 0],
+  quick_access_size: [quickAccessSize, 0],
+  columns: [columns, 350],
+  token_max_age_hours: [tokenMaxAgeHours, 600],
+  log_retention_days: [logRetentionDays, 600],
+  lan_cidrs: [lanCidrs, 600],
+  proxy_url: [proxyUrl, 600],
+  site_name: [siteName, 600],
+  site_subtitle: [siteSubtitle, 600],
+  site_logo: [siteLogo, 600],
 }
+
+// 数字字段取值范围（与后端 int_ranges 一致）：越界就地夹紧，而不是发一个必然 400 的值
+const NUM_RANGES = { columns: [2, 8], token_max_age_hours: [1, 720], log_retention_days: [1, 3650] }
+
+function normalizeSetting(key, value) {
+  const range = NUM_RANGES[key]
+  if (!range) return value
+  const n = Number(value)
+  if (!Number.isFinite(n)) return undefined // 输入框被清空的中间态：暂不提交
+  return Math.min(range[1], Math.max(range[0], Math.round(n)))
+}
+
+function sameValue(a, b) {
+  return a === b || JSON.stringify(a) === JSON.stringify(b)
+}
+
+// 把某字段的界面值改回去（回滚 / 撤销），并抑制由此触发的自动保存
+function setLocalSetting(key, value) {
+  const entry = AUTO_KEYS[key]
+  if (!entry || sameValue(entry[0].value, value)) return
+  suppress.add(key)
+  entry[0].value = value
+  nextTick(() => suppress.delete(key))
+}
+
+// 搜索清单 + 默认引擎：一起提交。后端对 search_engines 的校验是拿「新清单」去校验
+// 「当前保存的默认引擎」——若这次改动恰好停用/删除了默认引擎，单发清单会被拒（400），
+// 所以这里同时带上自动纠正后的 default_engine。
+function searchEnginePayload() {
+  const list = searchEngines.value.map(({ id, label, url, enabled }) => ({
+    id,
+    label,
+    url,
+    enabled: enabled !== false,
+  }))
+  const enabledExternal = list.filter((item) => item.enabled && item.id !== 'local')
+  let de = defaultEngine.value
+  if (!enabledExternal.some((item) => item.id === de)) {
+    // 默认引擎被删除/停用时就近选第一个可用引擎（与旧版整表保存的行为一致）
+    de = enabledExternal[0]?.id || 'google'
+    defaultEngine.value = de
+  }
+  return { search_engines: list, default_engine: de }
+}
+
+function scheduleSave(key, delay, buildPayload) {
+  const timer = saveTimers.get(key)
+  if (timer) clearTimeout(timer)
+  const run = async () => {
+    saveTimers.delete(key)
+    const payload = buildPayload()
+    if (!payload) return
+    // 与「最近一次发起过的值」一致（例如搜索清单自动纠正默认引擎后的二次触发、
+    // 撤销回原值）→ 不产生无谓请求。注意比对 lastSent 而不是 lastGood：
+    // 前一次保存可能仍在途，此时 lastGood 还是旧值，用它会漏掉真实的后续改动。
+    const keys = Object.keys(payload)
+    if (keys.every((k) => k in lastSent && sameValue(lastSent[k], payload[k]))) return
+    await persistSettings(payload)
+  }
+  if (delay > 0) saveTimers.set(key, setTimeout(run, delay))
+  else run()
+}
+
+// 串行化所有设置保存：快速连点开关时并行请求可能乱序落库，导致最终值不是用户最后选的那个
+let saveQueue = Promise.resolve()
+
+function persistSettings(payload) {
+  const task = () => doSaveSettings(payload)
+  saveQueue = saveQueue.then(task, task)
+  return saveQueue
+}
+
+async function doSaveSettings(payload) {
+  const keys = Object.keys(payload)
+  const before = {} // 上次成功落库值：用于失败回滚与撤销
+  const prevSent = {} // 上次发起值：失败后还原去重基准
+  keys.forEach((k) => {
+    if (k in lastGood) before[k] = lastGood[k]
+    prevSent[k] = lastSent[k]
+  })
+  keys.forEach((k) => { lastSent[k] = payload[k] }) // 占位，避免在途期间重复提交同一值
+  savingCount.value++
+  try {
+    await api.updateSettings(payload)
+    keys.forEach((k) => { lastGood[k] = payload[k] })
+    // 同步全局 store：前台不刷新即生效（如搜索框位置、首页卡片布局）
+    await loadSettings()
+    offerUndo(before)
+  } catch (e) {
+    keys.forEach((k) => {
+      if (prevSent[k] === undefined) delete lastSent[k]
+      else lastSent[k] = prevSent[k]
+    })
+    rollbackSettings(before)
+    msg.value = e.message || '设置保存失败'
+  } finally {
+    savingCount.value--
+  }
+}
+
+// 回滚：能定位到界面字段的直接回填；组合字段（搜索清单）没有单字段映射，重新拉取为准
+function rollbackSettings(before) {
+  const keys = Object.keys(before)
+  if (!keys.length || !keys.every((k) => AUTO_KEYS[k])) {
+    fetchSettings()
+    return
+  }
+  keys.forEach((k) => setLocalSetting(k, before[k]))
+}
+
+function offerUndo(before) {
+  if (!Object.keys(before).length) return
+  lastUndo.value = { payload: { ...before } }
+  if (undoTimer) clearTimeout(undoTimer)
+  undoTimer = setTimeout(() => { lastUndo.value = null }, 6000)
+}
+
+async function undoLastChange() {
+  const snapshot = lastUndo.value
+  if (!snapshot) return
+  lastUndo.value = null
+  if (undoTimer) clearTimeout(undoTimer)
+  await persistSettings(snapshot.payload)
+}
+
+// 注册自动保存：哪个字段变了就保存哪个
+Object.entries(AUTO_KEYS).forEach(([key, [source, delay]]) => {
+  watch(source, () => {
+    if (hydrating || suppress.has(key)) return
+    scheduleSave(key, delay, () => {
+      const value = normalizeSetting(key, source.value)
+      return value === undefined ? null : { [key]: value }
+    })
+  })
+})
+
+// 搜索偏好：增删/启停/改名/改地址/拖拽任一变化都触发「清单 + 默认引擎」组合提交
+watch([searchEngines, defaultEngine], () => {
+  if (hydrating) return
+  scheduleSave('__search__', 600, searchEnginePayload)
+}, { deep: true })
 
 // 站点 logo 上传：复用 /api/upload/icon，返回本地路径写回 site_logo
 async function onLogoUpload(e) {
@@ -1067,7 +1269,7 @@ async function onLogoUpload(e) {
   try {
     const data = await api.uploadIcon(file)
     siteLogo.value = data.path
-    msg.value = 'Logo 已上传，记得点「保存更改」生效'
+    msg.value = 'Logo 已上传，已实时生效'
   } catch (err) {
     msg.value = err.message || 'Logo 上传失败'
   } finally {
@@ -1340,6 +1542,14 @@ onMounted(async () => {
                 </select>
               </div>
               <div class="flex items-center gap-2">
+                <label class="font-label-sm text-label-sm text-text-secondary">快捷访问:</label>
+                <select v-model="filterFav" class="bg-bg-card border border-outline-variant rounded-lg px-3 py-1.5 font-body-sm text-body-sm focus:outline-none focus:border-primary">
+                  <option value="">全部</option>
+                  <option value="yes">已收藏</option>
+                  <option value="no">未收藏</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
                 <label class="font-label-sm text-label-sm text-text-secondary">标题:</label>
                 <input v-model="filterTitle" type="text" placeholder="搜索标题…" class="bg-bg-card border border-outline-variant rounded-lg px-3 py-1.5 font-body-sm text-body-sm focus:outline-none focus:border-primary w-40" />
               </div>
@@ -1388,6 +1598,7 @@ onMounted(async () => {
                       <th class="py-4 px-6 font-headline-sm text-headline-sm text-on-surface-variant font-semibold">密码</th>
                       <th class="py-4 px-6 font-headline-sm text-headline-sm text-on-surface-variant font-semibold">权限</th>
                       <th class="py-4 px-6 font-headline-sm text-headline-sm text-on-surface-variant font-semibold">是否主页显示</th>
+                      <th class="py-4 px-6 font-headline-sm text-headline-sm text-on-surface-variant font-semibold">快捷访问</th>
                       <th class="py-4 px-6 font-headline-sm text-headline-sm text-on-surface-variant font-semibold text-right">操作</th>
                     </tr>
                   </thead>
@@ -1455,6 +1666,14 @@ onMounted(async () => {
                             :class="l.show_on_home ? 'translate-x-5' : ''"></span>
                         </button>
                       </td>
+                      <td class="py-4 px-6">
+                        <button type="button" @click="toggleFav(l)"
+                          :title="l.is_favorite ? '已加入快捷访问，点击取消' : '加入首页快捷访问区'"
+                          class="p-2 rounded-md transition-colors"
+                          :class="l.is_favorite ? 'bg-warning/20 text-warning' : 'text-outline-variant hover:bg-surface-container hover:text-on-surface-variant'">
+                          <span class="material-symbols-outlined text-[20px]" :style="favStarStyle(l.is_favorite)">star</span>
+                        </button>
+                      </td>
                       <td class="py-4 px-6 text-right">
                         <div class="flex justify-end gap-2">
                           <button v-if="isAdmin" class="p-2 bg-success/10 text-success rounded-md hover:bg-success/20 transition-colors" title="权限矩阵：查看哪些用户能看此链接" @click="openMatrix(l)">
@@ -1470,7 +1689,7 @@ onMounted(async () => {
                       </td>
                     </tr>
                     <tr v-if="!pagedLinks.length">
-                      <td colspan="11" class="py-10 text-center text-on-surface-variant">无内容</td>
+                      <td colspan="12" class="py-10 text-center text-on-surface-variant">无内容</td>
                     </tr>
                   </tbody>
                 </table>
@@ -2088,7 +2307,7 @@ onMounted(async () => {
                       <div class="font-body-sm text-body-sm text-on-surface">登录有效期（小时）</div>
                       <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">令牌自动失效时间，默认 168（7 天）</div>
                     </div>
-                    <input type="number" min="1" max="8760" v-model.number="tokenMaxAgeHours" class="block w-24 px-3 py-1.5 text-sm border border-outline-variant rounded-lg bg-surface shrink-0 focus:outline-none focus:ring-1 focus:ring-primary" />
+                    <input type="number" min="1" max="720" v-model.number="tokenMaxAgeHours" class="block w-24 px-3 py-1.5 text-sm border border-outline-variant rounded-lg bg-surface shrink-0 focus:outline-none focus:ring-1 focus:ring-primary" />
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
                     <div class="min-w-0">
@@ -2228,6 +2447,29 @@ onMounted(async () => {
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
                       <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="density === 'comfortable' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'comfortable'">舒适</button>
                       <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="density === 'compact' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'compact'">紧凑</button>
+                    </div>
+                  </div>
+
+                  <!-- 快捷访问（收藏）：首页卡片区最上方的置顶图标区 -->
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">显示快捷访问区</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">在首页卡片区最上方显示已收藏链接的图标区</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="showQuickAccess" class="sr-only peer">
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40" :class="showQuickAccess ? '' : 'opacity-50'">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">快捷访问卡片大小</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">大 / 中 / 小三档，只影响该区域的图标尺寸</div>
+                    </div>
+                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="quickAccessSize === 'large' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'large'">大</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="quickAccessSize === 'medium' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'medium'">中</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="quickAccessSize === 'small' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'small'">小</button>
                     </div>
                   </div>
                 </div>
@@ -2381,11 +2623,20 @@ onMounted(async () => {
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
                     <div class="min-w-0">
-                      <div class="font-body-sm text-body-sm text-on-surface">界面主题</div>
-                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">浅色 / 深色 / 跟随系统</div>
+                      <div class="font-body-sm text-body-sm text-on-surface">我的界面主题</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅对本人生效，选择后立即存入个人设置</div>
                     </div>
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button v-for="t in [{k:'light',l:'浅色',i:'light_mode'},{k:'dark',l:'深色',i:'dark_mode'},{k:'system',l:'跟随系统',i:'auto_mode'}]" :key="t.k" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="store.theme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="store.theme = t.k"><span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">{{ t.i }}</span>{{ t.l }}</span></button>
+                      <button v-for="t in THEME_OPTIONS" :key="t.k" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="store.theme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="applyTheme(t.k, true)"><span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">{{ t.i }}</span>{{ t.l }}</span></button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="min-w-0">
+                      <div class="font-body-sm text-body-sm text-on-surface">站点默认主题</div>
+                      <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">未设置个人主题的用户默认使用（对所有人生效）</div>
+                    </div>
+                    <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
+                      <button v-for="t in THEME_OPTIONS" :key="t.k" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="siteDefaultTheme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="siteDefaultTheme = t.k"><span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">{{ t.i }}</span>{{ t.l }}</span></button>
                     </div>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
@@ -2433,9 +2684,15 @@ onMounted(async () => {
             </div>
             </div>
 
-            <div class="mt-8 flex justify-end gap-4 border-t border-outline-variant/30 pt-6">
-              <button class="ui-btn ui-btn-ghost px-6 py-2 rounded-lg font-body-sm text-body-sm">取消</button>
-              <button class="ui-btn ui-btn-primary px-6 py-2 rounded-lg font-body-sm text-body-sm" @click="saveSettings">保存更改</button>
+            <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-outline-variant/30 pt-6">
+              <p class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[17px]">{{ savingCount > 0 ? 'sync' : 'cloud_done' }}</span>
+                <span>{{ savingCount > 0 ? '正在保存…' : '设置实时保存，改动立即生效' }}</span>
+              </p>
+              <button v-if="lastUndo" @click="undoLastChange"
+                class="ui-btn ui-btn-ghost px-4 py-2 rounded-lg font-body-sm text-body-sm flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[18px]">undo</span>撤销刚才的修改
+              </button>
             </div>
           </section>
 

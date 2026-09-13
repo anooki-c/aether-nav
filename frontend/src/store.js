@@ -72,6 +72,9 @@ export const store = reactive({
   colorScheme: 'default',
   // 站点级开关：是否将分类颜色应用到首页图标（分类图标 + 其下链接卡片图标背景）
   showCategoryColors: false,
+  // 站点级开关：首页卡片区最上方的「快捷访问」区是否显示 + 卡片尺寸 small | medium | large
+  showQuickAccess: true,
+  quickAccessSize: 'medium',
   allowHomeEdit: true, // 站点设置：是否允许用户自定义主页（添加/拖拽排序）
   lanCidrs: '', // 站点设置：管理员补充的自定义局域网网段（换行/逗号分隔）
   // 首页是否可编辑：派生自「登录 + 站点允许主页编辑(allowHomeEdit)」，见 canEditHome，不再单独维护编辑模式开关
@@ -157,6 +160,8 @@ export async function loadSettings() {
     store.siteTheme = data.theme || 'light'
     store.siteColorScheme = data.color_scheme || 'default'
     store.showCategoryColors = data.show_category_colors === true
+    store.showQuickAccess = data.show_quick_access !== false
+    store.quickAccessSize = data.quick_access_size || 'medium'
     store.allowHomeEdit = data.allow_home_edit !== false
     store.showPersonalSettings = data.show_personal_settings !== false
     store.showAdminConsole = data.show_admin_console !== false
@@ -197,6 +202,8 @@ export function applyUserPrefs(prefs) {
   if (prefs.network) setNetwork(prefs.network, false)
   else if (store.siteNetwork) store.network = store.siteNetwork
   if (prefs.theme) applyTheme(prefs.theme, false)
+  // 个人未设置主题时回退到站点默认主题（与 network / color_scheme 的兜底保持一致）
+  else if (store.siteTheme) applyTheme(store.siteTheme, false)
   if (prefs.color_scheme) applyColorScheme(prefs.color_scheme, false)
   else applyColorScheme(store.siteColorScheme, false)
   if (prefs.weather_city) {
