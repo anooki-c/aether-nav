@@ -319,9 +319,16 @@ async function toggleHome(l) {
   }
 }
 
-// Material Symbols 星标：收藏后通过 FILL 轴切换为实心（项目内既有写法）
-function favStarStyle(isFav) {
-  return isFav ? { fontVariationSettings: "'FILL' 1" } : null
+// Material Symbols 的 FILL 轴：开 = 1（实心），关 = 0（描边，返回 null 即用默认）。
+// 开关型按钮（收藏 / 主页显示 / 访问密码）统一靠它表达状态，不再用 toggle 开关。
+function fillStyle(on) {
+  return on ? { fontVariationSettings: "'FILL' 1" } : null
+}
+
+// 可见权限的中文文案（移动端卡片用，与表格里的下拉选项保持一致）
+const PERM_TEXT = { all: '所有人', registered: '注册用户', admin: '管理员', self: '仅自己' }
+function permText(perm) {
+  return PERM_TEXT[perm] || PERM_TEXT.all
 }
 
 // 快捷访问（收藏）开关：点击星标即时生效，按当前登录用户独立存储
@@ -1582,7 +1589,8 @@ onMounted(async () => {
             </div>
 
             <div class="bg-bg-card rounded-[16px] shadow-sm overflow-hidden border border-outline-variant/30">
-              <div class="overflow-x-auto">
+              <!-- PC 端：11 列表格（原样保留，仅加 hidden md:block 让位给移动端卡片） -->
+              <div class="overflow-x-auto hidden md:block">
                 <table class="w-full text-left border-collapse">
                   <thead>
                     <tr class="border-b border-outline-variant/50 bg-surface-container-lowest">
@@ -1671,7 +1679,7 @@ onMounted(async () => {
                           :title="l.is_favorite ? '已加入快捷访问，点击取消' : '加入首页快捷访问区'"
                           class="p-2 rounded-md transition-colors"
                           :class="l.is_favorite ? 'bg-warning/20 text-warning' : 'text-outline-variant hover:bg-surface-container hover:text-on-surface-variant'">
-                          <span class="material-symbols-outlined text-[20px]" :style="favStarStyle(l.is_favorite)">star</span>
+                          <span class="material-symbols-outlined text-[20px]" :style="fillStyle(l.is_favorite)">star</span>
                         </button>
                       </td>
                       <td class="py-4 px-6 text-right">
@@ -1694,6 +1702,102 @@ onMounted(async () => {
                   </tbody>
                 </table>
               </div>
+
+              <!-- 移动端：一链接一卡。原来的 11 列拆成「标题+元信息 / 地址 / 按钮」三段，
+                   每段都有 ≥4 个汉字的可用宽度，中文不再逐字竖排。 -->
+              <div class="md:hidden p-3">
+                <div v-for="l in pagedLinks" :key="l.id" class="m-lcard">
+                  <div class="m-lcard-top">
+                    <span class="m-lcard-check">
+                      <input type="checkbox" :checked="isLinkSelected(l.id)" @change="toggleLinkSelect(l.id)" />
+                    </span>
+                    <span class="m-lcard-ico">
+                      <EntityIcon :icon="l.icon" :fallback="getLinkIcon(l.title)" :size="24" :alt="l.title" />
+                    </span>
+                    <span class="m-lcard-head">
+                      <span class="m-lcard-title">{{ l.title }}</span>
+                      <!-- 分类 / 添加人 / 权限范围（+ 含内网）收在标题正下方 -->
+                      <span class="m-lcard-sub">
+                        <span v-if="l.parent_category_name" class="m-tag">{{ l.parent_category_name }} › {{ l.category_name }}</span>
+                        <span v-else class="m-tag">{{ l.category_name }}</span>
+                        <span class="m-tag">{{ l.owner_name }}</span>
+                        <span class="m-tag is-pri">{{ permText(l.permission) }}</span>
+                        <span v-if="l.url_internal" class="m-tag is-warn">含内网</span>
+                      </span>
+                    </span>
+                  </div>
+
+                  <div class="mt-2.5">
+                    <div class="m-kv">
+                      <span class="k">外网</span>
+                      <button v-if="l.url_external" type="button" class="v text-left text-primary hover:underline" @click="openLinkUrl(l, 'external')">{{ l.url_external }}</button>
+                      <span v-else class="v text-text-secondary/60">—</span>
+                    </div>
+                    <div class="m-kv">
+                      <span class="k">内网</span>
+                      <button v-if="l.url_internal" type="button" class="v text-left text-primary hover:underline" @click="openLinkUrl(l, 'internal')">{{ l.url_internal }}</button>
+                      <span v-else class="v text-text-secondary/60">—</span>
+                    </div>
+                    <div class="m-kv">
+                      <span class="k">可见性</span>
+                      <span class="v">
+                        <select
+                          :value="l.permission || 'all'"
+                          class="w-full min-h-[40px] bg-bg-card border border-outline-variant rounded-lg px-2 text-[13px] focus:outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                          :disabled="l.owner_id !== store.user.id"
+                          :title="l.owner_id === store.user.id ? '修改此链接的可见权限' : '仅添加人可修改权限'"
+                          @change="changePerm(l, $event.target.value)"
+                        >
+                          <option value="all">所有人</option>
+                          <option value="registered">注册用户</option>
+                          <option value="admin">管理员</option>
+                          <option value="self">仅自己</option>
+                        </select>
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- 六个按钮一排：图标在上、短标签在下。
+                       前三个是开关项（靠图标字形 + 填充/底色表达状态，再点取消），后三个是操作。
+                       · 密码：开锁 lock_open（未设）/ 上锁 lock（已设）—— 点击仍弹原有弹窗
+                       · 主页：睁眼 visibility / 闭眼 visibility_off
+                       · 快捷：五角星，FILL 轴切实心 / 空心 -->
+                  <div class="m-acts is-icon">
+                    <button type="button"
+                      :title="l.has_password ? '已设访问密码，点击修改 / 取消' : '未设访问密码，点击设置'"
+                      class="m-act"
+                      :class="l.has_password ? 'is-on' : ''"
+                      @click="l.has_password ? openUpdatePwd(l) : openSetPwd(l)">
+                      <span class="material-symbols-outlined" :style="fillStyle(l.has_password)">{{ l.has_password ? 'lock' : 'lock_open' }}</span>密码
+                    </button>
+                    <button type="button"
+                      :title="l.show_on_home ? '主页显示中，点击隐藏' : '已隐藏，点击在主页显示'"
+                      class="m-act"
+                      :class="l.show_on_home ? 'is-on' : ''"
+                      @click="toggleHome(l)">
+                      <span class="material-symbols-outlined" :style="fillStyle(l.show_on_home)">{{ l.show_on_home ? 'visibility' : 'visibility_off' }}</span>主页
+                    </button>
+                    <button type="button"
+                      :title="l.is_favorite ? '已加入快捷访问，点击取消' : '加入首页快捷访问区'"
+                      class="m-act is-warn"
+                      :class="l.is_favorite ? 'is-on' : ''"
+                      @click="toggleFav(l)">
+                      <span class="material-symbols-outlined" :style="fillStyle(l.is_favorite)">star</span>快捷
+                    </button>
+                    <button v-if="isAdmin" type="button" class="m-act" title="权限矩阵：查看哪些用户能看此链接" @click="openMatrix(l)">
+                      <span class="material-symbols-outlined">grid_view</span>权限
+                    </button>
+                    <button type="button" class="m-act is-pri" title="编辑" @click="openEdit(l)">
+                      <span class="material-symbols-outlined">edit</span>编辑
+                    </button>
+                    <button v-if="l.can_edit" type="button" class="m-act is-danger" title="删除" @click="delLink(l)">
+                      <span class="material-symbols-outlined">delete</span>删除
+                    </button>
+                  </div>
+                </div>
+                <div v-if="!pagedLinks.length" class="py-10 text-center text-on-surface-variant">无内容</div>
+              </div>
+
               <div class="border-t border-outline-variant/50 p-4 flex flex-wrap items-center justify-between gap-3 bg-surface-container-lowest rounded-b-[16px]">
                 <div class="flex items-center gap-3">
                   <span class="font-body-sm text-body-sm text-on-surface-variant">共 {{ filteredLinks.length }} 条 · 第 {{ linksPage }} / {{ linksTotalPages }} 页</span>
@@ -1757,8 +1861,8 @@ onMounted(async () => {
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <!-- Tree -->
               <div class="lg:col-span-1 flex flex-col gap-4">
-                <div class="bg-surface rounded-2xl p-6 border border-surface-variant shadow-sm">
-                  <div class="flex items-center justify-between mb-6">
+                <div class="bg-surface rounded-2xl p-4 md:p-6 border border-surface-variant shadow-sm">
+                  <div class="flex items-center justify-between mb-4 md:mb-6">
                     <h2 class="font-headline-sm text-primary-container">分类目录</h2>
                     <button class="text-primary flex items-center gap-1 hover:bg-surface-container-low px-2 py-1 rounded-lg transition-colors" @click="newCatMode">
                       <span class="material-symbols-outlined text-sm">add</span>
@@ -1788,7 +1892,7 @@ onMounted(async () => {
                              <span v-if="isAdmin" class="category-drag-handle material-symbols-outlined text-[18px] text-outline-variant cursor-grab active:cursor-grabbing" title="拖动调整顶级分类顺序" aria-label="拖动调整分类顺序">drag_indicator</span>
                              <input v-if="isAdmin" type="checkbox" class="w-4 h-4 accent-primary shrink-0" :checked="selectedCatSet.has(p.id)" @click.stop="toggleCatSelect(p.id)" title="选择此分类批量改权限" />
                           <EntityIcon :icon="p.icon" fallback="folder" :size="20" :alt="p.name" />
-                          <span class="font-body-md font-bold">{{ p.name }}</span>
+                          <span class="font-body-md font-bold truncate min-w-0">{{ p.name }}</span>
                           <span v-if="p.visible === false" class="text-label-sm opacity-80 text-error">已隐藏</span>
                           <span v-if="p.archived" class="text-label-sm opacity-80 text-tertiary">已归档</span>
                           <span v-if="!canEditCat(p)" class="material-symbols-outlined text-label-sm opacity-70" title="无权限编辑">lock</span>
@@ -1803,7 +1907,7 @@ onMounted(async () => {
                            :animation="200"
                            ghost-class="category-drag-ghost"
                            chosen-class="category-drag-chosen"
-                           class="ml-6 mt-1 flex flex-col gap-1"
+                           class="ml-4 md:ml-6 mt-1 flex flex-col gap-1"
                            @end="onChildCategoryDragEnd(p)"
                          >
                            <template #item="{ element: c }">
@@ -1817,7 +1921,7 @@ onMounted(async () => {
                                <span v-if="isAdmin" class="child-category-drag-handle material-symbols-outlined text-[18px] text-outline-variant cursor-grab active:cursor-grabbing" title="拖动调整子分类顺序" aria-label="拖动调整子分类顺序">drag_indicator</span>
                                <input v-if="isAdmin" type="checkbox" class="w-4 h-4 accent-primary shrink-0" :checked="selectedCatSet.has(c.id)" @click.stop="toggleCatSelect(c.id)" title="选择此分类批量改权限" />
                                <EntityIcon :icon="c.icon" fallback="folder" :size="20" :alt="c.name" />
-                               <span class="font-body-md">{{ c.name }}</span>
+                               <span class="font-body-md truncate min-w-0">{{ c.name }}</span>
                                <span v-if="c.visible === false" class="ml-1 text-label-sm opacity-80 text-error">已隐藏</span>
                                <span v-if="c.archived" class="text-label-sm opacity-80 text-tertiary">已归档</span>
                                <span v-if="!canEditCat(c)" class="material-symbols-outlined text-label-sm opacity-70" title="无权限编辑">lock</span>
@@ -1834,14 +1938,14 @@ onMounted(async () => {
               <!-- Edit form -->
               <div class="lg:col-span-2 flex flex-col gap-4">
                 <div class="bg-surface rounded-2xl border border-surface-variant shadow-sm overflow-hidden">
-                  <div class="px-6 py-4 border-b border-surface-variant flex items-center justify-between bg-surface-container-lowest">
+                  <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center justify-between bg-surface-container-lowest">
                     <h2 class="font-headline-sm text-on-surface">{{ selectedCat ? '编辑分类' : '新建分类' }}</h2>
                     <div class="flex items-center gap-3">
                       <button class="ui-btn ui-btn-ghost px-4 py-2 rounded-lg font-body-sm" @click="newCatMode">取消</button>
                       <button class="ui-btn ui-btn-primary px-4 py-2 rounded-lg font-body-sm" @click="saveCat">保存更改</button>
                     </div>
                   </div>
-                  <div class="p-6 flex flex-col gap-6">
+                  <div class="p-4 md:p-6 flex flex-col gap-6">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div class="flex flex-col gap-2">
                         <label class="font-label-sm text-secondary">分类名称 <span class="text-error">*</span></label>
@@ -1857,8 +1961,8 @@ onMounted(async () => {
                     </div>
                     <div class="flex flex-col gap-2">
                       <label class="font-label-sm text-secondary">图标选择</label>
-                      <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-primary-fixed flex items-center justify-center text-primary overflow-hidden">
+                      <div class="flex flex-wrap items-center gap-3 md:gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-primary-fixed flex items-center justify-center text-primary overflow-hidden shrink-0">
                           <EntityIcon :icon="catForm.icon" fallback="folder" :size="28" :alt="catForm.name" />
                         </div>
                         <input v-model="catForm.icon" class="px-3 py-1.5 rounded-lg border border-outline-variant text-label-sm w-28 focus:outline-none focus:border-primary" placeholder="图标名/emoji" />
@@ -1871,7 +1975,7 @@ onMounted(async () => {
                     </div>
                     <div class="flex flex-col gap-2">
                       <label class="font-label-sm text-secondary">分类颜色</label>
-                      <div class="flex items-center gap-3">
+                      <div class="flex flex-wrap items-center gap-3">
                         <input type="color" v-model="catForm.color" class="w-10 h-10 rounded-lg border border-outline-variant bg-transparent cursor-pointer p-0.5" />
                         <div class="flex items-center gap-2 flex-wrap">
                           <button v-for="c in catColorPresets" :key="c" type="button" class="w-6 h-6 rounded-full border border-outline-variant/60 transition-transform hover:scale-110" :class="catForm.color?.toLowerCase() === c.toLowerCase() ? 'ring-2 ring-offset-1 ring-primary' : ''" :style="{ background: c }" :title="c" @click="catForm.color = c"></button>
@@ -1887,7 +1991,7 @@ onMounted(async () => {
                       </div>
                       <!-- 仅管理员可设置「主页显示」开关 -->
                       <button v-if="isAdmin" type="button" role="switch" :aria-checked="catForm.visible !== false"
-                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 self-start md:self-auto"
                         :class="catForm.visible !== false ? 'bg-primary' : 'bg-outline-variant'"
                         @click="toggleCatVisible(catForm.visible === false)">
                         <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform"
@@ -1899,12 +2003,12 @@ onMounted(async () => {
                       </div>
                     </div>
                     <!-- 分类权限（与链接权限一致：all/registered/admin/self），仅管理员可设置 -->
-                    <div class="flex items-center justify-between rounded-xl bg-surface-container-low px-4 py-3">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between rounded-xl bg-surface-container-low px-4 py-3">
                       <div class="flex flex-col">
                         <span class="font-body-md text-on-surface">分类权限</span>
                         <span class="font-label-sm text-on-surface-variant">控制谁能在前台看到该分类及其下的链接</span>
                       </div>
-                      <div v-if="isAdmin" class="flex items-center gap-3 flex-wrap justify-end w-[55%]">
+                      <div v-if="isAdmin" class="flex items-center gap-3 flex-wrap justify-end w-full md:w-[55%]">
                         <select v-model="catForm.permission"
                           class="w-full px-3 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer">
                           <option v-for="p in PERM_OPTIONS" :key="p.value" :value="p.value">{{ p.label }}</option>
@@ -1915,7 +2019,7 @@ onMounted(async () => {
                         <span>仅管理员可设置</span>
                       </div>
                     </div>
-                    <div v-if="catForm.archived" class="flex items-center justify-between rounded-xl bg-tertiary-container/40 px-4 py-3">
+                    <div v-if="catForm.archived" class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-tertiary-container/40 px-4 py-3">
                       <div class="flex items-center gap-2">
                         <span class="material-symbols-outlined text-tertiary">inventory_2</span>
                         <span class="font-body-md text-on-surface">该分类已在回收站（归档）</span>
@@ -1944,11 +2048,11 @@ onMounted(async () => {
           <!-- 删除分类弹窗：处理旗下链接与子分类 -->
           <div v-if="showCatDel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="showCatDel = false">
             <div class="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-              <div class="px-6 py-4 border-b border-surface-variant flex items-center gap-2">
+              <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center gap-2">
                 <span class="material-symbols-outlined text-error">warning</span>
                 <h3 class="font-headline-sm text-on-surface">删除分类</h3>
               </div>
-              <div class="p-6 flex flex-col gap-5">
+              <div class="p-4 md:p-6 flex flex-col gap-5">
                 <p class="font-body-sm text-on-surface-variant">
                   该分类下共有
                   <span class="font-bold text-on-surface">{{ catDelStats.link_count }}</span> 个链接、
@@ -1984,7 +2088,7 @@ onMounted(async () => {
                   </label>
                 </div>
               </div>
-              <div class="px-6 py-4 border-t border-surface-variant flex items-center justify-end gap-3 bg-surface-container-lowest">
+              <div class="px-4 py-3 md:px-6 md:py-4 border-t border-surface-variant flex items-center justify-end gap-3 bg-surface-container-lowest">
                 <button class="px-4 py-2 rounded-lg font-body-sm text-secondary hover:bg-surface-container transition-colors" @click="showCatDel = false">取消</button>
                 <button class="px-4 py-2 rounded-lg font-body-sm bg-error text-on-error hover:opacity-90 transition-colors" @click="confirmCatDel">确认删除</button>
               </div>
@@ -1994,11 +2098,11 @@ onMounted(async () => {
           <!-- 父分类权限变更 → 子分类级联确认（item 8） -->
           <div v-if="showPermCascade" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="showPermCascade = false">
             <div class="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-              <div class="px-6 py-4 border-b border-surface-variant flex items-center gap-2">
+              <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center gap-2">
                 <span class="material-symbols-outlined text-primary">account_tree</span>
                 <h3 class="font-headline-sm text-on-surface">同步子分类权限</h3>
               </div>
-              <div class="p-6 flex flex-col gap-4">
+              <div class="p-4 md:p-6 flex flex-col gap-4">
                 <p class="font-body-sm text-on-surface-variant">
                   该父分类下共有 <b>{{ permCascadeCount }}</b> 个子分类，且权限与拟设值不同。是否同时将新权限应用到这些子分类？
                 </p>
@@ -2027,13 +2131,13 @@ onMounted(async () => {
 
             <div class="flex gap-2 mb-6 border-b border-outline-variant/30 pb-2 overflow-x-auto">
               <button v-for="t in [{k:'all',label:'全部用户'},{k:'admin',label:'管理员'},{k:'online',label:'在线用户'},{k:'banned',label:'封禁名单'}]" :key="t.k"
-                class="px-4 py-2 rounded-full font-headline-sm text-headline-sm whitespace-nowrap transition-colors"
+                class="px-3 py-2 md:px-4 rounded-full font-headline-sm text-headline-sm whitespace-nowrap transition-colors"
                 :class="userSubTab === t.k ? 'bg-primary-container text-on-primary-container' : 'text-secondary hover:bg-surface-container'"
                 @click="userSubTab = t.k">{{ t.label }} ({{ userCounts[t.k] }})</button>
             </div>
 
             <div v-if="pagedUsers.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
-              <div v-for="u in pagedUsers" :key="u.id" class="bg-bg-card rounded-card p-6 shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-[transform,background-color,box-shadow,border-color] border border-transparent hover:border-primary-fixed-dim group flex flex-col relative overflow-hidden">
+              <div v-for="u in pagedUsers" :key="u.id" class="bg-bg-card rounded-card p-4 md:p-6 shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-[transform,background-color,box-shadow,border-color] border border-transparent hover:border-primary-fixed-dim group flex flex-col relative overflow-hidden">
                 <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-primary-fixed/20 to-transparent rounded-bl-full pointer-events-none"></div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                   <div class="flex items-center gap-4">
@@ -2066,7 +2170,7 @@ onMounted(async () => {
                     <span>活跃：{{ u.online ? '当前在线' : fmtTime(u.last_seen) }}</span>
                   </div>
                 </div>
-                <div class="mt-auto pt-4 border-t border-outline-variant/30 flex items-center justify-between">
+                <div class="mt-auto pt-4 border-t border-outline-variant/30 flex flex-wrap items-center justify-between gap-2">
                   <span class="font-label-sm text-label-sm" :class="u.online ? 'text-success font-medium' : 'text-on-surface-variant'">
                     {{ u.online ? '在线' : '离线' }}
                   </span>
@@ -2099,7 +2203,7 @@ onMounted(async () => {
               <p>无内容</p>
             </div>
 
-            <div class="bg-surface rounded-card p-4 flex items-center justify-between border border-outline-variant shadow-sm">
+            <div class="bg-surface rounded-card p-4 flex flex-wrap items-center justify-between gap-3 border border-outline-variant shadow-sm">
               <span class="font-body-sm text-body-sm text-secondary">共 {{ filteredUsers.length }} 位用户 · 第 {{ usersPage }} / {{ usersTotalPages }} 页</span>
               <div class="flex items-center gap-1">
                 <button class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-40" :disabled="usersPage <= 1" @click="goUsersPage(usersPage - 1)">‹</button>
@@ -2114,11 +2218,11 @@ onMounted(async () => {
             <!-- 重设密码弹窗 -->
             <div v-if="showResetPwd" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="showResetPwd = false">
               <div class="bg-surface rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-                <div class="px-6 py-4 border-b border-surface-variant flex items-center gap-2">
+                <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center gap-2">
                   <span class="material-symbols-outlined text-primary">key</span>
                   <h3 class="font-headline-sm text-on-surface">重设密码 · {{ resetPwdUser && resetPwdUser.username }}</h3>
                 </div>
-                <div class="p-6 flex flex-col gap-4">
+                <div class="p-4 md:p-6 flex flex-col gap-4">
                   <template v-if="!resetPwdResult">
                     <p class="font-body-sm text-on-surface-variant">为当前用户设置一个新密码（至少 6 位）。留空则自动生成 12 位随机密码。</p>
                     <div class="flex gap-2">
@@ -2150,14 +2254,14 @@ onMounted(async () => {
             <!-- 禁用用户确认弹窗 -->
             <div v-if="banConfirmUser" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="banConfirmUser = null">
               <div class="bg-surface rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-                <div class="px-6 py-4 border-b border-surface-variant flex items-center gap-2">
+                <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center gap-2">
                   <span class="material-symbols-outlined text-error">person_off</span>
                   <h3 class="font-headline-sm text-on-surface">禁用用户</h3>
                 </div>
-                <div class="p-6">
+                <div class="p-4 md:p-6">
                   <p class="font-body-sm text-on-surface-variant">确定禁用用户「<span class="font-medium text-on-surface">{{ banConfirmUser.username }}</span>」？禁用后该用户将无法登录，需由管理员重新启用。</p>
                 </div>
-                <div class="px-6 py-4 border-t border-surface-variant flex items-center justify-end gap-3 bg-surface-container-lowest">
+                <div class="px-4 py-3 md:px-6 md:py-4 border-t border-surface-variant flex items-center justify-end gap-3 bg-surface-container-lowest">
                   <button class="px-4 py-2 rounded-lg font-body-sm text-secondary hover:bg-surface-container transition-colors" @click="banConfirmUser = null">取消</button>
                   <button class="px-4 py-2 rounded-lg font-body-sm text-on-error bg-error hover:opacity-90 transition-colors" @click="confirmBan">确认禁用</button>
                 </div>
@@ -2183,7 +2287,8 @@ onMounted(async () => {
             </div>
 
             <div class="bg-surface rounded-2xl border border-surface-variant shadow-sm overflow-hidden">
-              <table class="w-full text-left border-collapse">
+              <!-- 移动端 .m-table 会把每行变成一张卡：左侧 data-label 定宽不换行，右侧值可换行 -->
+              <table class="m-table is-dense w-full text-left border-collapse">
                 <thead>
                   <tr class="border-b border-outline-variant/50 bg-surface-container-lowest">
                     <th class="py-3 px-5 font-headline-sm text-headline-sm text-on-surface-variant">时间</th>
@@ -2193,21 +2298,21 @@ onMounted(async () => {
                     <th class="py-3 px-5 font-headline-sm text-headline-sm text-on-surface-variant">详情</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-outline-variant/20 font-body-md">
+                <tbody class="md:divide-y md:divide-outline-variant/20 font-body-md">
                   <tr v-if="auditLoading" class="text-center text-on-surface-variant">
-                    <td colspan="5" class="py-10 font-body-md">加载中…</td>
+                    <td colspan="5" class="m-span py-10 font-body-md">加载中…</td>
                   </tr>
                   <tr v-else-if="!auditLogs.length" class="text-center text-on-surface-variant">
-                    <td colspan="5" class="py-10 font-body-md">暂无审计记录</td>
+                    <td colspan="5" class="m-span py-10 font-body-md">暂无审计记录</td>
                   </tr>
                   <tr v-for="l in auditLogs" :key="l.id" class="hover:bg-surface-container-lowest transition-colors">
-                    <td class="py-3 px-5 text-label-sm text-on-surface-variant whitespace-nowrap">{{ formatTime(l.created_at) }}</td>
-                    <td class="py-3 px-5 text-body-sm text-on-surface">{{ l.operator_name }}</td>
-                    <td class="py-3 px-5">
+                    <td data-label="时间" class="py-3 px-5 text-label-sm text-on-surface-variant whitespace-nowrap">{{ formatTime(l.created_at) }}</td>
+                    <td data-label="操作人" class="py-3 px-5 text-body-sm text-on-surface">{{ l.operator_name }}</td>
+                    <td data-label="动作" class="py-3 px-5">
                       <span class="px-2 py-1 rounded-md text-label-sm font-medium" :class="auditBadge(l.action).cls">{{ auditBadge(l.action).label }}</span>
                     </td>
-                    <td class="py-3 px-5 text-body-sm text-on-surface">{{ l.target_type }}<span v-if="l.target_name" class="text-on-surface-variant"> · {{ l.target_name }}</span></td>
-                    <td class="py-3 px-5 text-body-sm text-on-surface-variant">{{ l.detail }}</td>
+                    <td data-label="对象" class="py-3 px-5 text-body-sm text-on-surface">{{ l.target_type }}<span v-if="l.target_name" class="text-on-surface-variant"> · {{ l.target_name }}</span></td>
+                    <td data-label="详情" class="py-3 px-5 text-body-sm text-on-surface-variant">{{ l.detail }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -2425,7 +2530,7 @@ onMounted(async () => {
                   <div class="py-2.5 border-t border-outline-variant/40">
                     <div class="flex items-center justify-between mb-2 gap-3">
                       <div class="font-body-sm text-body-sm text-on-surface">每行显示列数（桌面端）</div>
-                      <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-highest rounded-full px-2.5 py-0.5">{{ columns }}</span>
+                      <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-highest rounded-full px-2.5 py-0.5 w-fit">{{ columns }}</span>
                     </div>
                     <input type="range" min="2" max="8" step="1" v-model.number="columns" class="w-full h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer accent-primary">
                   </div>
@@ -2713,11 +2818,11 @@ onMounted(async () => {
     <div v-if="showUserModal" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showUserModal = false"></div>
       <div class="responsive-modal-panel relative bg-bg-card w-full max-w-md rounded-[16px] shadow-lg overflow-hidden flex flex-col">
-        <div class="p-6 border-b border-outline-variant/30 flex justify-between items-center">
+        <div class="p-4 md:p-6 border-b border-outline-variant/30 flex justify-between items-center">
           <h2 class="font-headline-md text-headline-md text-on-surface">添加新用户</h2>
           <button class="text-outline hover:text-primary transition-colors" @click="showUserModal = false"><span class="material-symbols-outlined">close</span></button>
         </div>
-        <div class="p-6 flex flex-col gap-4 overflow-y-auto max-h-[70vh]">
+        <div class="p-4 md:p-6 flex flex-col gap-4 overflow-y-auto max-h-[70vh]">
           <div class="flex flex-col gap-1">
             <label class="font-label-sm text-label-sm text-on-surface-variant">姓名</label>
             <input v-model="userForm.display_name" class="w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded font-body-sm focus:outline-none focus:border-primary" placeholder="请输入姓名" type="text" />
@@ -2739,7 +2844,7 @@ onMounted(async () => {
             </select>
           </div>
         </div>
-        <div class="p-6 bg-surface-container-low flex justify-end gap-3">
+        <div class="p-4 md:p-6 bg-surface-container-low flex justify-end gap-3">
           <button class="px-6 py-2 rounded-full text-secondary hover:bg-surface-container transition-colors font-headline-sm" @click="showUserModal = false">取消</button>
           <button class="px-6 py-2 rounded-full bg-primary text-on-primary shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-[transform,background-color,box-shadow] font-headline-sm" @click="saveUser">保存用户</button>
         </div>
@@ -2756,11 +2861,11 @@ onMounted(async () => {
     <div v-if="pwdModal" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4">
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="pwdModal = null"></div>
       <div class="responsive-modal-panel relative bg-bg-card w-full max-w-md rounded-[16px] shadow-lg overflow-hidden flex flex-col">
-        <div class="px-6 py-4 border-b border-outline-variant/30 flex justify-between items-center">
+        <div class="px-4 py-3 md:px-6 md:py-4 border-b border-outline-variant/30 flex justify-between items-center">
           <h2 class="font-headline-md text-headline-md text-on-surface">{{ pwdModal.mode === 'set' ? '设置链接密码' : '修改链接密码' }}</h2>
           <button class="text-outline hover:text-primary transition-colors" @click="pwdModal = null"><span class="material-symbols-outlined">close</span></button>
         </div>
-        <div class="p-6 flex flex-col gap-4">
+        <div class="p-4 md:p-6 flex flex-col gap-4">
           <p class="font-body-sm text-body-sm text-on-surface-variant">链接：<span class="font-semibold text-on-surface">{{ pwdModal.link.title }}</span></p>
           <template v-if="pwdModal.mode === 'update'">
             <div class="flex flex-col gap-1">
@@ -2778,7 +2883,7 @@ onMounted(async () => {
           </div>
           <p v-if="pwdError" class="text-error font-body-sm">{{ pwdError }}</p>
         </div>
-        <div class="p-6 bg-surface-container-low flex justify-end gap-3">
+        <div class="p-4 md:p-6 bg-surface-container-low flex justify-end gap-3">
           <button class="px-6 py-2 rounded-full text-secondary hover:bg-surface-container transition-colors font-headline-sm" @click="pwdModal = null">取消</button>
           <button class="px-6 py-2 rounded-full bg-primary text-on-primary shadow-sm hover:shadow-md transition-all font-headline-sm" @click="confirmPwd">确定</button>
         </div>
@@ -3096,6 +3201,30 @@ onMounted(async () => {
     align-self: flex-start;
     max-width: 100%;
     flex-wrap: wrap;
+  }
+  /* 分段控件（我的主题 / 站点主题 / 卡片密度 / 快捷访问大小）：手机端铺满一行、各段等宽，
+     按钮收窄内边距 + 缩到 11px，320px 屏「跟随系统」这类 4 字标签也不溢出、不掉行。 */
+  .settings-column .flex.items-center.justify-between.gap-3 > .flex {
+    width: 100%;
+    align-self: stretch;
+    flex-wrap: nowrap;
+  }
+  .settings-column .flex.items-center.justify-between.gap-3 > .flex > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+    font-size: 0.6875rem;
+    justify-content: center;
+  }
+  /* 开关行：开关保持紧凑、靠左跟随文字，不拉满整行（否则半行宽度都可点，容易误触）。 */
+  .settings-column .flex.items-center.justify-between.gap-3 > label.relative {
+    width: auto;
+    align-self: flex-start;
+  }
+  /* 数字输入（登录有效期 / 日志保留天数）在手机上铺满，96px 在窄屏太局促。 */
+  .settings-column .flex.items-center.justify-between.gap-3 > input {
+    width: 100%;
   }
 }
 </style>

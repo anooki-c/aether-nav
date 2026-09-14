@@ -94,15 +94,15 @@ function close() {
 
     <div class="relative responsive-modal-panel w-full max-w-4xl max-h-[90vh] flex flex-col bg-surface-container-lowest rounded-xl shadow-2xl border border-outline-variant/30 overflow-hidden">
       <!-- Header -->
-      <div class="flex items-start justify-between p-6 border-b border-outline-variant/30">
-        <div>
+      <div class="flex flex-wrap items-start justify-between gap-3 p-4 md:p-6 border-b border-outline-variant/30">
+        <div class="min-w-0">
           <h2 class="font-headline-lg text-headline-lg text-text-primary tracking-tight">编辑权限：{{ user.display_name || user.username }}</h2>
           <p class="text-text-secondary mt-1 flex items-center gap-2 font-body-sm">
             <span class="material-symbols-outlined text-[16px]">mail</span>
             {{ user.username }}@本地
           </p>
         </div>
-        <div class="flex gap-3" v-if="tab === 'manage'">
+        <div class="flex flex-wrap gap-2 md:gap-3" v-if="tab === 'manage'">
           <button class="px-4 py-2 bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-high transition-colors font-headline-sm text-headline-sm shadow-sm" @click="restoreAll">恢复默认</button>
           <button class="px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-surface-tint transition-colors font-headline-sm text-headline-sm shadow-[0_4px_14px_rgba(108,92,231,0.15)] flex items-center gap-2 disabled:opacity-50" :disabled="saving" @click="save">
             <span class="material-symbols-outlined text-[18px]">save</span>
@@ -134,14 +134,14 @@ function close() {
       <div class="flex-1 overflow-hidden flex flex-col">
         <!-- ===== 可管理链接 ===== -->
         <template v-if="tab === 'manage'">
-          <div class="p-4 border-b border-outline-variant/30 bg-surface/50 flex justify-between items-center">
-            <div class="flex items-center gap-2 text-on-surface-variant text-label-sm bg-surface-container px-3 py-1.5 rounded-md">
-              <span class="material-symbols-outlined text-[16px]">info</span>
-              开关开启 = 该用户可见；关闭 = 对该用户隐藏。无权限的链接不显示在此
+          <div class="p-3 md:p-4 border-b border-outline-variant/30 bg-surface/50 flex flex-col items-stretch gap-2.5 md:flex-row md:items-center md:justify-between">
+            <div class="flex items-start gap-2 text-on-surface-variant text-label-sm bg-surface-container px-3 py-1.5 rounded-md min-w-0">
+              <span class="material-symbols-outlined text-[16px] shrink-0">info</span>
+              <span class="min-w-0">开关开启 = 该用户可见；关闭 = 对该用户隐藏。无权限的链接不显示在此</span>
             </div>
-            <div class="relative">
+            <div class="relative shrink-0">
               <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-outline">filter_list</span>
-              <select v-model="filterCat" class="pl-9 pr-8 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer">
+              <select v-model="filterCat" class="w-full md:w-auto pl-9 pr-8 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer">
                 <option value="">全部分类</option>
                 <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
               </select>
@@ -149,7 +149,7 @@ function close() {
           </div>
 
           <div class="overflow-y-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="m-table is-dense w-full text-left border-collapse">
               <thead>
                 <tr class="border-b border-outline-variant/30 bg-surface-container-low/50 sticky top-0">
                   <th class="py-3 px-4 font-headline-sm text-headline-sm text-on-surface-variant w-16 text-center">序号</th>
@@ -159,36 +159,36 @@ function close() {
                   <th class="py-3 px-4 font-headline-sm text-headline-sm text-on-surface-variant w-28 text-center">可见</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-outline-variant/20">
+              <tbody class="md:divide-y md:divide-outline-variant/20">
                 <tr v-if="loading" class="text-center text-on-surface-variant">
-                  <td colspan="5" class="py-10 font-body-md">加载中…</td>
+                  <td colspan="5" class="m-span py-10 font-body-md">加载中…</td>
                 </tr>
                 <tr v-else-if="manageShown.length === 0" class="text-center text-on-surface-variant">
-                  <td colspan="5" class="py-10 font-body-md">该用户暂无可管理的链接</td>
+                  <td colspan="5" class="m-span py-10 font-body-md">该用户暂无可管理的链接</td>
                 </tr>
                 <tr v-for="(l, i) in manageShown" :key="l.id" class="hover:bg-surface-container-lowest transition-all group">
-                  <td class="py-4 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
-                  <td class="py-4 px-4">
-                    <div class="flex items-center gap-3">
+                  <td data-label="序号" class="py-4 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
+                  <td class="m-span py-4 px-4">
+                    <div class="flex items-start gap-3 min-w-0">
                       <div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
                         <span class="material-symbols-outlined text-secondary group-hover:text-primary">link</span>
                       </div>
-                      <div>
+                      <div class="min-w-0">
                         <p class="font-headline-sm text-headline-sm text-text-primary">{{ l.title }}</p>
-                        <p class="text-label-sm text-text-secondary mt-0.5">{{ l.url }}</p>
+                        <p class="text-label-sm text-text-secondary mt-0.5 break-words">{{ l.url }}</p>
                       </div>
                     </div>
                   </td>
-                  <td class="py-4 px-4 text-body-sm text-on-surface">{{ l.owner_name }}</td>
-                  <td class="py-4 px-4">
-                    <div class="flex items-center text-label-sm text-text-secondary gap-1">
+                  <td data-label="添加者" class="py-4 px-4 text-body-sm text-on-surface">{{ l.owner_name }}</td>
+                  <td data-label="分类" class="py-4 px-4">
+                    <div class="flex items-center flex-wrap text-label-sm text-text-secondary gap-1">
                       <template v-for="(c, ci) in l.category_path" :key="ci">
                         <span v-if="ci > 0" class="material-symbols-outlined text-[14px]">chevron_right</span>
                         <span class="bg-surface-container px-2 py-1 rounded">{{ c }}</span>
                       </template>
                     </div>
                   </td>
-                  <td class="py-4 px-4 text-center">
+                  <td data-label="可见" class="py-4 px-4 text-center">
                     <button
                       type="button"
                       role="switch"
@@ -214,14 +214,14 @@ function close() {
 
         <!-- ===== 无权限链接 ===== -->
         <template v-else>
-          <div class="p-4 border-b border-outline-variant/30 bg-surface/50 flex justify-between items-center">
-            <div class="flex items-center gap-2 text-on-surface-variant text-label-sm bg-surface-container px-3 py-1.5 rounded-md">
-              <span class="material-symbols-outlined text-[16px]">lock</span>
-              以下链接该用户最终不可见，并标注被哪一层权限拦截
+          <div class="p-3 md:p-4 border-b border-outline-variant/30 bg-surface/50 flex flex-col items-stretch gap-2.5 md:flex-row md:items-center md:justify-between">
+            <div class="flex items-start gap-2 text-on-surface-variant text-label-sm bg-surface-container px-3 py-1.5 rounded-md min-w-0">
+              <span class="material-symbols-outlined text-[16px] shrink-0">lock</span>
+              <span class="min-w-0">以下链接该用户最终不可见，并标注被哪一层权限拦截</span>
             </div>
-            <div class="relative">
+            <div class="relative shrink-0">
               <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-outline">filter_list</span>
-              <select v-model="filterCat" class="pl-9 pr-8 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer">
+              <select v-model="filterCat" class="w-full md:w-auto pl-9 pr-8 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer">
                 <option value="">全部分类</option>
                 <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
               </select>
@@ -229,7 +229,7 @@ function close() {
           </div>
 
           <div class="overflow-y-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="m-table is-dense w-full text-left border-collapse">
               <thead>
                 <tr class="border-b border-outline-variant/30 bg-surface-container-low/50 sticky top-0">
                   <th class="py-3 px-4 font-headline-sm text-headline-sm text-on-surface-variant w-16 text-center">序号</th>
@@ -239,38 +239,38 @@ function close() {
                   <th class="py-3 px-4 font-headline-sm text-headline-sm text-on-surface-variant">原因</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-outline-variant/20">
+              <tbody class="md:divide-y md:divide-outline-variant/20">
                 <tr v-if="loading" class="text-center text-on-surface-variant">
-                  <td colspan="5" class="py-10 font-body-md">加载中…</td>
+                  <td colspan="5" class="m-span py-10 font-body-md">加载中…</td>
                 </tr>
                 <tr v-else-if="deniedShown.length === 0" class="text-center text-on-surface-variant">
-                  <td colspan="5" class="py-10 font-body-md">该用户对所有链接都有访问权限 🎉</td>
+                  <td colspan="5" class="m-span py-10 font-body-md">该用户对所有链接都有访问权限 🎉</td>
                 </tr>
                 <tr v-for="(l, i) in deniedShown" :key="l.id" class="hover:bg-surface-container-lowest transition-all group">
-                  <td class="py-4 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
-                  <td class="py-4 px-4">
-                    <div class="flex items-center gap-3">
+                  <td data-label="序号" class="py-4 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
+                  <td class="m-span py-4 px-4">
+                    <div class="flex items-start gap-3 min-w-0">
                       <div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center shrink-0">
                         <span class="material-symbols-outlined text-on-surface-variant">link_off</span>
                       </div>
-                      <div>
+                      <div class="min-w-0">
                         <p class="font-headline-sm text-headline-sm text-text-primary">{{ l.title }}</p>
-                        <p class="text-label-sm text-text-secondary mt-0.5">{{ l.url }}</p>
+                        <p class="text-label-sm text-text-secondary mt-0.5 break-words">{{ l.url }}</p>
                       </div>
                     </div>
                   </td>
-                  <td class="py-4 px-4">
-                    <div class="flex items-center text-label-sm text-text-secondary gap-1">
+                  <td data-label="分类" class="py-4 px-4">
+                    <div class="flex items-center flex-wrap text-label-sm text-text-secondary gap-1">
                       <template v-for="(c, ci) in l.category_path" :key="ci">
                         <span v-if="ci > 0" class="material-symbols-outlined text-[14px]">chevron_right</span>
                         <span class="bg-surface-container px-2 py-1 rounded">{{ c }}</span>
                       </template>
                     </div>
                   </td>
-                  <td class="py-4 px-4">
+                  <td data-label="拦截" class="py-4 px-4">
                     <span class="px-2 py-1 rounded-md text-label-sm font-medium" :class="layerBadge(l.layer).cls">{{ layerBadge(l.layer).label }}</span>
                   </td>
-                  <td class="py-4 px-4 text-body-sm text-on-surface">
+                  <td data-label="原因" class="py-4 px-4 text-body-sm text-on-surface">
                     {{ l.reason }}
                     <span v-if="l.fixable_here" class="block text-label-xs text-primary mt-1">可在「可管理链接」页签开启</span>
                     <span v-else class="block text-label-xs text-on-surface-variant mt-1">需在分类 / 链接设置中调整</span>

@@ -65,13 +65,16 @@ function onCardClick() {
 
     <!-- 内外网标识：右上角图标徽章（外网=地球/绿，内网=房子/橙）。
          用「颜色 + 形状」双重编码，替代原先仅靠颜色的 2.5px 小圆点——
-         圆点尺寸过小且绿橙明度接近，移动端扫视时几乎读不出信息。 -->
+         圆点尺寸过小且绿橙明度接近，移动端扫视时几乎读不出信息。
+         尺寸校准：18px→14px、图标 12px→9px。卡片仅 100px 宽（主图标 40px），
+         18px 徽章占卡宽近 1/5，比主图标还抢眼；缩到 14px 后让位给主图标，
+         同时保留色块，远看仍是一枚可辨的小色标。 -->
     <span
-      class="absolute top-1 right-1 z-20 w-[18px] h-[18px] rounded-[5px] flex items-center justify-center"
+      class="absolute top-1 right-1 z-20 w-[14px] h-[14px] rounded-[4px] flex items-center justify-center"
       :class="link.network === 'external' ? 'bg-success/15 text-success' : 'bg-warning/20 text-warning'"
       :title="link.network === 'external' ? '外网链接' : '内网链接'"
     >
-      <span class="material-symbols-outlined text-[12px] leading-none">
+      <span class="material-symbols-outlined text-[9px] leading-none">
         {{ link.network === 'external' ? 'public' : 'home' }}
       </span>
     </span>

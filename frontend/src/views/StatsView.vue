@@ -484,7 +484,7 @@ onBeforeUnmount(() => { destroyCharts() })
         <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div style="height: 300px; position: relative;"><canvas ref="topCanvas"></canvas></div>
           <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+            <table class="m-table w-full text-sm">
               <thead>
                 <tr class="text-label-sm text-text-secondary border-b border-surface-variant/40">
                   <th class="text-left py-2 pr-2 font-medium">名称</th>
@@ -494,25 +494,25 @@ onBeforeUnmount(() => { destroyCharts() })
                   <th class="text-right py-2 font-medium">环比</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody class="md:divide-y md:divide-surface-variant/30">
                 <template v-for="it in top.items" :key="it.id">
                   <tr class="border-b border-surface-variant/30 hover:bg-surface-container/40" :class="dim === 'parent' ? 'cursor-pointer' : ''" @click="dim === 'parent' && toggleDrill(it.id)">
-                    <td class="py-2 pr-2 text-text-primary font-medium">
+                    <td data-label="名称" class="py-2 pr-2 text-text-primary font-medium">
                       {{ it.title }}
                       <span v-if="dim === 'parent'" class="material-symbols-outlined text-[16px] align-middle text-text-secondary">{{ drillParent === it.id ? 'expand_less' : 'expand_more' }}</span>
                     </td>
-                    <td class="py-2 pr-2 text-text-secondary">{{ (it.path && it.path.join(' / ')) || (dim === 'child' ? '子分类' : '—') }}</td>
-                    <td class="py-2 pr-2 text-right text-text-primary">{{ it.clicks.toLocaleString() }}</td>
-                    <td class="py-2 pr-2 text-right text-text-secondary">{{ it.ratio }}%</td>
-                    <td class="py-2 text-right" :class="topDelta(it.clicks, it.prev_clicks).cls">{{ topDelta(it.clicks, it.prev_clicks).txt }}</td>
+                    <td data-label="路径" class="py-2 pr-2 text-text-secondary">{{ (it.path && it.path.join(' / ')) || (dim === 'child' ? '子分类' : '—') }}</td>
+                    <td data-label="点击" class="py-2 pr-2 text-right text-text-primary">{{ it.clicks.toLocaleString() }}</td>
+                    <td data-label="占比" class="py-2 pr-2 text-right text-text-secondary">{{ it.ratio }}%</td>
+                    <td data-label="环比" class="py-2 text-right" :class="topDelta(it.clicks, it.prev_clicks).cls">{{ topDelta(it.clicks, it.prev_clicks).txt }}</td>
                   </tr>
                   <template v-if="dim === 'parent' && drillParent === it.id">
                     <tr v-for="ch in it.children" :key="ch.id" class="bg-surface-container/50">
-                      <td class="py-1.5 pl-8 pr-2 text-text-secondary text-sm">{{ ch.title }}</td>
-                      <td class="py-1.5 pr-2 text-text-secondary text-sm">子分类</td>
-                      <td class="py-1.5 pr-2 text-right text-text-secondary text-sm">{{ ch.clicks.toLocaleString() }}</td>
-                      <td class="py-1.5 pr-2 text-right text-text-secondary text-sm">—</td>
-                      <td class="py-1.5 text-right text-text-secondary text-sm">—</td>
+                      <td data-label="名称" class="py-1.5 pl-8 pr-2 text-text-secondary text-sm">{{ ch.title }}</td>
+                      <td data-label="路径" class="py-1.5 pr-2 text-text-secondary text-sm">子分类</td>
+                      <td data-label="点击" class="py-1.5 pr-2 text-right text-text-secondary text-sm">{{ ch.clicks.toLocaleString() }}</td>
+                      <td data-label="占比" class="py-1.5 pr-2 text-right text-text-secondary text-sm">—</td>
+                      <td data-label="环比" class="py-1.5 text-right text-text-secondary text-sm">—</td>
                     </tr>
                   </template>
                 </template>
@@ -534,15 +534,15 @@ onBeforeUnmount(() => { destroyCharts() })
           <p class="text-label-sm text-text-secondary mb-2">各成员累计添加链接数（F6）</p>
           <div style="height: 260px; position: relative;"><canvas ref="memberCanvas"></canvas></div>
           <div class="mt-3 pt-3 border-t border-surface-variant/40 overflow-x-auto">
-            <table class="w-full text-sm">
+            <table class="m-table is-grid is-dense w-full text-sm">
               <thead><tr class="text-label-sm text-text-secondary"><th class="text-left py-1 font-medium">成员</th><th class="text-right py-1 font-medium">累计</th><th class="text-right py-1 font-medium">期内新增</th><th class="text-right py-1 font-medium">分类</th><th class="text-right py-1 font-medium">编辑</th></tr></thead>
-              <tbody>
+              <tbody class="md:divide-y md:divide-surface-variant/30">
                 <tr v-for="m in members.slice(0, 6)" :key="m.id" class="border-t border-surface-variant/30">
-                  <td class="py-1 text-text-primary">{{ m.display_name || m.username }}</td>
-                  <td class="py-1 text-right text-text-primary">{{ m.added_links }}</td>
-                  <td class="py-1 text-right text-text-secondary">+{{ m.new_links_period }}</td>
-                  <td class="py-1 text-right text-text-secondary">{{ m.added_categories }}</td>
-                  <td class="py-1 text-right text-text-secondary">{{ m.edits }}</td>
+                  <td data-label="成员" class="py-1 text-text-primary">{{ m.display_name || m.username }}</td>
+                  <td data-label="累计" class="py-1 text-right text-text-primary">{{ m.added_links }}</td>
+                  <td data-label="期内新增" class="py-1 text-right text-text-secondary">+{{ m.new_links_period }}</td>
+                  <td data-label="分类" class="py-1 text-right text-text-secondary">{{ m.added_categories }}</td>
+                  <td data-label="编辑" class="py-1 text-right text-text-secondary">{{ m.edits }}</td>
                 </tr>
               </tbody>
             </table>
@@ -566,21 +566,21 @@ onBeforeUnmount(() => { destroyCharts() })
           </div>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+          <table class="m-table is-grid is-dense w-full text-sm">
             <thead><tr class="text-label-sm text-text-secondary border-b border-surface-variant/40">
               <th class="text-left py-2 font-medium">用户</th><th class="text-left py-2 font-medium">角色</th>
               <th class="text-right py-2 font-medium">点击</th><th class="text-right py-2 font-medium">登录</th>
               <th class="text-right py-2 font-medium">总操作</th><th class="text-right py-2 font-medium">最后活跃</th><th class="text-right py-2 font-medium">注册时间</th>
             </tr></thead>
-            <tbody>
+            <tbody class="md:divide-y md:divide-surface-variant/30">
               <tr v-for="u in sortedUsers" :key="u.id" class="border-b border-surface-variant/30 hover:bg-surface-container/40">
-                <td class="py-2 text-text-primary font-medium">{{ u.display_name || u.username }}</td>
-                <td class="py-2 text-text-secondary">{{ u.role }}</td>
-                <td class="py-2 text-right text-text-primary">{{ u.clicks.toLocaleString() }}</td>
-                <td class="py-2 text-right text-text-secondary">{{ u.logins.toLocaleString() }}</td>
-                <td class="py-2 text-right text-text-primary">{{ u.total.toLocaleString() }}</td>
-                <td class="py-2 text-right text-text-secondary">{{ u.last_seen ? u.last_seen.slice(0, 10) : '—' }}</td>
-                <td class="py-2 text-right text-text-secondary">{{ u.created_at ? u.created_at.slice(0, 10) : '—' }}</td>
+                <td data-label="用户" class="py-2 text-text-primary font-medium">{{ u.display_name || u.username }}</td>
+                <td data-label="角色" class="py-2 text-text-secondary">{{ u.role }}</td>
+                <td data-label="点击" class="py-2 text-right text-text-primary">{{ u.clicks.toLocaleString() }}</td>
+                <td data-label="登录" class="py-2 text-right text-text-secondary">{{ u.logins.toLocaleString() }}</td>
+                <td data-label="总操作" class="py-2 text-right text-text-primary">{{ u.total.toLocaleString() }}</td>
+                <td data-label="最后活跃" class="py-2 text-right text-text-secondary">{{ u.last_seen ? u.last_seen.slice(0, 10) : '—' }}</td>
+                <td data-label="注册时间" class="py-2 text-right text-text-secondary">{{ u.created_at ? u.created_at.slice(0, 10) : '—' }}</td>
               </tr>
             </tbody>
           </table>

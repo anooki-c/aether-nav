@@ -61,7 +61,7 @@
         </div>
         <div v-if="!data.zero_click_links.length" class="py-8 text-center text-body-md text-on-surface-variant">暂无异常 🎉</div>
         <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-body-md">
+          <table class="m-table w-full text-left text-body-md">
             <thead>
               <tr class="border-b border-outline-variant text-on-surface-variant">
                 <th class="py-2 pr-4 font-medium">标题</th>
@@ -72,14 +72,14 @@
                 <th class="py-2 font-medium">操作</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="md:divide-y md:divide-outline-variant/60">
               <tr v-for="l in data.zero_click_links" :key="l.id" class="border-b border-outline-variant/60">
-                <td class="py-2 pr-4 text-on-surface">{{ l.title }}</td>
-                <td class="py-2 pr-4 max-w-[220px] truncate text-on-surface-variant"><a :href="l.url" target="_blank" class="hover:text-primary hover:underline">{{ l.url || '-' }}</a></td>
-                <td class="py-2 pr-4 text-on-surface-variant">{{ l.category_name || '-' }}</td>
-                <td class="py-2 pr-4 text-on-surface-variant">{{ permLabel(l.permission) }}</td>
-                <td class="py-2 pr-4 text-on-surface-variant">{{ fmtDate(l.created_at) }}</td>
-                <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('links')">去管理</button></td>
+                <td data-label="标题" class="py-2 pr-4 text-on-surface">{{ l.title }}</td>
+                <td data-label="地址" class="py-2 pr-4 max-w-[220px] truncate text-on-surface-variant"><a :href="l.url" target="_blank" class="hover:text-primary hover:underline">{{ l.url || '-' }}</a></td>
+                <td data-label="分类" class="py-2 pr-4 text-on-surface-variant">{{ l.category_name || '-' }}</td>
+                <td data-label="权限" class="py-2 pr-4 text-on-surface-variant">{{ permLabel(l.permission) }}</td>
+                <td data-label="创建时间" class="py-2 pr-4 text-on-surface-variant">{{ fmtDate(l.created_at) }}</td>
+                <td class="m-span py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('links')">去管理</button></td>
               </tr>
             </tbody>
           </table>
@@ -95,7 +95,7 @@
         </div>
         <div v-if="!data.empty_categories.length" class="py-8 text-center text-body-md text-on-surface-variant">暂无异常 🎉</div>
         <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-body-md">
+          <table class="m-table w-full text-left text-body-md">
             <thead>
               <tr class="border-b border-outline-variant text-on-surface-variant">
                 <th class="py-2 pr-4 font-medium">分类名</th>
@@ -105,15 +105,15 @@
                 <th class="py-2 font-medium">操作</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="md:divide-y md:divide-outline-variant/60">
               <tr v-for="c in data.empty_categories" :key="c.id" class="border-b border-outline-variant/60">
-                <td class="py-2 pr-4 text-on-surface">
+                <td data-label="分类名" class="py-2 pr-4 text-on-surface">
                   <span v-if="c.icon" class="mr-1">{{ c.icon }}</span>{{ c.name }}
                 </td>
-                <td class="py-2 pr-4 text-on-surface-variant">{{ c.parent_name || '-' }}</td>
-                <td class="py-2 pr-4 text-on-surface-variant">{{ permLabel(c.permission) }}</td>
-                <td class="py-2 pr-4 text-on-surface-variant">{{ c.visible ? '显示' : '隐藏' }}</td>
-                <td class="py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('categories')">去管理</button></td>
+                <td data-label="父分类" class="py-2 pr-4 text-on-surface-variant">{{ c.parent_name || '-' }}</td>
+                <td data-label="权限" class="py-2 pr-4 text-on-surface-variant">{{ permLabel(c.permission) }}</td>
+                <td data-label="主页显示" class="py-2 pr-4 text-on-surface-variant">{{ c.visible ? '显示' : '隐藏' }}</td>
+                <td class="m-span py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('categories')">去管理</button></td>
               </tr>
             </tbody>
           </table>

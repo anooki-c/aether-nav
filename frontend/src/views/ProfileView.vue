@@ -35,8 +35,12 @@ const sections = [
   { k: 'info', icon: 'info', label: '账号信息' },
 ]
 const activeSection = ref('profile')
+// 移动端抽屉导航：桌面侧栏是 hidden md:flex，手机上必须另给入口，
+// 否则「个人偏好 / 安全 / 账号信息」三个 section 在手机里根本进不去。
+const navOpen = ref(false)
 function scrollTo(id) {
   activeSection.value = id
+  navOpen.value = false
   const el = document.getElementById('sec-' + id)
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -161,6 +165,42 @@ async function savePassword() {
 
 <template>
   <div class="flex h-screen overflow-hidden bg-bg-page text-on-background font-body-md">
+    <!-- 移动端抽屉导航（与后台同一套交互）：补上桌面侧栏在手机上缺的入口 -->
+    <div v-if="navOpen" class="fixed inset-0 bg-black/40 z-40 md:hidden" @click="navOpen = false"></div>
+    <aside v-if="navOpen" class="fixed left-0 top-0 h-full w-[260px] max-w-[85vw] bg-surface shadow-xl z-50 flex flex-col md:hidden">
+      <div class="px-5 pt-6 pb-5 border-b border-outline-variant/30 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+          <img v-if="store.siteLogo" :src="store.siteLogo" alt="logo" class="w-full h-full object-contain" />
+          <span v-else class="font-bold text-lg text-primary">云</span>
+        </div>
+        <div class="min-w-0">
+          <div class="font-headline-sm text-headline-sm font-bold text-primary truncate">{{ store.siteName }}</div>
+          <div class="font-label-sm text-label-sm text-secondary">个人设置</div>
+        </div>
+        <button class="ml-auto w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container" title="关闭" @click="navOpen = false">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+      <nav class="flex-1 px-4 py-4 flex flex-col gap-1">
+        <button
+          v-for="s in sections"
+          :key="s.k"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-all active:opacity-80"
+          :class="activeSection === s.k ? 'bg-primary-fixed text-primary border-l-4 border-primary rounded-r-lg font-bold' : 'text-secondary hover:bg-surface-container'"
+          @click="scrollTo(s.k)"
+        >
+          <span class="material-symbols-outlined">{{ s.icon }}</span>
+          {{ s.label }}
+        </button>
+      </nav>
+      <div class="p-4 border-t border-outline-variant/30" style="padding-bottom: calc(1rem + var(--sab))">
+        <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-all" @click="goFront">
+          <span class="material-symbols-outlined">arrow_back</span>
+          <span class="font-body-md">返回前台</span>
+        </button>
+      </div>
+    </aside>
+
     <!-- 个人设置 侧边栏（与后台同款独立控制台） -->
     <aside class="hidden md:flex flex-col bg-surface shadow-md w-[240px] shrink-0">
       <button class="px-6 pt-6 pb-6 border-b border-outline-variant/30 flex items-center gap-3 text-left hover:opacity-80 transition-opacity" @click="goFront">
@@ -197,7 +237,12 @@ async function savePassword() {
     <div class="flex-1 flex flex-col min-w-0">
       <!-- 顶栏 -->
       <header class="flex justify-between items-center gap-3 px-4 sm:px-grid-gutter py-3 bg-surface shadow-sm z-30">
-        <div class="font-headline-md text-headline-md font-bold text-primary truncate">个人设置</div>
+        <div class="flex items-center gap-2 min-w-0">
+          <button class="md:hidden flex items-center justify-center w-9 h-9 shrink-0 rounded-lg text-primary hover:bg-surface-container transition-colors" title="菜单" @click="navOpen = true">
+            <span class="material-symbols-outlined text-[22px]">menu</span>
+          </button>
+          <div class="font-headline-md text-headline-md font-bold text-primary truncate">个人设置</div>
+        </div>
         <div class="flex items-center gap-2">
           <span class="text-body-sm text-on-surface-variant hidden sm:block">{{ store.user?.display_name || store.user?.username }}</span>
           <button

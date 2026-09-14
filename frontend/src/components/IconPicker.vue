@@ -208,23 +208,23 @@ function close() {
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
     <div class="relative bg-bg-card modal-panel responsive-modal-panel w-full max-w-3xl max-h-[85vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
       <!-- Header -->
-      <div class="px-6 py-4 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+      <div class="px-4 py-3 md:px-6 md:py-4 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center gap-3 shrink-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
             <span class="material-symbols-outlined text-[20px]">emoji_emotions</span>
           </div>
-          <div>
-            <h2 class="font-headline-md text-headline-md text-on-surface">{{ title }}</h2>
+          <div class="min-w-0">
+            <h2 class="font-headline-sm md:font-headline-md text-headline-sm md:text-headline-md text-on-surface">{{ title }}</h2>
             <p class="font-label-sm text-label-sm text-on-surface-variant">点击图标即可复制其代码并填入输入框</p>
           </div>
         </div>
-        <button class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-on-surface-variant" @click="close">
+        <button class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-on-surface-variant shrink-0" @click="close">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
 
       <!-- 图标来源切换 -->
-      <div class="px-6 py-3 border-b border-outline-variant/20 shrink-0">
+      <div class="px-4 py-3 md:px-6 border-b border-outline-variant/20 shrink-0">
         <div class="flex items-center bg-surface-container-highest rounded-full p-1 gap-1 overflow-x-auto">
           <button type="button" v-for="t in TABS" :key="t.key"
             class="flex-none px-3 py-1.5 rounded-full text-sm font-medium transition-all"
@@ -236,7 +236,7 @@ function close() {
       </div>
 
       <!-- 搜索（Flaticon 不需要） -->
-      <div v-if="activeTab !== 'flaticon'" class="px-6 py-3 border-b border-outline-variant/20 shrink-0">
+      <div v-if="activeTab !== 'flaticon'" class="px-4 py-3 md:px-6 border-b border-outline-variant/20 shrink-0">
         <div class="relative">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
           <input
@@ -257,16 +257,16 @@ function close() {
             <span class="material-symbols-outlined text-4xl">search_off</span>
             <p class="mt-2 font-body-sm text-body-sm">没有匹配的图标</p>
           </div>
-          <div v-else class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+          <div v-else class="grid grid-cols-4 sm:grid-cols-8 md:grid-cols-10 gap-2">
             <button
               v-for="it in items"
               :key="it.value"
-              class="flex flex-col items-center justify-center gap-1 py-3 rounded-xl border border-transparent hover:border-primary/40 hover:bg-primary-fixed/30 transition-[transform,background-color,border-color] active:scale-95 group"
+              class="flex flex-col items-center justify-start gap-1 py-2.5 md:py-3 rounded-xl border border-transparent hover:border-primary/40 hover:bg-primary-fixed/30 transition-[transform,background-color,border-color] active:scale-95 group min-w-0"
               :title="`点击选用：${it.name}`"
               @click="onPick(it.value)"
             >
               <EntityIcon :icon="it.value" :size="26" class="text-on-surface group-hover:text-primary" />
-              <span class="font-label-sm text-label-sm text-on-surface-variant truncate max-w-full px-1 group-hover:text-primary">{{ it.name }}</span>
+              <span class="font-label-sm text-label-sm text-on-surface-variant w-full text-center break-all leading-tight px-0.5 line-clamp-2 md:line-clamp-none md:truncate group-hover:text-primary">{{ it.name }}</span>
             </button>
           </div>
         </template>

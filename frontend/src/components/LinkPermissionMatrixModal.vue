@@ -68,17 +68,17 @@ function close() {
 
     <div class="relative responsive-modal-panel w-full max-w-3xl max-h-[90vh] flex flex-col bg-surface-container-lowest rounded-xl shadow-2xl border border-outline-variant/30 overflow-hidden">
       <!-- Header -->
-      <div class="flex items-start justify-between p-6 border-b border-outline-variant/30">
-        <div>
-          <h2 class="font-headline-lg text-headline-lg text-text-primary tracking-tight">权限矩阵：{{ link.title }}</h2>
-          <p class="text-text-secondary mt-1 flex items-center gap-2 font-body-sm" v-if="linkInfo">
+      <div class="flex flex-wrap items-start justify-between gap-3 p-4 md:p-6 border-b border-outline-variant/30">
+        <div class="min-w-0">
+          <h2 class="font-headline-lg text-headline-lg text-text-primary tracking-tight break-words">权限矩阵：{{ link.title }}</h2>
+          <p class="text-text-secondary mt-1 flex flex-wrap items-center gap-2 font-body-sm" v-if="linkInfo">
             <span class="material-symbols-outlined text-[16px]">folder</span>
             {{ (linkInfo.category_path || []).join(' / ') || '未分类' }}
             <span class="text-outline">·</span>
             <span>基础权限：{{ linkInfo.permission }}</span>
           </p>
         </div>
-        <button class="text-outline hover:text-primary transition-colors" @click="close">
+        <button class="text-outline hover:text-primary transition-colors shrink-0" @click="close">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -97,13 +97,13 @@ function close() {
 
       <!-- Body -->
       <div class="flex-1 overflow-hidden flex flex-col">
-        <div class="p-4 border-b border-outline-variant/30 bg-surface/50 flex justify-between items-center">
-          <div class="flex items-center gap-2 text-on-surface-variant text-label-sm bg-surface-container px-3 py-1.5 rounded-md">
-            <span class="material-symbols-outlined text-[16px]">info</span>
-            该链接对每个用户的可见性；隐藏者标注被哪一层拦截
+        <div class="p-3 md:p-4 border-b border-outline-variant/30 bg-surface/50 flex flex-col items-stretch gap-2.5 md:flex-row md:items-center md:justify-between">
+          <div class="flex items-start gap-2 text-on-surface-variant text-label-sm bg-surface-container px-3 py-1.5 rounded-md min-w-0">
+            <span class="material-symbols-outlined text-[16px] shrink-0">info</span>
+            <span class="min-w-0">该链接对每个用户的可见性；隐藏者标注被哪一层拦截</span>
           </div>
-          <div class="relative" v-if="roles.length">
-            <select v-model="filterRole" class="pl-3 pr-8 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer">
+          <div class="relative shrink-0" v-if="roles.length">
+            <select v-model="filterRole" class="w-full md:w-auto pl-3 pr-8 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none cursor-pointer">
               <option value="">全部角色</option>
               <option v-for="r in roles" :key="r" :value="r">{{ r }}</option>
             </select>
@@ -111,7 +111,7 @@ function close() {
         </div>
 
         <div class="overflow-y-auto">
-          <table class="w-full text-left border-collapse">
+          <table class="m-table is-dense w-full text-left border-collapse">
             <thead>
               <tr class="border-b border-outline-variant/30 bg-surface-container-low/50 sticky top-0">
                 <th class="py-3 px-4 font-headline-sm text-headline-sm text-on-surface-variant w-12 text-center">#</th>
@@ -121,30 +121,30 @@ function close() {
                 <th class="py-3 px-4 font-headline-sm text-headline-sm text-on-surface-variant">被拦截层级 / 原因</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-outline-variant/20">
+            <tbody class="md:divide-y md:divide-outline-variant/20">
               <tr v-if="loading" class="text-center text-on-surface-variant">
-                <td colspan="5" class="py-10 font-body-md">加载中…</td>
+                <td colspan="5" class="m-span py-10 font-body-md">加载中…</td>
               </tr>
               <tr v-else-if="shown.length === 0" class="text-center text-on-surface-variant">
-                <td colspan="5" class="py-10 font-body-md">暂无用户</td>
+                <td colspan="5" class="m-span py-10 font-body-md">暂无用户</td>
               </tr>
               <tr v-for="(u, i) in shown" :key="u.id" class="hover:bg-surface-container-lowest transition-all">
-                <td class="py-3 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
-                <td class="py-3 px-4">
-                  <div class="flex items-center gap-2">
+                <td data-label="#" class="py-3 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
+                <td class="m-span py-3 px-4">
+                  <div class="flex items-center flex-wrap gap-2">
                     <span class="font-headline-sm text-headline-sm text-text-primary">{{ u.display_name }}</span>
                     <span class="text-label-sm text-on-surface-variant">@{{ u.username }}</span>
                     <span v-if="!u.is_active" class="px-1.5 py-0.5 rounded text-label-xs bg-gray-200 text-gray-600">已禁用</span>
                   </div>
                 </td>
-                <td class="py-3 px-4 text-body-sm text-on-surface">{{ u.role }}</td>
-                <td class="py-3 px-4 text-center">
+                <td data-label="角色" class="py-3 px-4 text-body-sm text-on-surface">{{ u.role }}</td>
+                <td data-label="可见" class="py-3 px-4 text-center">
                   <span
                     class="inline-flex px-2 py-1 rounded-full text-label-sm font-medium"
                     :class="u.visible ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'"
                   >{{ u.visible ? '可见' : '隐藏' }}</span>
                 </td>
-                <td class="py-3 px-4">
+                <td data-label="拦截原因" class="py-3 px-4">
                   <template v-if="u.visible">
                     <span class="text-label-sm text-on-surface-variant">默认可见 / 已授权</span>
                   </template>

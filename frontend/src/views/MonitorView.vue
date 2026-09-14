@@ -772,12 +772,12 @@ async function runIpDiagnostic() {
             <h2 class="font-headline-sm text-headline-sm text-text-primary">Docker 容器</h2>
             <span class="text-label-sm text-text-secondary">{{ filteredContainers.length }}/{{ containers.length }} 个</span>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <!-- 搜索 -->
-            <div class="relative">
+            <div class="relative flex-1 min-w-[8rem] lg:flex-none">
               <span class="material-symbols-outlined text-[18px] text-text-secondary absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
               <input v-model="searchText" type="text" placeholder="搜索名称 / 镜像"
-                class="pl-9 pr-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40 w-44" />
+                class="w-full lg:w-44 pl-9 pr-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
             </div>
             <!-- 视图切换 -->
             <div class="flex rounded-xl border border-outline-variant/40 overflow-hidden">
@@ -823,9 +823,9 @@ async function runIpDiagnostic() {
         <div v-if="!containers.length" class="text-text-secondary text-sm py-4">未获取到容器（或群晖未安装 Container Manager）</div>
         <div v-else-if="!filteredContainers.length" class="text-text-secondary text-sm py-4">没有符合当前筛选条件的容器</div>
 
-        <!-- 列表视图 -->
+        <!-- 列表视图（移动端由 .m-table 转成卡片：定宽标签 + 可换行值） -->
         <div v-else-if="viewMode === 'list'" class="overflow-x-auto">
-          <table class="w-full text-sm">
+          <table class="m-table w-full text-sm">
             <thead>
               <tr class="text-label-sm text-text-secondary border-b border-surface-variant/40">
                 <th class="text-left py-2 pr-2 font-medium">名称</th>
@@ -836,23 +836,28 @@ async function runIpDiagnostic() {
                 <th class="text-right py-2 font-medium">操作</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="md:divide-y md:divide-surface-variant/30">
               <template v-for="c in filteredContainers" :key="c.id">
                 <tr class="border-b border-surface-variant/30 hover:bg-surface-container/40">
-                  <td class="py-2 pr-2 text-text-primary font-medium">
-                    <div class="flex items-center gap-2">
+                  <td data-label="名称" class="py-2 pr-2 text-text-primary font-medium">
+                    <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                       <span>{{ c.name }}</span>
                       <span v-if="c.project" class="text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-text-secondary">{{ c.project }}</span>
+                      <!-- 手机端：状态贴到名称行最右；PC 端由下方独立列展示 -->
+                      <span class="md:hidden ml-auto inline-flex items-center gap-1.5 shrink-0">
+                        <span class="w-2 h-2 rounded-full shrink-0" :class="stateDot(c.state)"></span>
+                        <span class="text-text-secondary text-xs">{{ stateText(c.state) }}</span>
+                      </span>
                     </div>
                   </td>
-                  <td class="py-2 pr-2">
+                  <td data-label="状态" class="m-hide py-2 pr-2">
                     <span class="inline-flex items-center gap-1.5">
-                      <span class="w-2 h-2 rounded-full" :class="stateDot(c.state)"></span>
+                      <span class="w-2 h-2 rounded-full shrink-0" :class="stateDot(c.state)"></span>
                       <span class="text-text-secondary">{{ stateText(c.state) }}</span>
                     </span>
                   </td>
-                  <td class="py-2 pr-2 text-text-secondary max-w-[220px] truncate">{{ c.image || '—' }}</td>
-                  <td class="py-2 pr-2 text-text-primary">
+                  <td data-label="镜像" class="py-2 pr-2 text-text-secondary max-w-[220px] truncate">{{ c.image || '—' }}</td>
+                  <td data-label="网络" class="m-span py-2 pr-2 text-text-primary">
                     <div v-if="c.networks && c.networks.length" class="flex flex-col gap-0.5 font-mono text-xs">
                       <span v-for="n in c.networks" :key="n.name">
                         <span class="text-text-secondary">{{ n.name }}</span>:
@@ -861,7 +866,7 @@ async function runIpDiagnostic() {
                     </div>
                     <span v-else class="text-text-secondary">—</span>
                   </td>
-                  <td class="py-2 pr-2">
+                  <td class="m-span py-2 pr-2">
                     <div v-if="!portCache[c.id]">
                       <button @click.stop="refreshContainerPorts(c)" class="text-label-sm text-primary hover:underline">加载端口</button>
                     </div>
@@ -879,23 +884,25 @@ async function runIpDiagnostic() {
                       </button>
                     </div>
                   </td>
-                  <td class="py-2 text-right whitespace-nowrap" @click.stop>
+                  <td class="m-span py-2 md:text-right whitespace-nowrap" @click.stop>
+                    <div class="flex flex-wrap items-center gap-1 md:justify-end">
                     <button v-if="c.state !== 'running'" @click="act(c.name, 'start')" :disabled="actingId === c.name + ':start'"
                       class="px-2 py-1 rounded-lg text-xs font-semibold bg-success/10 text-success hover:bg-success/20 transition-all disabled:opacity-60">启动</button>
                     <button v-if="c.state === 'running'" @click="act(c.name, 'stop')" :disabled="actingId === c.name + ':stop'"
                       class="px-2 py-1 rounded-lg text-xs font-semibold bg-error/10 text-error hover:bg-error/20 transition-all disabled:opacity-60">停止</button>
                     <button @click="act(c.name, 'restart')" :disabled="actingId === c.name + ':restart'"
-                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all disabled:opacity-60 ml-1">重启</button>
+                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all disabled:opacity-60">重启</button>
                     <!-- 快速添加为导航链接：仅内网（群晖宿主 IP + docker 宿主机端口）；未运行或地址已存在则禁用 -->
                     <button v-if="c.state === 'running'" @click="openAddConnection(c)"
                       :disabled="addUrlExists(c)"
-                      class="px-2 py-1 rounded-lg text-xs font-semibold transition-all ml-1"
+                      class="px-2 py-1 rounded-lg text-xs font-semibold transition-all"
                       :class="addUrlExists(c)
                         ? 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 cursor-not-allowed'
                         : 'bg-primary/10 text-primary hover:bg-primary/20'"
                       :title="addUrlExists(c) ? '该内网地址已存在链接' : '快速添加为导航链接（内网地址）'">添加连接</button>
                     <button v-else disabled
-                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 transition-all ml-1 cursor-not-allowed" title="容器未运行，暂不可用">添加连接</button>
+                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 transition-all cursor-not-allowed" title="容器未运行，暂不可用">添加连接</button>
+                    </div>
                   </td>
                 </tr>
               </template>
@@ -969,19 +976,19 @@ async function runIpDiagnostic() {
       <!-- 端口重复性检测弹窗 -->
       <div v-if="showPortModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showPortModal = false"></div>
-        <div class="relative bg-bg-card w-full max-w-[520px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
-          <div class="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+        <div class="relative responsive-modal-panel bg-bg-card w-full max-w-[520px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+          <div class="px-4 py-3 md:px-6 md:py-4 border-b border-outline-variant/20 flex justify-between items-center gap-3 shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[20px]">find_in_page</span>
               </div>
-              <h2 class="font-headline-md text-headline-md text-text-primary">端口检测结果：{{ portCheckValue }}</h2>
+              <h2 class="font-headline-sm md:font-headline-md text-headline-sm md:text-headline-md text-text-primary break-words">端口检测结果：{{ portCheckValue }}</h2>
             </div>
-            <button class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-text-secondary" @click="showPortModal = false">
+            <button class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-text-secondary shrink-0" @click="showPortModal = false">
               <span class="material-symbols-outlined">close</span>
             </button>
           </div>
-          <div class="p-6">
+          <div class="p-4 md:p-6 overflow-y-auto">
             <div v-if="!portMatches.length" class="text-text-secondary text-sm py-4 text-center">
               未检测到端口 {{ portCheckValue }} 被任何容器占用 ✓
             </div>
@@ -1013,7 +1020,7 @@ async function runIpDiagnostic() {
               </p>
             </div>
           </div>
-          <div class="px-6 py-4 border-t border-outline-variant/20 flex justify-end shrink-0">
+          <div class="px-4 py-3 md:px-6 md:py-4 border-t border-outline-variant/20 flex justify-end gap-2 shrink-0">
             <button @click="showPortModal = false"
               class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all">
               关闭
@@ -1025,19 +1032,19 @@ async function runIpDiagnostic() {
       <!-- IP 重复检测弹窗 -->
       <div v-if="showIpModal" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showIpModal = false"></div>
-        <div class="relative bg-bg-card w-full max-w-[640px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
-          <div class="px-6 py-4 border-b border-outline-variant/20 flex justify-between items-center shrink-0">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+        <div class="relative responsive-modal-panel bg-bg-card w-full max-w-[640px] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
+          <div class="px-4 py-3 md:px-6 md:py-4 border-b border-outline-variant/20 flex justify-between items-center gap-3 shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-[20px]">pin</span>
               </div>
-              <h2 class="font-headline-md text-headline-md text-text-primary">IP 重复检测</h2>
+              <h2 class="font-headline-sm md:font-headline-md text-headline-sm md:text-headline-md text-text-primary">IP 重复检测</h2>
             </div>
-            <button @click="showIpModal = false" class="text-text-secondary hover:text-text-primary transition-all">
+            <button @click="showIpModal = false" class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-text-secondary shrink-0">
               <span class="material-symbols-outlined text-[22px]">close</span>
             </button>
           </div>
-          <div class="p-6 space-y-4">
+          <div class="p-4 md:p-6 space-y-4 overflow-y-auto">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3">
               <label class="flex flex-col gap-1">
                 <span class="text-label-sm text-text-secondary">网络类型</span>
@@ -1084,7 +1091,7 @@ async function runIpDiagnostic() {
               暂无可用网络（容器未加载网络信息）
             </p>
           </div>
-          <div class="px-6 py-4 border-t border-outline-variant/20 flex justify-end shrink-0">
+          <div class="px-4 py-3 md:px-6 md:py-4 border-t border-outline-variant/20 flex justify-end gap-2 shrink-0">
             <button @click="showIpModal = false"
               class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all">
               关闭

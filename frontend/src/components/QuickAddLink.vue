@@ -218,23 +218,23 @@ async function save() {
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
       <div class="modal-panel responsive-modal-panel relative bg-bg-card w-full max-w-[640px] max-h-[90vh] rounded-[20px] shadow-2xl overflow-hidden flex flex-col border border-outline-variant/30">
       <!-- Header -->
-      <div class="px-7 py-5 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center shrink-0">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center">
+      <div class="px-4 py-4 md:px-7 md:py-5 border-b border-outline-variant/20 bg-surface-container-lowest flex justify-between items-center gap-3 shrink-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-primary-fixed text-primary flex items-center justify-center shrink-0">
             <span class="material-symbols-outlined text-[20px]">bolt</span>
           </div>
-          <div>
-            <h2 class="font-headline-md text-headline-md text-on-surface leading-tight">快速添加链接</h2>
+          <div class="min-w-0">
+            <h2 class="font-headline-sm md:font-headline-md text-headline-sm md:text-headline-md text-on-surface leading-tight">快速添加链接</h2>
             <p class="font-label-xs text-label-xs text-on-surface-variant">粘贴地址，或在任意网页用「书签小工具」一键带入当前页</p>
           </div>
         </div>
-        <button class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-on-surface-variant" @click="close">
+        <button class="w-9 h-9 rounded-full hover:bg-surface-container transition-colors flex items-center justify-center text-on-surface-variant shrink-0" @click="close">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
 
       <!-- Body -->
-      <div class="flex-1 overflow-y-auto p-7 space-y-5">
+      <div class="flex-1 overflow-y-auto p-4 md:p-7 space-y-4 md:space-y-5">
         <!-- 主 URL -->
         <div class="flex flex-col gap-1.5">
           <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">页面主 URL <span class="text-error">*</span></label>
@@ -422,9 +422,9 @@ async function save() {
       </div>
 
       <!-- Footer -->
-      <div class="px-7 py-5 border-t border-outline-variant/20 bg-surface-container-lowest flex justify-end gap-3 shrink-0">
-        <button class="px-7 py-2.5 rounded-full text-secondary hover:bg-surface-container transition-colors font-headline-sm" @click="close">取消</button>
-        <button class="px-7 py-2.5 rounded-full bg-primary text-on-primary shadow-md hover:shadow-lg hover:-translate-y-[1px] active:translate-y-0 transition-[transform,background-color,box-shadow] font-headline-sm font-semibold disabled:opacity-50" :disabled="saving" @click="save">
+      <div class="px-4 py-4 md:px-7 md:py-5 border-t border-outline-variant/20 bg-surface-container-lowest flex justify-end gap-2 md:gap-3 shrink-0">
+        <button class="px-5 md:px-7 py-2.5 rounded-full text-secondary hover:bg-surface-container transition-colors font-headline-sm" @click="close">取消</button>
+        <button class="px-5 md:px-7 py-2.5 rounded-full bg-primary text-on-primary shadow-md hover:shadow-lg hover:-translate-y-[1px] active:translate-y-0 transition-[transform,background-color,box-shadow] font-headline-sm font-semibold disabled:opacity-50" :disabled="saving" @click="save">
           {{ saving ? '保存中…' : '保存' }}
         </button>
       </div>
