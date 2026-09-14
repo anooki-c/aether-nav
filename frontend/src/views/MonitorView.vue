@@ -167,6 +167,12 @@ function addUrlExists(c) {
 
 /* ── 容器视图：Tab / 搜索 / 列表卡片切换 ────────────── */
 const viewMode = ref('list')        // 'list' | 'card'
+// 移动端（<768px）两种模式都按卡片样式显示 —— 列表模式在窄屏会把「名称/镜像/网络」
+// 压到不可读。这里用 matchMedia 同步一个标记（不用 resize 监听，性能更好也更准）。
+const isMobile = ref(false)
+let mqRef = null
+function syncMobile() { if (mqRef) isMobile.value = mqRef.matches }
+const showCards = computed(() => viewMode.value === 'card' || isMobile.value)
 const activeTab = ref('all')        // all | running | stopped | paused
 const searchText = ref('')
 
@@ -528,9 +534,18 @@ function stateCardClass(state) {
   if (state === 'paused') return 'bg-warning/10 border-warning/30'
   return 'bg-error/10 border-error/30'
 }
+// 运行状态徽章底色：按状态填充（运行中绿 / 已暂停黄 / 已停止红）
+function stateBadgeClass(state) {
+  if (state === 'running') return 'bg-success/15 text-success'
+  if (state === 'paused') return 'bg-warning/20 text-warning'
+  return 'bg-error/15 text-error'
+}
 
 /* ── 生命周期 ─────────────────────────────────────── */
 onMounted(async () => {
+  mqRef = window.matchMedia('(max-width: 767px)')
+  syncMobile()
+  mqRef.addEventListener('change', syncMobile)
   await loadConfig()
   if (!needConfig.value) loadSnapshot()
   await loadExistingLinks()   // 必须等待：按钮 disabled / openAddConnection 去重都依赖 existingLinks
@@ -544,6 +559,7 @@ function onVisibilityChange() {
 }
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer)
+  if (mqRef) mqRef.removeEventListener('change', syncMobile)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
@@ -594,7 +610,7 @@ async function runIpDiagnostic() {
       </div>
       <div class="flex items-center gap-2">
         <button v-if="!needConfig" @click="showConfig = !showConfig"
-          class="px-3 py-2 rounded-xl text-sm font-semibold border transition-all flex items-center gap-1"
+          class="px-3 py-2 rounded-xl text-sm font-semibold border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] flex items-center gap-1"
           :class="showConfig
             ? 'bg-primary text-on-primary hover:opacity-90'
             : 'bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high'">
@@ -602,7 +618,7 @@ async function runIpDiagnostic() {
           {{ showConfig ? '收起配置' : '连接配置' }}
         </button>
         <button v-if="!needConfig" @click="loadSnapshot(true)" :disabled="loading"
-          class="px-3 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all flex items-center gap-1 disabled:opacity-60">
+          class="px-3 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] flex items-center gap-1 disabled:opacity-60">
           <span class="material-symbols-outlined text-[18px]" :class="loading ? 'animate-spin' : ''">refresh</span>
           {{ loading ? '刷新中…' : '刷新' }}
         </button>
@@ -656,15 +672,15 @@ async function runIpDiagnostic() {
       <div class="flex items-center justify-end gap-3 mt-4">
         <span v-if="configMsg" class="text-label-sm text-text-secondary mr-auto">{{ configMsg }}</span>
         <button v-if="!needConfig" @click="showConfig = false"
-          class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all">
+          class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">
           收起
         </button>
         <button @click="testConfig" :disabled="testingConfig"
-          class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all disabled:opacity-60">
+          class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60">
           {{ testingConfig ? '测试中…' : '测试连接' }}
         </button>
         <button @click="saveConfig" :disabled="savingConfig"
-          class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all disabled:opacity-60">
+          class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60">
           {{ savingConfig ? '保存中…' : '保存并连接' }}
         </button>
       </div>
@@ -710,18 +726,18 @@ async function runIpDiagnostic() {
             <span class="text-label-sm text-text-secondary">CPU 使用率</span>
             <span class="material-symbols-outlined text-[18px] text-primary">memory</span>
           </div>
-          <div class="font-headline-md text-headline-md text-text-primary shrink-0">{{ util.cpu_usage != null ? util.cpu_usage + '%' : '—' }}</div>
+          <div class="font-headline-md text-headline-md text-text-primary shrink-0 tabular-nums">{{ util.cpu_usage != null ? util.cpu_usage + '%' : '—' }}</div>
           <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full flex-1 min-h-[40px] mt-1 text-primary">
             <path :d="smoothPath(history.map(h => h.cpu))" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round" />
           </svg>
-          <div class="text-label-sm text-text-secondary shrink-0" v-if="util.cpu_1 != null">负载 {{ util.cpu_1 }}/{{ util.cpu_5 }}/{{ util.cpu_15 }}</div>
+          <div class="text-label-sm text-text-secondary shrink-0 tabular-nums" v-if="util.cpu_1 != null">负载 {{ util.cpu_1 }}/{{ util.cpu_5 }}/{{ util.cpu_15 }}</div>
         </div>
         <div class="bg-bg-card rounded-2xl p-card-padding shadow-glass border border-surface-variant/50 flex flex-col min-h-0">
           <div class="flex items-center justify-between shrink-0">
             <span class="text-label-sm text-text-secondary">内存使用率</span>
             <span class="material-symbols-outlined text-[18px] text-info">developer_board</span>
           </div>
-          <div class="font-headline-md text-headline-md text-text-primary shrink-0">{{ util.memory != null ? util.memory + '%' : '—' }}</div>
+          <div class="font-headline-md text-headline-md text-text-primary shrink-0 tabular-nums">{{ util.memory != null ? util.memory + '%' : '—' }}</div>
           <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full flex-1 min-h-[40px] mt-1 text-info">
             <path :d="smoothPath(history.map(h => h.mem))" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round" />
           </svg>
@@ -731,7 +747,7 @@ async function runIpDiagnostic() {
             <span class="text-label-sm text-text-secondary">网络速率</span>
             <span class="material-symbols-outlined text-[18px] text-success">lan</span>
           </div>
-          <div class="font-headline-md text-headline-md text-text-primary shrink-0">{{ history.length ? fmtNetRate(history[history.length - 1].net) : '—' }}</div>
+          <div class="font-headline-md text-headline-md text-text-primary shrink-0 tabular-nums">{{ history.length ? fmtNetRate(history[history.length - 1].net) : '—' }}</div>
           <svg viewBox="0 0 120 32" preserveAspectRatio="none" class="w-full flex-1 min-h-[40px] mt-1 text-success">
             <path :d="smoothPath(history.map(h => h.net))" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round" />
           </svg>
@@ -746,17 +762,17 @@ async function runIpDiagnostic() {
             <div v-for="(d, i) in diskVolumes" :key="'disk' + i" class="space-y-1">
               <div class="flex items-center gap-3 text-sm min-w-0">
                 <span class="text-text-primary font-medium shrink-0 w-20 truncate" :title="d.display_name || d.name">{{ d.display_name || d.name }}</span>
-                <span class="text-text-primary text-xs shrink-0">{{ d.used != null ? fmtBytes(d.used) + ' / ' + fmtBytes(d.total) : '—' }}</span>
-                <span class="text-text-secondary text-xs shrink-0 ml-auto">
+                <span class="text-text-primary text-xs shrink-0 tabular-nums">{{ d.used != null ? fmtBytes(d.used) + ' / ' + fmtBytes(d.total) : '—' }}</span>
+                <span class="text-text-secondary text-xs shrink-0 ml-auto tabular-nums">
                   <template v-if="d.io">IO {{ fmtBytes(d.io.read_byte) }} / {{ fmtBytes(d.io.write_byte) }}</template>
                   <template v-else>IO —</template>
                 </span>
               </div>
               <div v-if="d.usage_pct != null" class="flex items-center gap-2">
                 <div class="flex-1 h-1.5 rounded-full bg-surface-container overflow-hidden">
-                  <div class="h-full rounded-full transition-all" :class="barColor(d.usage_pct)" :style="{ width: (d.usage_pct || 0) + '%' }"></div>
+                  <div class="h-full w-full rounded-full origin-left transition-[transform]" :class="barColor(d.usage_pct)" :style="{ transform: `scaleX(${Math.min(1, Math.max(0, (d.usage_pct || 0) / 100))})` }"></div>
                 </div>
-                <span class="text-label-sm text-text-secondary w-9 text-right shrink-0">{{ d.usage_pct }}%</span>
+                <span class="text-label-sm text-text-secondary w-9 text-right shrink-0 tabular-nums">{{ d.usage_pct }}%</span>
               </div>
             </div>
           </div>
@@ -779,14 +795,14 @@ async function runIpDiagnostic() {
               <input v-model="searchText" type="text" placeholder="搜索名称 / 镜像"
                 class="w-full lg:w-44 pl-9 pr-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40" />
             </div>
-            <!-- 视图切换 -->
-            <div class="flex rounded-xl border border-outline-variant/40 overflow-hidden">
+            <!-- 视图切换（移动端两种模式都是卡片，切换无意义 → 仅桌面端显示） -->
+            <div class="hidden md:flex rounded-xl border border-outline-variant/40 overflow-hidden">
               <button @click="viewMode = 'list'" :class="viewMode === 'list' ? 'bg-primary/10 text-primary' : 'bg-surface-container text-text-secondary hover:bg-surface-container-high'"
-                class="px-2.5 py-2 transition-all" title="列表视图">
+                class="px-2.5 py-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" title="列表视图">
                 <span class="material-symbols-outlined text-[18px]">view_list</span>
               </button>
               <button @click="viewMode = 'card'" :class="viewMode === 'card' ? 'bg-primary/10 text-primary' : 'bg-surface-container text-text-secondary hover:bg-surface-container-high'"
-                class="px-2.5 py-2 transition-all border-l border-outline-variant/40" title="卡片视图">
+                class="px-2.5 py-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] border-l border-outline-variant/40" title="卡片视图">
                 <span class="material-symbols-outlined text-[18px]">view_module</span>
               </button>
             </div>
@@ -795,13 +811,13 @@ async function runIpDiagnostic() {
               <input v-model="portCheckValue" @keyup.enter="runPortDiagnostic" type="text" placeholder="端口检测"
                 class="px-3 py-2 text-sm bg-transparent text-text-primary focus:outline-none w-24" />
               <button @click="runPortDiagnostic"
-                class="px-2.5 py-2 text-text-secondary hover:bg-surface-container-high transition-all" title="检测端口是否被占用">
+                class="px-2.5 py-2 text-text-secondary hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" title="检测端口是否被占用">
                 <span class="material-symbols-outlined text-[18px]">find_in_page</span>
               </button>
             </div>
             <!-- IP 检测 -->
             <button @click="openIpModal"
-              class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all" title="检测 IP 是否被占用">
+              class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" title="检测 IP 是否被占用">
               <span class="material-symbols-outlined text-[18px]">pin</span>
               IP 检测
             </button>
@@ -811,20 +827,20 @@ async function runIpDiagnostic() {
         <!-- 状态 Tab -->
         <div class="flex flex-wrap gap-2 mb-4">
           <button @click="activeTab = 'all'" :class="activeTab === 'all' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'"
-            class="px-3 py-1.5 rounded-full text-xs font-semibold transition-all">{{ '全部' }} <span class="opacity-70">{{ tabCounts.all }}</span></button>
+            class="px-3 py-1.5 rounded-full text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">{{ '全部' }} <span class="opacity-70 tabular-nums">{{ tabCounts.all }}</span></button>
           <button @click="activeTab = 'running'" :class="activeTab === 'running' ? 'bg-success text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'"
-            class="px-3 py-1.5 rounded-full text-xs font-semibold transition-all">运行中 <span class="opacity-70">{{ tabCounts.running }}</span></button>
+            class="px-3 py-1.5 rounded-full text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">运行中 <span class="opacity-70 tabular-nums">{{ tabCounts.running }}</span></button>
           <button @click="activeTab = 'stopped'" :class="activeTab === 'stopped' ? 'bg-text-secondary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'"
-            class="px-3 py-1.5 rounded-full text-xs font-semibold transition-all">已停止 <span class="opacity-70">{{ tabCounts.stopped }}</span></button>
+            class="px-3 py-1.5 rounded-full text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">已停止 <span class="opacity-70 tabular-nums">{{ tabCounts.stopped }}</span></button>
           <button @click="activeTab = 'paused'" :class="activeTab === 'paused' ? 'bg-warning text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'"
-            class="px-3 py-1.5 rounded-full text-xs font-semibold transition-all">已暂停 <span class="opacity-70">{{ tabCounts.paused }}</span></button>
+            class="px-3 py-1.5 rounded-full text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">已暂停 <span class="opacity-70 tabular-nums">{{ tabCounts.paused }}</span></button>
         </div>
 
         <div v-if="!containers.length" class="text-text-secondary text-sm py-4">未获取到容器（或群晖未安装 Container Manager）</div>
         <div v-else-if="!filteredContainers.length" class="text-text-secondary text-sm py-4">没有符合当前筛选条件的容器</div>
 
-        <!-- 列表视图（移动端由 .m-table 转成卡片：定宽标签 + 可换行值） -->
-        <div v-else-if="viewMode === 'list'" class="overflow-x-auto">
+        <!-- 列表视图（仅桌面端；移动端恒走下面的卡片视图，两者样式一致） -->
+        <div v-else-if="!showCards" class="overflow-x-auto">
           <table class="m-table w-full text-sm">
             <thead>
               <tr class="text-label-sm text-text-secondary border-b border-surface-variant/40">
@@ -876,7 +892,7 @@ async function runIpDiagnostic() {
                     <div v-else class="flex flex-wrap gap-1.5 items-center">
                       <template v-for="(p, i) in filteredPorts(c.id)" :key="i">
                         <a v-if="portExternalUrl(c, p)" :href="portExternalUrl(c, p)" target="_blank" rel="noopener"
-                          class="px-1.5 py-0.5 rounded-lg font-mono text-[11px] text-text-primary hover:bg-surface-container hover:border hover:border-outline-variant/40 hover:text-primary transition-all">{{ fmtPort(p) }}</a>
+                          class="px-1.5 py-0.5 rounded-lg font-mono text-[11px] text-text-primary hover:bg-surface-container hover:border hover:border-outline-variant/40 hover:text-primary transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">{{ fmtPort(p) }}</a>
                         <span v-else class="px-1.5 py-0.5 rounded-lg font-mono text-[11px] text-text-primary">{{ fmtPort(p) }}</span>
                       </template>
                       <button @click.stop="refreshContainerPorts(c)" class="text-text-secondary hover:text-primary" title="刷新端口">
@@ -887,21 +903,21 @@ async function runIpDiagnostic() {
                   <td class="m-span py-2 md:text-right whitespace-nowrap" @click.stop>
                     <div class="flex flex-wrap items-center gap-1 md:justify-end">
                     <button v-if="c.state !== 'running'" @click="act(c.name, 'start')" :disabled="actingId === c.name + ':start'"
-                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-success/10 text-success hover:bg-success/20 transition-all disabled:opacity-60">启动</button>
+                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-success/10 text-success hover:bg-success/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60">启动</button>
                     <button v-if="c.state === 'running'" @click="act(c.name, 'stop')" :disabled="actingId === c.name + ':stop'"
-                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-error/10 text-error hover:bg-error/20 transition-all disabled:opacity-60">停止</button>
+                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-error/10 text-error hover:bg-error/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60">停止</button>
                     <button @click="act(c.name, 'restart')" :disabled="actingId === c.name + ':restart'"
-                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all disabled:opacity-60">重启</button>
+                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60">重启</button>
                     <!-- 快速添加为导航链接：仅内网（群晖宿主 IP + docker 宿主机端口）；未运行或地址已存在则禁用 -->
                     <button v-if="c.state === 'running'" @click="openAddConnection(c)"
                       :disabled="addUrlExists(c)"
-                      class="px-2 py-1 rounded-lg text-xs font-semibold transition-all"
+                      class="px-2 py-1 rounded-lg text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                       :class="addUrlExists(c)
                         ? 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 cursor-not-allowed'
                         : 'bg-primary/10 text-primary hover:bg-primary/20'"
                       :title="addUrlExists(c) ? '该内网地址已存在链接' : '快速添加为导航链接（内网地址）'">添加连接</button>
                     <button v-else disabled
-                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 transition-all cursor-not-allowed" title="容器未运行，暂不可用">添加连接</button>
+                      class="px-2 py-1 rounded-lg text-xs font-semibold bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] cursor-not-allowed" title="容器未运行，暂不可用">添加连接</button>
                     </div>
                   </td>
                 </tr>
@@ -910,38 +926,16 @@ async function runIpDiagnostic() {
           </table>
         </div>
 
-        <!-- 卡片视图 -->
-        <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <!-- 卡片视图：移动端恒为此样式（列表模式在窄屏也走这里，两者外观一致）。
+             桌面端按需切到 md:grid-cols-3 / lg:4 / xl:5。 -->
+        <div v-else class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           <div v-for="c in filteredContainers" :key="c.id"
-            class="rounded-2xl border border-surface-variant/40 bg-surface-container/30 p-3 flex flex-col gap-2">
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <div class="flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full shrink-0" :class="stateDot(c.state)"></span>
-                  <span class="font-medium text-text-primary text-sm truncate">{{ c.name }}</span>
-                </div>
-                <div class="flex items-center gap-1.5 mt-0.5">
-                  <span class="text-[11px] text-text-secondary">{{ stateText(c.state) }}</span>
-                  <span v-if="c.project" class="text-[9px] px-1 py-0.5 rounded bg-surface-container text-text-secondary">{{ c.project }}</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-1 shrink-0" @click.stop>
-                <button v-if="c.state !== 'running'" @click="act(c.name, 'start')" :disabled="actingId === c.name + ':start'"
-                  class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-success/10 text-success hover:bg-success/20 transition-all disabled:opacity-60">启动</button>
-                <button v-if="c.state === 'running'" @click="act(c.name, 'stop')" :disabled="actingId === c.name + ':stop'"
-                  class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-error/10 text-error hover:bg-error/20 transition-all disabled:opacity-60">停止</button>
-                <button @click="act(c.name, 'restart')" :disabled="actingId === c.name + ':restart'"
-                  class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all disabled:opacity-60">重启</button>
-                <button v-if="c.state === 'running'" @click="openAddConnection(c)"
-                  :disabled="addUrlExists(c)"
-                  class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold transition-all"
-                  :class="addUrlExists(c)
-                    ? 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 cursor-not-allowed'
-                    : 'bg-primary/10 text-primary hover:bg-primary/20'"
-                  :title="addUrlExists(c) ? '该内网地址已存在链接' : '快速添加为导航链接（内网地址）'">添加连接</button>
-                <button v-else disabled title="容器未运行，暂不可用"
-                  class="px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 transition-all cursor-not-allowed">添加连接</button>
-              </div>
+            class="rounded-2xl border border-surface-variant/40 bg-surface-container/30 p-3 flex flex-col gap-1.5">
+            <!-- 容器名称 + 描述(项目) + 运行状态 同一行；运行状态固定最右，并按状态给底色 -->
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-medium text-text-primary text-sm truncate">{{ c.name }}</span>
+              <span v-if="c.project" class="shrink-0 text-[9px] px-1 py-0.5 rounded bg-surface-container text-text-secondary">{{ c.project }}</span>
+              <span class="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="stateBadgeClass(c.state)">{{ stateText(c.state) }}</span>
             </div>
             <div class="text-[11px] text-text-secondary truncate">镜像：{{ c.image || '—' }}</div>
             <div v-if="c.networks && c.networks.length" class="flex flex-col gap-0.5 font-mono text-[11px] text-text-primary">
@@ -950,7 +944,7 @@ async function runIpDiagnostic() {
                 <span>{{ n.ip || (n.name === 'host' ? 'host' : '—') }}</span>
               </span>
             </div>
-            <div class="mt-auto">
+            <div>
               <div v-if="!portCache[c.id]">
                 <button @click.stop="refreshContainerPorts(c)" class="text-[11px] text-primary hover:underline">加载端口</button>
               </div>
@@ -960,10 +954,28 @@ async function runIpDiagnostic() {
               <div v-else class="flex flex-wrap gap-1">
                 <template v-for="(p, i) in filteredPorts(c.id)" :key="i">
                   <a v-if="portExternalUrl(c, p)" :href="portExternalUrl(c, p)" target="_blank" rel="noopener"
-                    class="px-1.5 py-0.5 rounded font-mono text-[10px] text-text-primary hover:bg-surface-container hover:border hover:border-outline-variant/40 hover:text-primary transition-all">{{ fmtPort(p) }}</a>
+                    class="px-1.5 py-0.5 rounded font-mono text-[10px] text-text-primary hover:bg-surface-container hover:border hover:border-outline-variant/40 hover:text-primary transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">{{ fmtPort(p) }}</a>
                   <span v-else class="px-1.5 py-0.5 rounded font-mono text-[10px] text-text-primary">{{ fmtPort(p) }}</span>
                 </template>
               </div>
+            </div>
+            <!-- 操作按钮固定在卡片最下方（mt-auto 推到底；同排卡片等高时也能对齐） -->
+            <div class="flex items-center gap-1 mt-auto pt-1.5 border-t border-surface-variant/40" @click.stop>
+              <button v-if="c.state !== 'running'" @click="act(c.name, 'start')" :disabled="actingId === c.name + ':start'"
+                class="flex-1 min-w-0 px-1 py-1 rounded-md text-[11px] font-semibold bg-success/10 text-success hover:bg-success/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60 whitespace-nowrap">启动</button>
+              <button v-if="c.state === 'running'" @click="act(c.name, 'stop')" :disabled="actingId === c.name + ':stop'"
+                class="flex-1 min-w-0 px-1 py-1 rounded-md text-[11px] font-semibold bg-error/10 text-error hover:bg-error/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60 whitespace-nowrap">停止</button>
+              <button @click="act(c.name, 'restart')" :disabled="actingId === c.name + ':restart'"
+                class="flex-1 min-w-0 px-1 py-1 rounded-md text-[11px] font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60 whitespace-nowrap">重启</button>
+              <button v-if="c.state === 'running'" @click="openAddConnection(c)"
+                :disabled="addUrlExists(c)"
+                class="flex-1 min-w-0 px-1 py-1 rounded-md text-[11px] font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] whitespace-nowrap"
+                :class="addUrlExists(c)
+                  ? 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 cursor-not-allowed'
+                  : 'bg-primary/10 text-primary hover:bg-primary/20'"
+                :title="addUrlExists(c) ? '该内网地址已存在链接' : '快速添加为导航链接（内网地址）'">添加连接</button>
+              <button v-else disabled title="容器未运行，暂不可用"
+                class="flex-1 min-w-0 px-1 py-1 rounded-md text-[11px] font-semibold bg-surface-container text-on-surface-variant/40 border border-outline-variant/30 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] cursor-not-allowed whitespace-nowrap">添加连接</button>
             </div>
           </div>
         </div>
@@ -1022,7 +1034,7 @@ async function runIpDiagnostic() {
           </div>
           <div class="px-4 py-3 md:px-6 md:py-4 border-t border-outline-variant/20 flex justify-end gap-2 shrink-0">
             <button @click="showPortModal = false"
-              class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all">
+              class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">
               关闭
             </button>
           </div>
@@ -1067,7 +1079,7 @@ async function runIpDiagnostic() {
                   class="px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono" />
               </label>
             <button @click="runIpDiagnostic"
-                class="sm:self-end px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all">
+                class="sm:self-end px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">
                 检测
               </button>
             </div>
@@ -1093,7 +1105,7 @@ async function runIpDiagnostic() {
           </div>
           <div class="px-4 py-3 md:px-6 md:py-4 border-t border-outline-variant/20 flex justify-end gap-2 shrink-0">
             <button @click="showIpModal = false"
-              class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all">
+              class="px-4 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">
               关闭
             </button>
           </div>

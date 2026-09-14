@@ -17,12 +17,12 @@
 
     <p v-if="error" class="mb-4 rounded-lg bg-error-container px-4 py-3 text-body-md text-on-error-container">{{ error }}</p>
 
-    <!-- 两个可点击卡片 -->
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <!-- 三个可点击卡片 -->
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
       <button
         v-for="p in panels"
         :key="p.key"
-        class="group flex flex-col items-start gap-3 rounded-xl border bg-surface p-5 text-left transition-all"
+        class="group flex flex-col items-start gap-3 rounded-xl border bg-surface p-5 text-left transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
         :class="[
           selected === p.key
             ? p.activeClass + ' ' + p.activeBorder
@@ -119,6 +119,40 @@
           </table>
         </div>
       </div>
+
+      <!-- 无法连通：后端 /api/admin/stats/anomalies 已下发 unreachable_links（按内网/外网分别探测） -->
+      <div v-else-if="selected === 'unreachable'">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-headline-md font-bold text-on-surface">
+            无法连通 <span class="text-on-surface-variant">({{ data.unreachable_links.length }})</span>
+          </h2>
+        </div>
+        <div v-if="!data.unreachable_links.length" class="py-8 text-center text-body-md text-on-surface-variant">暂无异常 🎉</div>
+        <div v-else class="overflow-x-auto">
+          <table class="m-table w-full text-left text-body-md">
+            <thead>
+              <tr class="border-b border-outline-variant text-on-surface-variant">
+                <th class="py-2 pr-4 font-medium">标题</th>
+                <th class="py-2 pr-4 font-medium">不可达地址</th>
+                <th class="py-2 pr-4 font-medium">范围</th>
+                <th class="py-2 pr-4 font-medium">分类</th>
+                <th class="py-2 pr-4 font-medium">最近探测</th>
+                <th class="py-2 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody class="md:divide-y md:divide-outline-variant/60">
+              <tr v-for="l in data.unreachable_links" :key="l.id" class="border-b border-outline-variant/60">
+                <td data-label="标题" class="py-2 pr-4 text-on-surface">{{ l.title }}</td>
+                <td data-label="地址" class="py-2 pr-4 max-w-[220px] truncate text-on-surface-variant"><a :href="l.url" target="_blank" class="hover:text-primary hover:underline">{{ l.url || '-' }}</a></td>
+                <td data-label="范围" class="py-2 pr-4"><span class="inline-block rounded-full bg-error-container px-2 py-0.5 text-label-sm font-bold text-on-error-container">{{ l.network_scope || '未知' }}</span></td>
+                <td data-label="分类" class="py-2 pr-4 text-on-surface-variant">{{ l.category_name || '-' }}</td>
+                <td data-label="最近探测" class="py-2 pr-4 text-on-surface-variant">{{ fmtDateTime(l.ping_at) }}</td>
+                <td class="m-span py-2"><button class="text-label-sm text-primary hover:underline" @click="goAdmin('links')">去管理</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -131,11 +165,13 @@ const emit = defineEmits(['gotoManage'])
 const loading = ref(false)
 const error = ref('')
 const selected = ref(null)
-const data = ref({ zero_click_links: [], empty_categories: [] })
+const data = ref({ zero_click_links: [], empty_categories: [], unreachable_links: [] })
 
 const PERM = { all: '所有人', registered: '登录用户', admin: '仅管理员', self: '仅自己' }
 function permLabel(p) { return PERM[p] || p || '所有人' }
 function fmtDate(s) { return s ? s.slice(0, 10) : '-' }
+// 探测时间是带时分的 ISO 串，异常排查场景只看日期不够用
+function fmtDateTime(s) { return s ? s.slice(0, 16).replace('T', ' ') : '-' }
 
 const panels = computed(() => [
   {
@@ -150,10 +186,17 @@ const panels = computed(() => [
     badgeClass: 'bg-secondary-container text-on-secondary-container',
     activeClass: 'bg-secondary-container/40', activeBorder: 'border-secondary', hoverBorder: 'hover:border-secondary',
   },
+  {
+    key: 'unreachable', title: '无法连通', icon: 'cloud_off', desc: '后台探测时无法访问的链接（内外网分别判定）',
+    iconClass: 'text-error',
+    badgeClass: 'bg-error-container text-on-error-container',
+    activeClass: 'bg-error-container/40', activeBorder: 'border-error', hoverBorder: 'hover:border-error',
+  },
 ])
 
 function countOf(key) {
   if (key === 'zero_click') return data.value.zero_click_links.length
+  if (key === 'unreachable') return data.value.unreachable_links.length
   return data.value.empty_categories.length
 }
 

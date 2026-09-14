@@ -185,7 +185,7 @@ async function savePassword() {
         <button
           v-for="s in sections"
           :key="s.k"
-          class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-all active:opacity-80"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] active:opacity-80"
           :class="activeSection === s.k ? 'bg-primary-fixed text-primary border-l-4 border-primary rounded-r-lg font-bold' : 'text-secondary hover:bg-surface-container'"
           @click="scrollTo(s.k)"
         >
@@ -194,7 +194,7 @@ async function savePassword() {
         </button>
       </nav>
       <div class="p-4 border-t border-outline-variant/30" style="padding-bottom: calc(1rem + var(--sab))">
-        <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-all" @click="goFront">
+        <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" @click="goFront">
           <span class="material-symbols-outlined">arrow_back</span>
           <span class="font-body-md">返回前台</span>
         </button>
@@ -217,7 +217,7 @@ async function savePassword() {
         <button
           v-for="s in sections"
           :key="s.k"
-          class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-all active:opacity-80"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] active:opacity-80"
           :class="activeSection === s.k ? 'bg-primary-fixed text-primary border-l-4 border-primary rounded-r-lg font-bold' : 'text-secondary hover:bg-surface-container'"
           @click="scrollTo(s.k)"
         >
@@ -226,7 +226,7 @@ async function savePassword() {
         </button>
       </nav>
       <div class="p-4 border-t border-outline-variant/30">
-        <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-all" @click="goFront">
+        <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" @click="goFront">
           <span class="material-symbols-outlined">arrow_back</span>
           <span class="font-body-md">返回前台</span>
         </button>
@@ -287,7 +287,7 @@ async function savePassword() {
             <!-- emoji 选择（可折叠） -->
             <div v-if="showEmoji" class="flex flex-wrap gap-2 mb-6">
               <button v-for="em in EMOJIS" :key="em" @click="pickEmoji(em)"
-                class="w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all"
+                class="w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                 :class="form.avatar === em ? 'bg-primary/10 ring-2 ring-primary' : 'bg-surface-container hover:bg-surface-container-high'">
                 {{ em }}
               </button>
@@ -307,7 +307,7 @@ async function savePassword() {
 
             <div class="flex justify-end mt-5">
               <button @click="saveProfile" :disabled="savingProfile"
-                class="px-6 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50">
+                class="px-6 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold shadow-sm hover:bg-primary/90 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-50">
                 {{ savingProfile ? '保存中…' : '保存资料' }}
               </button>
             </div>
@@ -324,12 +324,12 @@ async function savePassword() {
                 <div class="text-label-sm text-text-secondary">首页与链接默认展示外网还是内网地址</div>
               </div>
               <div class="flex items-center self-start bg-surface-container-highest rounded-full p-1 gap-1 shrink-0 max-w-full overflow-x-auto">
-                <button class="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+                <button class="px-4 py-1.5 rounded-full text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                   :class="form.network === 'external' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
                   @click="form.network = 'external'">
                   <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">public</span>外网</span>
                 </button>
-                <button class="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+                <button class="px-4 py-1.5 rounded-full text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                   :class="form.network === 'internal' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
                   @click="form.network = 'internal'">
                   <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">home</span>内网</span>
@@ -345,7 +345,7 @@ async function savePassword() {
               </div>
               <div class="flex items-center self-start bg-surface-container-highest rounded-full p-1 gap-1 shrink-0 max-w-full overflow-x-auto">
                 <button v-for="t in [{k:'light',l:'浅色',i:'light_mode'},{k:'dark',l:'深色',i:'dark_mode'},{k:'system',l:'跟随系统',i:'auto_mode'}]"
-                  :key="t.k" class="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+                  :key="t.k" class="px-4 py-1.5 rounded-full text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                   :class="form.theme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
                   @click="form.theme = t.k">
                   <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">{{ t.i }}</span>{{ t.l }}</span>
@@ -360,7 +360,7 @@ async function savePassword() {
                 <div class="text-label-sm text-text-secondary">全站强调色，覆盖系统默认</div>
               </div>
               <div class="flex items-center self-start bg-surface-container-highest rounded-full p-1 gap-1 shrink-0 flex-wrap justify-start max-w-full sm:justify-end sm:max-w-[300px]">
-                <button v-for="s in COLOR_SCHEMES" :key="s.id" type="button" class="px-2.5 py-1.5 rounded-full text-sm font-semibold transition-all inline-flex items-center gap-1" :class="form.color_scheme === s.id ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="form.color_scheme = s.id">
+                <button v-for="s in COLOR_SCHEMES" :key="s.id" type="button" class="px-2.5 py-1.5 rounded-full text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] inline-flex items-center gap-1" :class="form.color_scheme === s.id ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="form.color_scheme = s.id">
                   <span class="inline-flex gap-0.5">
                     <span v-for="(cc, ci) in s.colors.slice(0,2)" :key="ci" class="w-2.5 h-2.5 rounded-full" :style="{ background: cc }"></span>
                   </span>{{ s.label }}
@@ -379,7 +379,7 @@ async function savePassword() {
 
             <div class="flex justify-end mt-5">
               <button @click="saveProfile" :disabled="savingProfile"
-                class="px-6 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50">
+                class="px-6 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold shadow-sm hover:bg-primary/90 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-50">
                 {{ savingProfile ? '保存中…' : '保存偏好' }}
               </button>
             </div>
@@ -404,7 +404,7 @@ async function savePassword() {
             </div>
             <div class="flex justify-end mt-5">
               <button @click="savePassword" :disabled="savingPwd"
-                class="px-6 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50">
+                class="px-6 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold shadow-sm hover:bg-primary/90 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-50">
                 {{ savingPwd ? '更新中…' : '更新密码' }}
               </button>
             </div>
@@ -434,7 +434,7 @@ async function savePassword() {
 
     <!-- 右下角：返回前台（移动端也始终可见） -->
     <button
-      class="fixed bottom-20 lg:bottom-8 right-6 lg:right-8 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-on-primary shadow-[0_10px_25px_-5px_rgba(108,92,231,0.5)] hover:scale-105 hover:bg-primary/90 transition-[transform,background-color] active:scale-95"
+      class="fixed bottom-20 lg:bottom-8 right-6 lg:right-8 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-on-primary sh-glow-fab hover:scale-105 hover:bg-primary/90 transition-[transform,background-color] active:scale-95"
       @click="goFront"
       aria-label="返回前台"
     >

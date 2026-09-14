@@ -76,7 +76,7 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
   <div class="flex h-screen overflow-hidden bg-background text-on-background">
     <Sidebar v-if="!isLogin && !isAdmin && !isSettings" />
     <div
-      class="flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ease-spring"
+      class="flex-1 flex flex-col min-w-0"
       :class="!isLogin && !isAdmin && !isSettings ? (store.sidebarCollapsed ? 'lg:pl-[144px]' : 'lg:pl-[240px]') : ''"
     >
       <TopBar v-if="!isLogin && !isAdmin && !isSettings" @add-link="openQuick" />
@@ -90,14 +90,14 @@ const toastIcon = computed(() => (TOAST_STYLE[store.toast.type] || TOAST_STYLE.i
     </div>
     <MobileNav v-if="!isLogin && !isAdmin && !isSettings" @search="onSearchNav" @profile="onProfileNav" @add-link="openQuick" />
 
-    <!-- 回到顶部 FAB（桌面端显示） -->
+    <!-- 回到顶部 FAB（全端显示；移动端抬高到底栏之上，避免被 MobileNav 遮挡） -->
     <button
       v-if="!isLogin && !isAdmin && !isSettings"
-        class="ui-btn ui-btn-primary ui-icon-hover fixed bottom-20 lg:bottom-8 right-8 w-14 h-14 min-h-0 p-0 rounded-full z-40 active:scale-95 hidden lg:flex"
+        class="ui-btn ui-btn-primary ui-icon-hover fixed right-4 lg:right-8 bottom-[calc(4.75rem+var(--sab))] lg:bottom-8 w-12 h-12 lg:w-14 lg:h-14 min-h-0 p-0 rounded-full z-40 active:scale-95 flex"
       @click="backToTop"
       aria-label="回到顶部"
     >
-      <span class="material-symbols-outlined text-[28px]">arrow_upward</span>
+      <span class="material-symbols-outlined text-[22px] lg:text-[28px]">arrow_upward</span>
     </button>
 
     <AddLinkModal :open="store.linkModalOpen" :edit-link="store.linkModalEditLink" @update:open="store.linkModalOpen = $event" />

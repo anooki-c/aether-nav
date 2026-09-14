@@ -128,7 +128,7 @@ function close() {
               <tr v-else-if="shown.length === 0" class="text-center text-on-surface-variant">
                 <td colspan="5" class="m-span py-10 font-body-md">暂无用户</td>
               </tr>
-              <tr v-for="(u, i) in shown" :key="u.id" class="hover:bg-surface-container-lowest transition-all">
+              <tr v-for="(u, i) in shown" :key="u.id" class="hover:bg-surface-container-lowest transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">
                 <td data-label="#" class="py-3 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
                 <td class="m-span py-3 px-4">
                   <div class="flex items-center flex-wrap gap-2">

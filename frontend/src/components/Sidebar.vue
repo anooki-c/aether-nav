@@ -100,7 +100,7 @@ function applySel(base, id, isChildlessParent, isChild) {
 // 父分类样式（折叠轨道 / 展开全宽）
 function parentClass(cat) {
   const base =
-    'nav-item relative flex items-center rounded-lg transition-all duration-150 cursor-pointer text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-container-highest'
+    'nav-item relative flex items-center rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] duration-150 cursor-pointer text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-container-highest'
   const hasChildren = cat.children && cat.children.length
   if (collapsed.value) {
     return applySel(base + ' w-24 mx-auto justify-center py-3', cat.id, !hasChildren, false)
@@ -111,7 +111,7 @@ function parentClass(cat) {
 // 子分类样式（内联 / 折叠共用）：图标 + 标题（折叠态仅图标）
 function childClass(child) {
   const base =
-    'nav-item relative flex items-center gap-3 rounded-lg transition-all duration-150 cursor-pointer text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-container-highest'
+    'nav-item relative flex items-center gap-3 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] duration-150 cursor-pointer text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-container-highest'
   if (collapsed.value) {
     return applySel(base + ' w-24 mx-auto justify-center py-2.5', child.id, false, true)
   }
@@ -201,19 +201,32 @@ function onLogin() {
 
 <template>
   <div>
-    <!-- 移动端抽屉遮罩（淡入淡出，与抽屉同步） -->
+    <!-- 移动端抽屉遮罩（淡入淡出，与抽屉同步）。
+         层级必须高于顶栏 z-30 与 FAB z-40、底栏 z-50 —— 原来只有 z-20，
+         比顶栏还低，导致顶栏整条露在遮罩之上且仍可点击。 -->
     <transition name="fade">
       <div
         v-if="store.drawerOpen"
-        class="fixed inset-0 bg-black/40 z-20 lg:hidden"
+        class="fixed inset-0 bg-black/40 z-[55] lg:hidden"
         @click="closeDrawer"
       ></div>
     </transition>
+    <!-- 抽屉面板 z-[56]：在遮罩之上、且在底栏(50)之上、主弹窗(60)之下。
+         桌面端恢复 z-30（桌面靠 lg:pl-* 让位，与顶栏不重叠，保持原状）。 -->
     <nav
-      class="app-sidebar border-r border-outline-variant shadow-sm fixed left-0 top-0 h-full z-30 transition-transform duration-300 ease-spring"
+      class="app-sidebar border-r border-outline-variant shadow-sm fixed left-0 top-0 h-full z-[56] lg:z-30 transition-transform duration-300 ease-spring"
       :class="navClass"
     >
       <div class="flex flex-col h-full py-8 w-full">
+        <!-- 移动端抽屉右上角关闭（桌面端侧边栏常驻显示，无需关闭按钮） -->
+        <button
+          type="button"
+          class="lg:hidden absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]"
+          aria-label="关闭侧边栏"
+          @click="closeDrawer"
+        >
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
         <!-- Brand（折叠态仅显示 Logo） -->
         <button
           class="mb-8 flex items-center gap-4 text-left hover:opacity-80 transition-opacity"
@@ -244,7 +257,7 @@ function onLogin() {
               @mouseleave="onTreeLeave(cat)"
             >
               <a
-                class="nav-item flex items-center rounded-lg transition-all duration-150 cursor-pointer text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-container-highest"
+                class="nav-item flex items-center rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] duration-150 cursor-pointer text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-container-highest"
                 :class="parentClass(cat)"
                 @mouseenter="onItemEnter(cat.id)"
                 @mouseleave="onItemLeave"
@@ -282,7 +295,7 @@ function onLogin() {
                   :data-index="i"
                 >
                   <a
-                    class="nav-item flex items-center gap-3 rounded-lg transition-all duration-150 cursor-pointer text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-container-highest"
+                    class="nav-item flex items-center gap-3 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] duration-150 cursor-pointer text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-container-highest"
                     :class="childClass(child)"
                     @mouseenter="onItemEnter(child.id)"
                     @mouseleave="onItemLeave"
@@ -297,8 +310,9 @@ function onLogin() {
           </ul>
         </div>
 
-        <!-- Bottom fixed items（折叠态仅图标居中）。移动端抽屉底部加留白，避免被底部导航栏遮挡 -->
-        <div class="mt-auto pb-20 lg:pb-0" :class="collapsed ? 'px-2' : 'px-4'">
+        <!-- Bottom fixed items（折叠态仅图标居中）。
+             抽屉层已高于底栏，不再需要为底栏预留 80px；只留安全区留白，避免贴住 Home 指示条 -->
+        <div class="mt-auto pb-[calc(1.25rem+var(--sab))] lg:pb-0" :class="collapsed ? 'px-2' : 'px-4'">
           <ul class="space-y-1" :class="collapsed ? 'border-t-0 pt-2' : 'border-t border-outline-variant pt-4'">
             <li>
               <button
@@ -337,7 +351,7 @@ function onLogin() {
             </li>
             <li v-if="store.user">
               <a
-                class="nav-item flex items-center rounded-lg hover:bg-error-container/30 cursor-pointer transition-colors text-error"
+                class="nav-item nav-item-danger flex items-center rounded-lg hover:bg-error-container/30 cursor-pointer transition-colors text-error"
                 :class="collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-3 py-2'"
                 @click="onSignOut"
               >

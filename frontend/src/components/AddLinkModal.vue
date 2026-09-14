@@ -353,7 +353,7 @@ async function onUpload(e) {
           <div class="flex flex-col gap-1.5">
             <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">名称 <span class="text-error">*</span></label>
             <input v-model="form.title" type="text"
-              class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+              class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
               placeholder="输入链接名称…" />
           </div>
 
@@ -366,7 +366,7 @@ async function onUpload(e) {
                 {{ sslExternal ? 'https://' : 'http://' }}
               </span>
               <input v-model="extBody" type="text"
-                class="flex-1 min-w-0 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                class="flex-1 min-w-0 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                 placeholder="example.com" />
               <label class="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-outline-variant bg-surface-container-low cursor-pointer shrink-0 select-none hover:bg-surface-container transition-colors">
                 <input type="checkbox" v-model="sslExternal" class="w-4 h-4 accent-primary" />
@@ -385,7 +385,7 @@ async function onUpload(e) {
                 {{ sslInternal ? 'https://' : 'http://' }}
               </span>
               <input v-model="intBody" type="text"
-                class="flex-1 min-w-0 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                class="flex-1 min-w-0 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                 placeholder="192.168.x.x:port" />
               <label class="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-outline-variant bg-surface-container-low cursor-pointer shrink-0 select-none hover:bg-surface-container transition-colors">
                 <input type="checkbox" v-model="sslInternal" class="w-4 h-4 accent-primary" />
@@ -399,7 +399,7 @@ async function onUpload(e) {
           <div class="flex flex-col gap-1.5">
             <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">描述内容</label>
             <textarea v-model="form.description" rows="3"
-              class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+              class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
               placeholder="添加描述信息…"></textarea>
           </div>
 
@@ -432,10 +432,10 @@ async function onUpload(e) {
                     </label>
                   </div>
                   <input v-if="selectedProvider === 'custom'" v-model="faviconCustomUrl" type="text"
-                    class="w-full h-[38px] px-3 bg-surface-container-low border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                    class="w-full h-[38px] px-3 bg-surface-container-low border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                     placeholder="自定义接口模板：{scheme}://{host}/favicon.ico" />
                   <input v-model="form.icon" type="text"
-                    class="w-full h-[42px] px-4 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                    class="w-full h-[42px] px-4 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                     placeholder="图片网址 / 本地文件路径 / Material Symbols 名称" />
                   <button type="button" class="w-full h-9 shrink-0 rounded-lg bg-surface-container-high text-on-surface-variant hover:bg-surface-variant text-sm flex items-center justify-center gap-1 transition-colors" @click="iconPickerOpen = true">
                     <span class="material-symbols-outlined text-[18px]">emoji_emotions</span>
@@ -452,12 +452,12 @@ async function onUpload(e) {
             <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">选择分类 <span class="text-error">*</span></label>
             <div class="flex gap-2">
               <select v-model="catParent"
-                class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer">
+                class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer">
                 <option value="">父分类</option>
                 <option v-for="p in store.tree" :key="p.id" :value="p.id">{{ p.name }}</option>
               </select>
               <select v-model="form.category_id"
-                class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+                class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                 :disabled="store.tree.length === 0">
                 <option :value="null">子分类</option>
                 <template v-if="catParent">
@@ -490,7 +490,7 @@ async function onUpload(e) {
           <div class="flex flex-col gap-2">
             <span class="font-label-xs text-label-xs text-on-surface-variant uppercase tracking-wider font-semibold">权限配置</span>
             <select v-model="form.permission"
-              class="w-full px-4 py-2.5 bg-bg-card border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer">
+              class="w-full px-4 py-2.5 bg-bg-card border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer">
               <option value="all">🌐 所有人 — 所有访客均可访问</option>
               <option value="registered">👤 注册用户 — 登录后可见</option>
               <option value="admin">🛡️ 管理员 — 仅管理员与所有者可见</option>
@@ -519,13 +519,13 @@ async function onUpload(e) {
               <div class="flex flex-col gap-1">
                 <label class="font-label-xs text-label-xs text-on-surface-variant">新密码</label>
                 <input v-model="form.pwdNew" type="password"
-                  class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+                  class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                   placeholder="至少 4 位密码" />
               </div>
               <div class="flex flex-col gap-1">
                 <label class="font-label-xs text-label-xs text-on-surface-variant">确认密码</label>
                 <input v-model="form.pwdConfirm" type="password"
-                  class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+                  class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                   placeholder="再次输入密码" />
               </div>
               <p v-if="pwdError" class="text-error font-label-xs text-label-xs flex items-center gap-1">

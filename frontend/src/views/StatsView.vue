@@ -25,12 +25,81 @@ const dayDetail = ref(null)
 const dayLoading = ref(false)
 
 /* ── 设计 token ─────────────────────────────────────── */
-const PALETTE = ['#5341CD', '#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#EC4899', '#84CC16', '#F97316']
-const CLICK_COLOR = '#5341CD'
-const LOGIN_COLOR = '#10B981'
-const GRID_COLOR = 'rgba(71,69,84,0.08)'
-const TEXT_MUTED = '#474554'
-const TEXT_PRIMARY = '#1c1b23'
+/* 主色跟随 [data-palette]：从 --c-primary 令牌读通道三元组（形如 "83 65 205"），
+   再派生 hex / rgba。写死 #5341CD 会让图表在切到马卡龙、薄荷等配色后仍是紫色。
+   读不到令牌时回落 83,65,205（与 :root 默认一致），保证图表不会没颜色。 */
+function readAccentRgb () {
+  return tokenRgb('--c-primary', '83,65,205')
+}
+const ACCENT_RGB = readAccentRgb()
+/* "83 65 205" / "83,65,205" → 色相角（0-360） */
+function rgbToHue (csv) {
+  const [r, g, b] = csv.split(',').map((n) => +n / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+  if (!d) return 0
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return (h * 60 + 360) % 360
+}
+const ACCENT_HEX = '#' + ACCENT_RGB.split(',').map((n) => (+n).toString(16).padStart(2, '0')).join('')
+const accentRgba = (a) => `rgba(${ACCENT_RGB},${a})`
+/* 分类色板：一套刻意排布的 10 色（色相 + 明度都拉开），不是 Tailwind 默认色阶。
+   槽位 0 永远是当前强调色；其余 9 色按「与强调色相的角距」从大到小排，
+   这样饼图/柱图的第一片是主色、第二片必然与主色差异最大，也不会与主色撞色。 */
+const CATEGORICAL = [
+  ['#C2503A', 12], ['#D5942A', 42], ['#7E9433', 82], ['#17A07C', 165], ['#4E9B57', 100],
+  ['#0E93A8', 192], ['#3E8FD0', 212], ['#5A63C9', 235], ['#8A6AD8', 268], ['#CF5390', 332],
+]
+function hueDistance (a, b) {
+  const d = Math.abs(a - b) % 360
+  return d > 180 ? 360 - d : d
+}
+function buildPalette () {
+  const base = rgbToHue(ACCENT_RGB)
+  const rest = CATEGORICAL.slice()
+    .sort((x, y) => hueDistance(y[1], base) - hueDistance(x[1], base))
+    .map((c) => c[0])
+  return [ACCENT_HEX, ...rest]
+}
+const PALETTE = buildPalette()
+const CLICK_COLOR = ACCENT_HEX
+let LOGIN_COLOR = '#10B981'   /* 占位：由 syncChartTheme 从 --c-success 覆盖 */
+
+/* 图表文本 / 网格色必须从主题令牌派生。
+   原先写死 GRID_COLOR rgba(71,69,84,.08) / TEXT_MUTED #474554 / TEXT_PRIMARY #1c1b23 ——
+   其中 #474554 恰好等于「暗色主题」的 --c-outline-variant，被当成了通用灰：
+   暗色下轴标签落在 #1c1a23 卡片上，对比度约 1.8:1，#1c1b23 更低至约 1.03:1，
+   网格线 rgba(71,69,84,.08) 更是完全看不见。改为每次渲染前重算，跟随 .dark 翻转。 */
+function tokenRgb (name, fallback) {
+  try {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name) || ''
+    const p = raw.trim().replace(/,/g, ' ').split(/\s+/).filter(Boolean).map(Number)
+    if (p.length >= 3 && p.slice(0, 3).every((n) => Number.isFinite(n))) {
+      return p.slice(0, 3).map((n) => Math.max(0, Math.min(255, Math.round(n)))).join(',')
+    }
+  } catch (e) { /* 无 getComputedStyle 时静默回落 */ }
+  return fallback
+}
+let TEXT_MUTED = '#474554'      /* 占位：applyDefaults / renderCharts 会先刷新 */
+let TEXT_PRIMARY = '#1c1b23'
+let GRID_COLOR = 'rgba(71,69,84,0.08)'
+let TOOLTIP_BG = '#1c1b23'     /* 浅色主题沿用深底；暗色主题换成比卡片更亮的容器色，否则与卡片同色、形状消失 */
+function syncChartTheme () {
+  TEXT_MUTED = `rgb(${tokenRgb('--c-on-surface-variant', '90,90,90')})`
+  TEXT_PRIMARY = `rgb(${tokenRgb('--c-on-surface', '30,30,30')})`
+  GRID_COLOR = `rgba(${tokenRgb('--c-outline-variant', '210,210,210')},0.28)`
+  /* --c-success 与旧硬编码 #10B981 同值，改走令牌后随主题翻转 */
+  LOGIN_COLOR = '#' + tokenRgb('--c-success', '16,185,129').split(',')
+    .map((n) => (+n).toString(16).padStart(2, '0')).join('')
+  /* 暗色主题下卡片是 #1c1a23，原来的 #1c1b23 tooltip 与它几乎同色（约 1.03:1） */
+  TOOLTIP_BG = isDarkTheme()
+    ? `rgb(${tokenRgb('--c-surface-container-highest', '228,228,228')})`
+    : '#1c1b23'
+}
+function isDarkTheme () {
+  try { return document.documentElement.classList.contains('dark') } catch (e) { return false }
+}
 
 /* ── 画布 ref ───────────────────────────────────────── */
 const trendCanvas = ref(null)
@@ -40,6 +109,8 @@ const catCanvas = ref(null)
 const memberCanvas = ref(null)
 const newUsersCanvas = ref(null)
 const charts = {}
+/* 首屏保留一次图表入场动效；此后每次筛选都瞬时 —— 见 renderCharts() */
+let chartsRendered = false
 
 /* ── 计算属性 ───────────────────────────────────────── */
 const kpis = computed(() => data.value.kpis || {})
@@ -117,11 +188,15 @@ function topDelta(cur, prev) {
 
 /* ── Chart.js 默认 ──────────────────────────────────── */
 function applyDefaults() {
+  syncChartTheme()
   Chart.defaults.font.family = "'Inter', sans-serif"
   Chart.defaults.color = TEXT_MUTED
   Chart.defaults.plugins.legend.labels.usePointStyle = true
   Chart.defaults.plugins.legend.labels.padding = 16
   Chart.defaults.plugins.legend.labels.boxWidth = 8
+  /* 给 tooltip 加一圈描边：浅色主题深底本来就清晰，暗色主题靠它跟卡片分开 */
+  Chart.defaults.plugins.tooltip.borderColor = `rgb(${tokenRgb('--c-outline-variant', '210,210,210')})`
+  Chart.defaults.plugins.tooltip.borderWidth = 1
 }
 
 function hexToRgba(hex, alpha) {
@@ -161,7 +236,7 @@ function buildTrend() {
     data: { labels: trend.value.labels.map((l) => l.slice(5)), datasets: ds },
     options: {
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { backgroundColor: '#1c1b23', padding: 12, cornerRadius: 10 } },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { backgroundColor: TOOLTIP_BG, padding: 12, cornerRadius: 10 } },
       scales: {
         x: { grid: { display: false, drawBorder: false }, ticks: { color: TEXT_MUTED, font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
         y: { grid: { color: GRID_COLOR, drawBorder: false }, ticks: { color: TEXT_MUTED, font: { size: 11 }, stepSize: 1 }, beginAtZero: true },
@@ -173,7 +248,7 @@ function buildTrend() {
 function buildTop() {
   if (!topCanvas.value) return
   const items = top.value.items.slice(0, 10)
-  const color = dim.value === 'link' ? CLICK_COLOR : dim.value === 'parent' ? '#3B82F6' : '#8B5CF6'
+  const color = dim.value === 'link' ? CLICK_COLOR : dim.value === 'parent' ? PALETTE[2] : PALETTE[3]
   charts.top = new Chart(topCanvas.value.getContext('2d'), {
     type: 'bar',
     data: {
@@ -182,7 +257,7 @@ function buildTop() {
     },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1c1b23', padding: 10, cornerRadius: 8, callbacks: { label: (c) => `点击: ${c.parsed.x}` } } },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: TOOLTIP_BG, padding: 10, cornerRadius: 8, callbacks: { label: (c) => `点击: ${c.parsed.x}` } } },
       scales: { x: { grid: { color: GRID_COLOR, drawBorder: false }, ticks: { display: false } }, y: { grid: { display: false, drawBorder: false }, ticks: { color: TEXT_PRIMARY, font: { size: 12 }, padding: 8 } } },
     },
   })
@@ -199,7 +274,7 @@ function buildPerm() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1c1b23', padding: 10, cornerRadius: 8, callbacks: { label: (c) => `点击: ${c.parsed.y}` } } },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: TOOLTIP_BG, padding: 10, cornerRadius: 8, callbacks: { label: (c) => `点击: ${c.parsed.y}` } } },
       scales: {
         x: { grid: { display: false, drawBorder: false }, ticks: { color: TEXT_PRIMARY, font: { size: 12 } } },
         y: { grid: { color: GRID_COLOR, drawBorder: false }, ticks: { color: TEXT_MUTED, font: { size: 11 }, stepSize: 1 }, beginAtZero: true },
@@ -218,7 +293,7 @@ function buildCat() {
       responsive: true, maintainAspectRatio: false, cutout: '62%',
       plugins: {
         legend: { position: 'right', labels: { padding: 10, font: { size: 11 } } },
-        tooltip: { backgroundColor: '#1c1b23', padding: 10, cornerRadius: 8, callbacks: { label: (c) => `${c.label}: ${c.parsed} (${c.raw != null && cs.length ? Math.round(c.parsed / (cs.reduce((s, x) => s + x.clicks, 0) || 1) * 100) : 0}%)` } },
+        tooltip: { backgroundColor: TOOLTIP_BG, padding: 10, cornerRadius: 8, callbacks: { label: (c) => `${c.label}: ${c.parsed} (${c.raw != null && cs.length ? Math.round(c.parsed / (cs.reduce((s, x) => s + x.clicks, 0) || 1) * 100) : 0}%)` } },
       },
     },
   })
@@ -232,7 +307,7 @@ function buildMember() {
     data: { labels: m.map((x) => (x.display_name || x.username).slice(0, 14)), datasets: [{ label: '累计添加链接', data: m.map((x) => x.added_links), backgroundColor: '#10B981', borderRadius: 6, barThickness: 18 }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1c1b23', padding: 10, cornerRadius: 8, callbacks: { label: (c) => `链接: ${c.parsed.x}` } } },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: TOOLTIP_BG, padding: 10, cornerRadius: 8, callbacks: { label: (c) => `链接: ${c.parsed.x}` } } },
       scales: { x: { grid: { color: GRID_COLOR, drawBorder: false }, ticks: { display: false } }, y: { grid: { display: false, drawBorder: false }, ticks: { color: TEXT_PRIMARY, font: { size: 12 }, padding: 8 } } },
     },
   })
@@ -244,11 +319,11 @@ function buildNewUsers() {
     type: 'line',
     data: {
       labels: newUsers.value.labels.map((l) => l.slice(5)),
-      datasets: [{ label: '新增用户', data: newUsers.value.count, borderColor: '#F59E0B', backgroundColor: hexToRgba('#F59E0B', 0.12), fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 }],
+      datasets: [{ label: '新增用户', data: newUsers.value.count, borderColor: PALETTE[1], backgroundColor: hexToRgba(PALETTE[1], 0.12), fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 }],
     },
     options: {
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { backgroundColor: '#1c1b23', padding: 12, cornerRadius: 10 } },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { backgroundColor: TOOLTIP_BG, padding: 12, cornerRadius: 10 } },
       scales: {
         x: { grid: { display: false, drawBorder: false }, ticks: { color: TEXT_MUTED, font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
         y: { grid: { color: GRID_COLOR, drawBorder: false }, ticks: { color: TEXT_MUTED, font: { size: 11 }, stepSize: 1 }, beginAtZero: true },
@@ -258,6 +333,12 @@ function buildNewUsers() {
 }
 
 function renderCharts() {
+  syncChartTheme()
+  /* 每次筛选都会走到这里，而下面 destroyCharts() 会重建全部 6 个实例 ——
+     每个新实例都重放 Chart.js 默认的 1000ms 主线程动画（6 图同时、且从零开始，
+     无法从当前状态续接）。首屏留一次入场动效，之后一律瞬时，
+     否则连点筛选＝连点 1 秒的掉帧（improve-animations §4 可打断性 / §5 性能）。 */
+  Chart.defaults.animation = chartsRendered ? false : { duration: 280, easing: 'easeOutQuart' }
   nextTick(() => {
     destroyCharts()
     buildTrend()
@@ -266,6 +347,7 @@ function renderCharts() {
     buildCat()
     buildMember()
     buildNewUsers()
+    chartsRendered = true
   })
 }
 
@@ -379,7 +461,7 @@ onBeforeUnmount(() => { destroyCharts() })
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex gap-1 bg-surface-container rounded-xl p-1">
           <button v-for="d in [7, 30, 90]" :key="d" @click="setRange(d)"
-            class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+            class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
             :class="days === d ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-high'">
             {{ d }}天
           </button>
@@ -393,11 +475,11 @@ onBeforeUnmount(() => { destroyCharts() })
           <option :value="50">TOP 50</option>
         </select>
         <button @click="onCompare"
-          class="px-3 py-2 rounded-xl text-sm font-semibold border transition-all"
+          class="px-3 py-2 rounded-xl text-sm font-semibold border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
           :class="compare ? 'bg-primary/10 text-primary border-primary/40' : 'bg-surface-container text-on-surface-variant border-outline-variant/40'">
           {{ compare ? '环比对比 开' : '环比对比 关' }}
         </button>
-        <button @click="exportCsv" class="px-3 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all flex items-center gap-1">
+        <button @click="exportCsv" class="px-3 py-2 rounded-xl text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] flex items-center gap-1">
           <span class="material-symbols-outlined text-[18px]">download</span>导出CSV
         </button>
       </div>
@@ -422,7 +504,7 @@ onBeforeUnmount(() => { destroyCharts() })
               {{ deltaChip(c.delta).arrow }} {{ deltaChip(c.delta).txt }}
             </span>
           </div>
-          <div class="font-headline-lg text-headline-lg text-text-primary leading-none">{{ typeof c.primaryValue === 'number' ? c.primaryValue.toLocaleString() : c.primaryValue }}</div>
+          <div class="font-headline-lg text-headline-lg text-text-primary leading-none tabular-nums">{{ typeof c.primaryValue === 'number' ? c.primaryValue.toLocaleString() : c.primaryValue }}</div>
           <div class="text-label-sm text-text-secondary mt-2">{{ c.primaryLabel }}</div>
           <div class="mt-3 pt-3 border-t border-surface-variant/40 flex items-center justify-between">
             <span class="text-label-sm text-text-secondary">{{ c.secondaryLabel }}</span>
@@ -471,7 +553,7 @@ onBeforeUnmount(() => { destroyCharts() })
             </select>
             <div class="flex gap-1 bg-surface-container rounded-xl p-1">
               <button v-for="o in [{k:'link',l:'链接'},{k:'parent',l:'父分类'},{k:'child',l:'子分类'}]" :key="o.k" @click="setDim(o.k)"
-                class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                 :class="dim === o.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-high'">
                 {{ o.l }}
               </button>
@@ -559,7 +641,7 @@ onBeforeUnmount(() => { destroyCharts() })
           </div>
           <div class="flex gap-1 bg-surface-container rounded-xl p-1">
             <button v-for="o in [{k:'total',l:'总操作'},{k:'clicks',l:'点击'},{k:'logins',l:'登录'}]" :key="o.k" @click="setUserSort(o.k)"
-              class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+              class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
               :class="userSort === o.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-high'">
               {{ o.l }}
             </button>
@@ -618,8 +700,8 @@ onBeforeUnmount(() => { destroyCharts() })
         <p class="text-label-sm text-text-secondary mb-3">统计周期内每日点击量（颜色越深越多），日期范围随上方时间筛选变化</p>
         <div class="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto pr-1">
           <button v-for="(d, i) in trend.labels" :key="d"
-            class="w-5 h-5 rounded-[4px] transition-all hover:opacity-80"
-            :style="{ background: `rgba(83,65,205,${0.08 + 0.92 * (trend.clicks[i] / dayMax)})`, outline: selectedDate === d ? '2px solid #5341CD' : 'none', outlineOffset: '1px' }"
+            class="w-5 h-5 rounded-[4px] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] hover:opacity-80"
+            :style="{ background: `${accentRgba(0.08 + 0.92 * (trend.clicks[i] / dayMax))}`, outline: selectedDate === d ? `2px solid ${CLICK_COLOR}` : 'none', outlineOffset: '1px' }"
             :title="`${d}：${trend.clicks[i]} 次点击`"
             @click="selectDate(d)"></button>
         </div>
@@ -633,7 +715,7 @@ onBeforeUnmount(() => { destroyCharts() })
           </div>
           <div class="grid grid-cols-12 gap-1.5">
             <div v-for="(h, i) in dayHourly" :key="i" class="relative rounded-md flex items-center justify-center text-[10px] font-medium text-white/90"
-              :style="{ height: '28px', background: `rgba(83,65,205,${0.12 + 0.88 * (h / dayHourlyMax)})` }" :title="`${i}:00 - ${h} 次`">
+              :style="{ height: '28px', background: `${accentRgba(0.12 + 0.88 * (h / dayHourlyMax))}` }" :title="`${i}:00 - ${h} 次`">
               <span v-if="h / dayHourlyMax > 0.45">{{ h }}</span>
             </div>
           </div>
@@ -658,7 +740,7 @@ onBeforeUnmount(() => { destroyCharts() })
             <p class="text-label-sm text-text-secondary">长尾与空壳分类统计（系统每 10 分钟自动 ping 探测）</p>
           </div>
           <button @click="recheckLinks" :disabled="pinging"
-            class="px-3 py-1.5 rounded-lg text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-all flex items-center gap-1 disabled:opacity-60">
+            class="px-3 py-1.5 rounded-lg text-sm font-semibold bg-surface-container text-on-surface-variant border border-outline-variant/40 hover:bg-surface-container-high transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] flex items-center gap-1 disabled:opacity-60">
             <span class="material-symbols-outlined text-[18px]" :class="pinging ? 'animate-spin' : ''">refresh</span>
             {{ pinging ? '检测中…' : '重新检测' }}
           </button>
@@ -670,22 +752,22 @@ onBeforeUnmount(() => { destroyCharts() })
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="rounded-xl bg-surface-container p-4">
             <div class="text-label-sm text-text-secondary">零点击链接</div>
-            <div class="font-headline-md text-headline-md text-warning mt-1">{{ health.zero_click_links }}</div>
+            <div class="font-headline-md text-headline-md text-warning mt-1 tabular-nums">{{ health.zero_click_links }}</div>
             <div class="text-label-sm text-text-secondary mt-1">占比 {{ health.zero_click_ratio }}%</div>
           </div>
           <div class="rounded-xl bg-surface-container p-4">
             <div class="text-label-sm text-text-secondary">链接总数</div>
-            <div class="font-headline-md text-headline-md text-text-primary mt-1">{{ health.links_total }}</div>
+            <div class="font-headline-md text-headline-md text-text-primary mt-1 tabular-nums">{{ health.links_total }}</div>
             <div class="text-label-sm text-text-secondary mt-1">活跃 {{ health.links_total - health.zero_click_links }}</div>
           </div>
           <div class="rounded-xl bg-surface-container p-4">
             <div class="text-label-sm text-text-secondary">空壳子分类</div>
-            <div class="font-headline-md text-headline-md text-warning mt-1">{{ health.empty_categories }}</div>
+            <div class="font-headline-md text-headline-md text-warning mt-1 tabular-nums">{{ health.empty_categories }}</div>
             <div class="text-label-sm text-text-secondary mt-1">占比 {{ health.empty_ratio }}%</div>
           </div>
           <div class="rounded-xl bg-surface-container p-4">
             <div class="text-label-sm text-text-secondary">子分类总数</div>
-            <div class="font-headline-md text-headline-md text-text-primary mt-1">{{ health.categories_total }}</div>
+            <div class="font-headline-md text-headline-md text-text-primary mt-1 tabular-nums">{{ health.categories_total }}</div>
             <div class="text-label-sm text-text-secondary mt-1">含链接 {{ health.categories_total - health.empty_categories }}</div>
           </div>
         </div>

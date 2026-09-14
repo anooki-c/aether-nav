@@ -44,7 +44,16 @@ async function submit() {
       <div class="absolute inset-0 bg-black/30 backdrop-blur-md" @click="close"></div>
 
       <!-- Modal Card -->
-      <div class="modal-panel responsive-modal-panel relative w-full max-w-md bg-surface rounded-2xl shadow-[0_20px_40px_-15px_rgba(108,92,231,0.15)] border border-outline-variant/30 overflow-hidden flex flex-col">
+      <div class="modal-panel responsive-modal-panel relative w-full max-w-md bg-surface rounded-2xl sh-glow-modal border border-outline-variant/30 overflow-hidden flex flex-col">
+      <!-- 右上角关闭：所有弹窗统一要求有 X（移动端没有 hover，必须常驻可见） -->
+      <button
+        type="button"
+        class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center text-text-secondary hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]"
+        aria-label="关闭"
+        @click="close"
+      >
+        <span class="material-symbols-outlined text-[20px]">close</span>
+      </button>
       <!-- Header with ambient glow -->
       <div class="relative pt-10 pb-6 px-8 flex flex-col items-center text-center bg-gradient-to-b from-surface-container-low to-surface">
         <div class="absolute top-8 w-24 h-24 bg-primary/10 rounded-full blur-xl mix-blend-multiply"></div>
@@ -69,7 +78,7 @@ async function submit() {
                 id="link-password"
                 v-model="password"
                 :type="showPwd ? 'text' : 'password'"
-                class="w-full bg-surface-bright border border-outline-variant rounded-xl py-3 pl-11 pr-12 text-on-surface font-body-md text-body-md focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-sm outline-none zn-input-reset"
+                class="w-full bg-surface-bright border border-outline-variant rounded-xl py-3 pl-11 pr-12 text-on-surface font-body-md text-body-md focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm outline-none zn-input-reset"
                 placeholder="请输入密码…"
                 @keyup.enter="submit"
                 autofocus
@@ -89,7 +98,7 @@ async function submit() {
           <div class="flex flex-col gap-3 mt-8">
             <button
               type="submit"
-              class="w-full bg-primary hover:bg-surface-tint text-on-primary font-headline-sm text-headline-sm rounded-xl py-3.5 flex items-center justify-center gap-2 transition-[transform,background-color,box-shadow] shadow-[0_4px_12px_rgba(108,92,231,0.25)] hover:shadow-[0_6px_16px_rgba(108,92,231,0.35)] hover:-translate-y-[1px] active:scale-[0.98] disabled:opacity-50"
+              class="w-full bg-primary hover:bg-surface-tint text-on-primary font-headline-sm text-headline-sm rounded-xl py-3.5 flex items-center justify-center gap-2 transition-[transform,background-color,box-shadow] sh-glow-sm sh-glow-sm-on-hover hover:-translate-y-[1px] active:scale-[0.98] disabled:opacity-50"
               :disabled="checking"
             >
               <span>{{ checking ? '验证中…' : '验证并打开' }}</span>

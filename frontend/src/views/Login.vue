@@ -47,7 +47,7 @@ function enterAsGuest() {
     </div>
 
     <!-- 主卡片（玻璃拟态） -->
-    <main class="w-full max-w-[420px] bg-surface/70 backdrop-blur-xl rounded-[1.25rem] shadow-[0_8px_32px_rgba(83,65,205,0.06)] border border-outline-variant/40 p-8 relative z-10 flex flex-col gap-unit-24">
+    <main class="w-full max-w-[420px] bg-surface/70 backdrop-blur-xl rounded-[1.25rem] sh-glow-login border border-outline-variant/40 p-8 relative z-10 flex flex-col gap-unit-24">
       <!-- Header -->
       <div class="flex flex-col items-center text-center">
         <div class="w-16 h-16 text-primary flex items-center justify-center mb-4 overflow-hidden">
@@ -67,7 +67,7 @@ function enterAsGuest() {
               id="username"
               v-model="username"
               type="text"
-              class="w-full bg-surface-container-lowest border border-outline-variant/60 rounded-lg pl-10 pr-4 py-3 font-body-md text-body-md text-on-surface placeholder:text-outline/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-sm"
+              class="w-full bg-surface-container-lowest border border-outline-variant/60 rounded-lg pl-10 pr-4 py-3 font-body-md text-body-md text-on-surface placeholder:text-outline/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm"
               placeholder="用户名"
               @keyup.enter="submit"
             />
@@ -81,13 +81,13 @@ function enterAsGuest() {
             icon="lock"
             placeholder="密码"
             autocomplete="current-password"
-            input-class="w-full bg-surface-container-lowest border border-outline-variant/60 rounded-lg py-3 font-body-md text-body-md text-on-surface placeholder:text-outline/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-sm"
+            input-class="w-full bg-surface-container-lowest border border-outline-variant/60 rounded-lg py-3 font-body-md text-body-md text-on-surface placeholder:text-outline/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm"
             @enter="submit"
           />
         </div>
 
         <div class="flex items-center gap-2 ml-1 mt-1">
-          <input v-model="remember" type="checkbox" id="remember-me" class="w-4 h-4 rounded border-outline-variant/60 text-primary-container focus:ring-primary-container cursor-pointer transition-all" />
+          <input v-model="remember" type="checkbox" id="remember-me" class="w-4 h-4 rounded border-outline-variant/60 text-primary-container focus:ring-primary-container cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" />
           <label for="remember-me" class="font-body-sm text-label-sm text-on-surface-variant cursor-pointer select-none">记住我，30天免登录</label>
         </div>
 

@@ -595,16 +595,22 @@ async function applyBatchCats() {
   } catch (e) { msg.value = e.message }
   finally { batchCatBusy.value = false }
 }
+// 分类编辑弹窗开关：点树里的分类 = 打开编辑弹窗；「新建分类」= 打开新建弹窗
+const showCatModal = ref(false)
+function closeCatModal() { showCatModal.value = false }
+
 function selectCat(c) {
   if (!canEditCat(c)) return
   selectedCat.value = c.id
   catForm.value = { id: c.id, name: c.name, parent_id: c.parent_id || null, icon: c.icon || '', color: c.color || '#6C5CE7', visible: c.visible !== false, archived: c.archived === true, description: c.description || '', permission: c.permission || 'all', allowed_roles: parseRoles(c.allowed_roles) }
   catFormOrigPerm.value = c.permission || 'all'
+  showCatModal.value = true
 }
 function newCatMode() {
   selectedCat.value = null
   catForm.value = { id: null, name: '', parent_id: null, icon: '', color: '#6C5CE7', visible: true, archived: false, description: '', permission: 'registered', allowed_roles: [] }
   catFormOrigPerm.value = null
+  showCatModal.value = true
 }
 // 新建子分类时，若未手动改过权限，则继承父分类权限（item 8：子分类没有设置则继承父分类）
 watch(
@@ -681,6 +687,7 @@ async function doSaveCat(cascade) {
     await api.createCategory(payload)
     msg.value = '分类已创建'
   }
+  showCatModal.value = false
   const { loadTree } = await import('../store')
   await loadTree()
   await loadLinks()
@@ -768,7 +775,7 @@ async function confirmCatDel() {
     showCatDel.value = false
     const { loadTree } = await import('../store')
     await loadTree()
-    newCatMode()
+    closeCatModal()
   } catch (e) { msg.value = e.message }
 }
 
@@ -1407,7 +1414,7 @@ onMounted(async () => {
         <button
           v-for="n in visibleNav"
           :key="n.k"
-          class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-all active:opacity-80"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] active:opacity-80"
           :class="tab === n.k ? 'bg-primary-fixed text-primary border-l-4 border-primary rounded-r-lg font-bold' : 'text-secondary hover:bg-surface-container'"
           @click="tab = n.k"
         >
@@ -1416,7 +1423,7 @@ onMounted(async () => {
         </button>
       </nav>
       <div class="p-4 border-t border-outline-variant/30">
-        <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-all" @click="router.push('/')">
+        <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" @click="router.push('/')">
           <span class="material-symbols-outlined">arrow_back</span>
           <span class="font-body-md">返回前台</span>
         </button>
@@ -1443,7 +1450,7 @@ onMounted(async () => {
           <button
             v-for="n in visibleNav"
             :key="n.k"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-all"
+            class="flex items-center gap-3 px-4 py-3 rounded-lg text-left font-body-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
             :class="tab === n.k ? 'bg-primary-fixed text-primary font-bold' : 'text-secondary hover:bg-surface-container'"
             @click="switchTab(n.k)"
           >
@@ -1452,7 +1459,7 @@ onMounted(async () => {
           </button>
         </nav>
         <div class="p-4 border-t border-outline-variant/30">
-          <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-all" @click="router.push('/'); adminNavOpen = false">
+          <button class="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-secondary hover:bg-surface-container transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" @click="router.push('/'); adminNavOpen = false">
             <span class="material-symbols-outlined">arrow_back</span>
             <span class="font-body-md">返回前台</span>
           </button>
@@ -1511,7 +1518,7 @@ onMounted(async () => {
                 @click="linkSubTab = 'archived'">已归档</button>
             </div>
 
-            <div class="flex flex-wrap items-center gap-4 py-2 mb-4">
+            <div class="link-filters flex flex-wrap items-center gap-4 py-2 mb-4">
               <div class="flex items-center gap-2">
                 <label class="font-label-sm text-label-sm text-text-secondary">分类:</label>
                 <select v-model="filterParent" class="bg-bg-card border border-outline-variant rounded-lg px-3 py-1.5 font-body-sm text-body-sm focus:outline-none focus:border-primary">
@@ -1708,9 +1715,6 @@ onMounted(async () => {
               <div class="md:hidden p-3">
                 <div v-for="l in pagedLinks" :key="l.id" class="m-lcard">
                   <div class="m-lcard-top">
-                    <span class="m-lcard-check">
-                      <input type="checkbox" :checked="isLinkSelected(l.id)" @change="toggleLinkSelect(l.id)" />
-                    </span>
                     <span class="m-lcard-ico">
                       <EntityIcon :icon="l.icon" :fallback="getLinkIcon(l.title)" :size="24" :alt="l.title" />
                     </span>
@@ -1724,6 +1728,10 @@ onMounted(async () => {
                         <span class="m-tag is-pri">{{ permText(l.permission) }}</span>
                         <span v-if="l.url_internal" class="m-tag is-warn">含内网</span>
                       </span>
+                    </span>
+                    <!-- 选择框放在标题行最右：原来独占卡片最左一列，白吃掉约 22px 横向空间 -->
+                    <span class="m-lcard-check">
+                      <input type="checkbox" :checked="isLinkSelected(l.id)" @change="toggleLinkSelect(l.id)" />
                     </span>
                   </div>
 
@@ -1858,9 +1866,10 @@ onMounted(async () => {
               <button @click="clearCatSelection" class="px-3 py-1.5 rounded-lg font-body-sm text-secondary hover:bg-surface-container transition-colors">取消选择</button>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 分类目录占满整行：编辑表单已移入弹窗，不再与目录并排 -->
+            <div class="grid grid-cols-1 gap-8">
               <!-- Tree -->
-              <div class="lg:col-span-1 flex flex-col gap-4">
+              <div class="flex flex-col gap-4">
                 <div class="bg-surface rounded-2xl p-4 md:p-6 border border-surface-variant shadow-sm">
                   <div class="flex items-center justify-between mb-4 md:mb-6">
                     <h2 class="font-headline-sm text-primary-container">分类目录</h2>
@@ -1907,7 +1916,7 @@ onMounted(async () => {
                            :animation="200"
                            ghost-class="category-drag-ghost"
                            chosen-class="category-drag-chosen"
-                           class="ml-4 md:ml-6 mt-1 flex flex-col gap-1"
+                           class="ml-6 md:ml-8 mt-1 flex flex-col gap-1"
                            @end="onChildCategoryDragEnd(p)"
                          >
                            <template #item="{ element: c }">
@@ -1935,17 +1944,18 @@ onMounted(async () => {
                 </div>
               </div>
 
-              <!-- Edit form -->
-              <div class="lg:col-span-2 flex flex-col gap-4">
-                <div class="bg-surface rounded-2xl border border-surface-variant shadow-sm overflow-hidden">
-                  <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center justify-between bg-surface-container-lowest">
-                    <h2 class="font-headline-sm text-on-surface">{{ selectedCat ? '编辑分类' : '新建分类' }}</h2>
-                    <div class="flex items-center gap-3">
-                      <button class="ui-btn ui-btn-ghost px-4 py-2 rounded-lg font-body-sm" @click="newCatMode">取消</button>
-                      <button class="ui-btn ui-btn-primary px-4 py-2 rounded-lg font-body-sm" @click="saveCat">保存更改</button>
-                    </div>
-                  </div>
-                  <div class="p-4 md:p-6 flex flex-col gap-6">
+            <!-- 分类编辑弹窗：点树里的分类 = 编辑，点「新建分类」= 新建。
+                 原来是在右侧栏内联常驻展示，手机上会把表单挤到目录下方、需要长距离滚动。 -->
+            <div v-if="showCatModal" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4">
+              <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeCatModal"></div>
+              <div class="responsive-modal-panel relative bg-surface w-full max-w-[760px] max-h-[calc(100dvh-1.5rem)] rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col">
+                <button type="button" class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]" aria-label="关闭" @click="closeCatModal">
+                  <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+                <div class="px-4 py-3 md:px-6 md:py-4 pr-14 md:pr-16 border-b border-surface-variant flex items-center justify-between bg-surface-container-lowest shrink-0">
+                  <h2 class="font-headline-sm text-on-surface">{{ selectedCat ? '编辑分类' : '新建分类' }}</h2>
+                </div>
+                <div class="p-4 md:p-6 flex flex-col gap-6 overflow-y-auto">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div class="flex flex-col gap-2">
                         <label class="font-label-sm text-secondary">分类名称 <span class="text-error">*</span></label>
@@ -2010,7 +2020,7 @@ onMounted(async () => {
                       </div>
                       <div v-if="isAdmin" class="flex items-center gap-3 flex-wrap justify-end w-full md:w-[55%]">
                         <select v-model="catForm.permission"
-                          class="w-full px-3 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer">
+                          class="w-full px-3 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer">
                           <option v-for="p in PERM_OPTIONS" :key="p.value" :value="p.value">{{ p.label }}</option>
                         </select>
                       </div>
@@ -2031,7 +2041,7 @@ onMounted(async () => {
                       <textarea v-model="catForm.description" class="bg-surface-container-low border-none rounded-lg text-body-md focus:ring-2 focus:ring-primary p-3" rows="3" placeholder="输入分类描述..."></textarea>
                     </div>
                     <div class="pt-4 border-t border-surface-variant" v-if="selectedCat">
-                      <button class="flex items-center gap-2 text-error bg-error-container/50 border border-error/25 hover:bg-error-container hover:border-error/40 px-4 py-2 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                      <button class="flex items-center gap-2 text-error bg-error-container/50 border border-error/25 hover:bg-error-container hover:border-error/40 px-4 py-2 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                         :disabled="!canEditCat(selectedCatNode)"
                         :title="canEditCat(selectedCatNode) ? '删除 / 移入回收站' : '无权限：仅可删除自己创建的分类'"
                         @click="openCatDel">
@@ -2039,16 +2049,23 @@ onMounted(async () => {
                         <span class="font-body-md font-bold">删除该分类</span>
                       </button>
                     </div>
-                  </div>
+                </div>
+                <div class="px-4 py-3 md:px-6 md:py-4 border-t border-surface-variant bg-surface-container-lowest flex justify-end gap-3 shrink-0">
+                  <button class="ui-btn ui-btn-ghost px-4 py-2 rounded-lg font-body-sm" @click="closeCatModal">取消</button>
+                  <button class="ui-btn ui-btn-primary px-4 py-2 rounded-lg font-body-sm" @click="saveCat">保存更改</button>
                 </div>
               </div>
+            </div>
             </div>
           </section>
 
           <!-- 删除分类弹窗：处理旗下链接与子分类 -->
-          <div v-if="showCatDel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="showCatDel = false">
-            <div class="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-              <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center gap-2">
+          <div v-if="showCatDel" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" @click.self="showCatDel = false">
+            <div class="relative bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+              <button type="button" class="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]" aria-label="关闭" @click="showCatDel = false">
+                <span class="material-symbols-outlined text-[20px]">close</span>
+              </button>
+              <div class="px-4 py-3 md:px-6 md:py-4 pr-14 border-b border-surface-variant flex items-center gap-2">
                 <span class="material-symbols-outlined text-error">warning</span>
                 <h3 class="font-headline-sm text-on-surface">删除分类</h3>
               </div>
@@ -2059,7 +2076,7 @@ onMounted(async () => {
                   <span class="font-bold text-on-surface">{{ catDelStats.child_count }}</span> 个子分类，请选择处理方式：
                 </p>
                 <div class="flex flex-col gap-3">
-                  <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all"
+                  <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                     :class="catDelMode === 'archive' ? 'border-amber-400 bg-amber-100 shadow-sm' : 'border-amber-200 bg-amber-50 hover:bg-amber-100'">
                     <input type="radio" value="archive" v-model="catDelMode" class="mt-1 accent-amber-500" />
                     <div class="flex flex-col">
@@ -2067,7 +2084,7 @@ onMounted(async () => {
                       <span class="font-label-sm text-on-surface-variant">保留分类与链接数据，前台不再显示，可随时恢复</span>
                     </div>
                   </label>
-                  <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all"
+                  <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                     :class="catDelMode === 'move' ? 'border-emerald-400 bg-emerald-100 shadow-sm' : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'">
                     <input type="radio" value="move" v-model="catDelMode" class="mt-1 accent-emerald-500" />
                     <div class="flex flex-col gap-2 w-full">
@@ -2078,7 +2095,7 @@ onMounted(async () => {
                       </select>
                     </div>
                   </label>
-                  <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all"
+                  <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                     :class="catDelMode === 'delete' ? 'border-red-400 bg-red-100 shadow-sm' : 'border-red-200 bg-red-50 hover:bg-red-100'">
                     <input type="radio" value="delete" v-model="catDelMode" class="mt-1 accent-red-500" />
                     <div class="flex flex-col">
@@ -2096,9 +2113,12 @@ onMounted(async () => {
           </div>
 
           <!-- 父分类权限变更 → 子分类级联确认（item 8） -->
-          <div v-if="showPermCascade" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="showPermCascade = false">
-            <div class="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-              <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center gap-2">
+          <div v-if="showPermCascade" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" @click.self="showPermCascade = false">
+            <div class="relative bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+              <button type="button" class="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]" aria-label="关闭" @click="showPermCascade = false">
+                <span class="material-symbols-outlined text-[20px]">close</span>
+              </button>
+              <div class="px-4 py-3 md:px-6 md:py-4 pr-14 border-b border-surface-variant flex items-center gap-2">
                 <span class="material-symbols-outlined text-primary">account_tree</span>
                 <h3 class="font-headline-sm text-on-surface">同步子分类权限</h3>
               </div>
@@ -2216,9 +2236,12 @@ onMounted(async () => {
             </div>
 
             <!-- 重设密码弹窗 -->
-            <div v-if="showResetPwd" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="showResetPwd = false">
-              <div class="bg-surface rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-                <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center gap-2">
+            <div v-if="showResetPwd" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" @click.self="showResetPwd = false">
+              <div class="relative bg-surface rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+                <button type="button" class="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]" aria-label="关闭" @click="showResetPwd = false">
+                  <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+                <div class="px-4 py-3 md:px-6 md:py-4 pr-14 border-b border-surface-variant flex items-center gap-2">
                   <span class="material-symbols-outlined text-primary">key</span>
                   <h3 class="font-headline-sm text-on-surface">重设密码 · {{ resetPwdUser && resetPwdUser.username }}</h3>
                 </div>
@@ -2227,7 +2250,7 @@ onMounted(async () => {
                     <p class="font-body-sm text-on-surface-variant">为当前用户设置一个新密码（至少 6 位）。留空则自动生成 12 位随机密码。</p>
                     <div class="flex gap-2">
                       <input v-model="resetPwdForm.new_password" type="text" placeholder="留空则生成随机密码" minlength="6"
-                        class="flex-1 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-sm" />
+                        class="flex-1 px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] font-body-sm" />
                       <button class="px-3 py-2 rounded-lg bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors font-body-sm" title="生成随机密码" @click="genRandomPwd">
                         <span class="material-symbols-outlined text-[20px]">autorenew</span>
                       </button>
@@ -2252,9 +2275,12 @@ onMounted(async () => {
             </div>
 
             <!-- 禁用用户确认弹窗 -->
-            <div v-if="banConfirmUser" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="banConfirmUser = null">
-              <div class="bg-surface rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-                <div class="px-4 py-3 md:px-6 md:py-4 border-b border-surface-variant flex items-center gap-2">
+            <div v-if="banConfirmUser" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" @click.self="banConfirmUser = null">
+              <div class="relative bg-surface rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+                <button type="button" class="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]" aria-label="关闭" @click="banConfirmUser = null">
+                  <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+                <div class="px-4 py-3 md:px-6 md:py-4 pr-14 border-b border-surface-variant flex items-center gap-2">
                   <span class="material-symbols-outlined text-error">person_off</span>
                   <h3 class="font-headline-sm text-on-surface">禁用用户</h3>
                 </div>
@@ -2390,7 +2416,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="allowRegister" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
@@ -2431,7 +2457,7 @@ onMounted(async () => {
                   </div>
                   <label class="font-label-sm text-label-sm text-on-surface-variant font-medium mb-1.5">自定义局域网网段（可选）</label>
                   <textarea v-model="lanCidrs" rows="3"
-                    class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                    class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                     placeholder="每行一个，如 192.168.1.0/24&#10;10.0.0.0/8&#10;172.16.0.0/12（留空则使用 RFC1918 私有段 + 本机 + 链路本地）"></textarea>
                   <p class="font-label-xs text-[11px] text-on-surface-variant mt-1.5 leading-tight">用于快速添加时判断粘贴的地址属于局域网还是互联网；命中即识别为内网并填入内网 URL。</p>
                 </div>
@@ -2445,7 +2471,7 @@ onMounted(async () => {
                   <div class="flex flex-col gap-1.5">
                     <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">代理地址（可选）</label>
                     <input v-model="proxyUrl" type="text"
-                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                       placeholder="如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080" />
                     <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅作为兜底：只在「获取图标失败」或「连通性检测不通」时走代理重试；页面加载、更新检测等其他请求均不使用。留空则始终直连。</p>
                   </div>
@@ -2463,9 +2489,9 @@ onMounted(async () => {
                       <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">新用户与未单独设置的用户的默认展示网络；「自动判断」按访问者所在网络（命中局域网网段则内网）自动选择</div>
                     </div>
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'internal' ? 'bg-info text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'internal'">内网</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'external' ? 'bg-success text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'external'">外网</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="defaultNetwork === 'auto' ? 'bg-tertiary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'auto'">自动判断</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="defaultNetwork === 'internal' ? 'bg-info text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'internal'">内网</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="defaultNetwork === 'external' ? 'bg-success text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'external'">外网</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="defaultNetwork === 'auto' ? 'bg-tertiary text-white shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="defaultNetwork = 'auto'">自动判断</button>
                     </div>
                   </div>
                 </div>
@@ -2488,7 +2514,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="allowHomeEdit" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                 </div>
@@ -2506,7 +2532,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="showPersonalSettings" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
@@ -2516,7 +2542,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="showAdminConsole" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                 </div>
@@ -2527,12 +2553,16 @@ onMounted(async () => {
                     <span class="material-symbols-outlined text-primary text-[20px]">grid_view</span>
                     <h3 class="font-title-md text-[15px] font-semibold text-on-surface">显示设置</h3>
                   </div>
-                  <div class="py-2.5 border-t border-outline-variant/40">
-                    <div class="flex items-center justify-between mb-2 gap-3">
-                      <div class="font-body-sm text-body-sm text-on-surface">每行显示列数（桌面端）</div>
-                      <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-highest rounded-full px-2.5 py-0.5 w-fit">{{ columns }}</span>
+                  <!-- 「数量 + 滑块」放在同一行：原来数量徽章独占第一行、滑块独占第二行，浪费一整行高度 -->
+                  <div class="set-row-inline flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
+                    <div class="font-body-sm text-body-sm text-on-surface shrink-0">
+                      <span class="hidden md:inline">每行显示列数（桌面端）</span>
+                      <span class="md:hidden">每行显示列数</span>
                     </div>
-                    <input type="range" min="2" max="8" step="1" v-model.number="columns" class="w-full h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer accent-primary">
+                    <div class="flex items-center justify-end gap-3 flex-1 min-w-0">
+                      <input type="range" min="2" max="8" step="1" v-model.number="columns" class="flex-1 min-w-0 h-2 bg-surface-variant rounded-lg appearance-none cursor-pointer accent-primary">
+                      <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-highest rounded-full px-2.5 py-0.5 w-8 text-center shrink-0">{{ columns }}</span>
+                    </div>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
                     <div class="min-w-0">
@@ -2541,7 +2571,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="compactMode" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
@@ -2550,8 +2580,8 @@ onMounted(async () => {
                       <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">紧凑视图可显示更多内容</div>
                     </div>
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="density === 'comfortable' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'comfortable'">舒适</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="density === 'compact' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'compact'">紧凑</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="density === 'comfortable' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'comfortable'">舒适</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="density === 'compact' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="density = 'compact'">紧凑</button>
                     </div>
                   </div>
 
@@ -2563,7 +2593,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="showQuickAccess" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40" :class="showQuickAccess ? '' : 'opacity-50'">
@@ -2572,9 +2602,9 @@ onMounted(async () => {
                       <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">大 / 中 / 小三档，只影响该区域的图标尺寸</div>
                     </div>
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="quickAccessSize === 'large' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'large'">大</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="quickAccessSize === 'medium' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'medium'">中</button>
-                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="quickAccessSize === 'small' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'small'">小</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="quickAccessSize === 'large' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'large'">大</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="quickAccessSize === 'medium' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'medium'">中</button>
+                      <button class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="quickAccessSize === 'small' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="quickAccessSize = 'small'">小</button>
                     </div>
                   </div>
                 </div>
@@ -2646,7 +2676,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="openNewTab" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                 </div>
@@ -2681,7 +2711,7 @@ onMounted(async () => {
                   <div class="flex flex-col gap-1.5 pt-3">
                     <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">Logo 地址或 Emoji</label>
                     <input v-model="siteLogo" type="text"
-                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                       placeholder="留空则用默认；可填 /uploads/xxx.png 或 🚀 这类 emoji" />
                     <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">上传会自动填入此处；也可手动粘贴图片 URL 或 emoji 作为站点图标。</p>
                   </div>
@@ -2689,14 +2719,14 @@ onMounted(async () => {
                   <div class="flex flex-col gap-1.5 pt-4">
                     <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">网站名称</label>
                     <input v-model="siteName" type="text"
-                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                       placeholder="云航导航" />
                   </div>
                   <!-- 副标题 -->
                   <div class="flex flex-col gap-1.5 pt-4">
                     <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">副标题</label>
                     <input v-model="siteSubtitle" type="text"
-                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                      class="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                       placeholder="个人导航主页" />
                     <p class="font-label-xs text-[11px] text-on-surface-variant leading-tight">显示在名称下方；留空则不显示。</p>
                   </div>
@@ -2715,7 +2745,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="showPasswordLock" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                 </div>
@@ -2732,7 +2762,7 @@ onMounted(async () => {
                       <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">仅对本人生效，选择后立即存入个人设置</div>
                     </div>
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button v-for="t in THEME_OPTIONS" :key="t.k" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="store.theme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="applyTheme(t.k, true)"><span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">{{ t.i }}</span>{{ t.l }}</span></button>
+                      <button v-for="t in THEME_OPTIONS" :key="t.k" class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="store.theme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="applyTheme(t.k, true)"><span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">{{ t.i }}</span>{{ t.l }}</span></button>
                     </div>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
@@ -2741,7 +2771,7 @@ onMounted(async () => {
                       <div class="font-label-xs text-[11px] text-on-surface-variant leading-tight">未设置个人主题的用户默认使用（对所有人生效）</div>
                     </div>
                     <div class="flex items-center bg-surface-container-highest rounded-full p-0.5 gap-1 shrink-0">
-                      <button v-for="t in THEME_OPTIONS" :key="t.k" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="siteDefaultTheme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="siteDefaultTheme = t.k"><span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">{{ t.i }}</span>{{ t.l }}</span></button>
+                      <button v-for="t in THEME_OPTIONS" :key="t.k" class="px-3 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]" :class="siteDefaultTheme === t.k ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'" @click="siteDefaultTheme = t.k"><span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">{{ t.i }}</span>{{ t.l }}</span></button>
                     </div>
                   </div>
                   <div class="flex items-center justify-between gap-3 py-2.5 border-t border-outline-variant/40">
@@ -2780,7 +2810,7 @@ onMounted(async () => {
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" v-model="showCategoryColors" class="sr-only peer">
-                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                      <div class="w-9 h-5 bg-surface-variant peer-checked:bg-primary rounded-full peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"></div>
                     </label>
                   </div>
                 </div>
@@ -2857,35 +2887,42 @@ onMounted(async () => {
     <!-- 点击加密链接时弹出的密码验证框（打开前已把目标 URL 写入 link.url） -->
     <PasswordModal v-model:open="adminPwdOpen" :link="adminPwdLink" />
 
-    <!-- 密码设置 / 修改弹窗 -->
-    <div v-if="pwdModal" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4">
-      <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="pwdModal = null"></div>
-      <div class="responsive-modal-panel relative bg-bg-card w-full max-w-md rounded-[16px] shadow-lg overflow-hidden flex flex-col">
-        <div class="px-4 py-3 md:px-6 md:py-4 border-b border-outline-variant/30 flex justify-between items-center">
-          <h2 class="font-headline-md text-headline-md text-on-surface">{{ pwdModal.mode === 'set' ? '设置链接密码' : '修改链接密码' }}</h2>
-          <button class="text-outline hover:text-primary transition-colors" @click="pwdModal = null"><span class="material-symbols-outlined">close</span></button>
-        </div>
-        <div class="p-4 md:p-6 flex flex-col gap-4">
-          <p class="font-body-sm text-body-sm text-on-surface-variant">链接：<span class="font-semibold text-on-surface">{{ pwdModal.link.title }}</span></p>
-          <template v-if="pwdModal.mode === 'update'">
-            <div class="flex flex-col gap-1">
-              <label class="font-label-sm text-label-sm text-on-surface-variant">旧密码</label>
-              <input v-model="pwdForm.oldPw" type="password" class="w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded font-body-sm focus:outline-none focus:border-primary" placeholder="请输入旧密码" />
-            </div>
-          </template>
-          <div class="flex flex-col gap-1">
-            <label class="font-label-sm text-label-sm text-on-surface-variant">{{ pwdModal.mode === 'set' ? '新密码' : '新密码（留空则取消密码）' }}</label>
-            <input v-model="pwdForm.npw1" type="password" class="w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded font-body-sm focus:outline-none focus:border-primary" placeholder="请输入新密码" />
+    <!-- 密码设置 / 修改弹窗（视觉与前台 PasswordModal 统一：模糊遮罩 + 渐变头部 + 大图标 + 右上角 X） -->
+    <div v-if="pwdModal" class="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4">
+      <div class="absolute inset-0 bg-black/30 backdrop-blur-md" @click="pwdModal = null"></div>
+      <div class="responsive-modal-panel relative w-full max-w-md bg-surface rounded-2xl sh-glow-modal border border-outline-variant/30 overflow-hidden flex flex-col">
+        <button type="button" class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center text-text-secondary hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]" aria-label="关闭" @click="pwdModal = null">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+
+        <!-- 渐变头部 + 大锁图标 -->
+        <div class="relative pt-8 pb-5 px-8 flex flex-col items-center text-center bg-gradient-to-b from-surface-container-low to-surface">
+          <div class="w-14 h-14 bg-primary-container rounded-2xl flex items-center justify-center text-on-primary-container shadow-sm mb-4 rotate-[-5deg]">
+            <span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">lock</span>
           </div>
-          <div class="flex flex-col gap-1">
-            <label class="font-label-sm text-label-sm text-on-surface-variant">确认新密码</label>
-            <input v-model="pwdForm.npw2" type="password" class="w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded font-body-sm focus:outline-none focus:border-primary" placeholder="再次输入新密码" />
+          <h2 class="font-headline-md text-headline-md text-text-primary mb-1">{{ pwdModal.mode === 'set' ? '设置链接密码' : '修改链接密码' }}</h2>
+          <p class="font-body-sm text-body-sm text-text-secondary max-w-[320px]">{{ pwdModal.link.title }}</p>
+        </div>
+
+        <div class="px-6 pb-6 flex flex-col gap-4">
+          <div v-if="pwdModal.mode === 'update'" class="flex flex-col gap-1.5">
+            <label class="font-label-sm text-label-sm text-on-surface-variant block ml-1">旧密码</label>
+            <input v-model="pwdForm.oldPw" type="password" class="w-full bg-surface-bright border border-outline-variant rounded-xl py-2.5 px-4 text-on-surface font-body-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm outline-none" placeholder="请输入旧密码" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="font-label-sm text-label-sm text-on-surface-variant block ml-1">{{ pwdModal.mode === 'set' ? '新密码' : '新密码（留空则取消密码）' }}</label>
+            <input v-model="pwdForm.npw1" type="password" class="w-full bg-surface-bright border border-outline-variant rounded-xl py-2.5 px-4 text-on-surface font-body-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm outline-none" placeholder="请输入新密码" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="font-label-sm text-label-sm text-on-surface-variant block ml-1">确认新密码</label>
+            <input v-model="pwdForm.npw2" type="password" class="w-full bg-surface-bright border border-outline-variant rounded-xl py-2.5 px-4 text-on-surface font-body-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm outline-none" placeholder="再次输入新密码" />
           </div>
           <p v-if="pwdError" class="text-error font-body-sm">{{ pwdError }}</p>
-        </div>
-        <div class="p-4 md:p-6 bg-surface-container-low flex justify-end gap-3">
-          <button class="px-6 py-2 rounded-full text-secondary hover:bg-surface-container transition-colors font-headline-sm" @click="pwdModal = null">取消</button>
-          <button class="px-6 py-2 rounded-full bg-primary text-on-primary shadow-sm hover:shadow-md transition-all font-headline-sm" @click="confirmPwd">确定</button>
+
+          <div class="flex flex-col gap-2.5 mt-1">
+            <button type="button" class="w-full bg-primary hover:bg-surface-tint text-on-primary font-headline-sm text-headline-sm rounded-xl py-3 flex items-center justify-center gap-2 transition-[transform,background-color,box-shadow] sh-glow-sm active:scale-[0.98]" @click="confirmPwd">确定</button>
+            <button type="button" class="w-full bg-transparent hover:bg-surface-container-highest text-secondary font-headline-sm text-headline-sm rounded-xl py-2.5 transition-colors" @click="pwdModal = null">取消</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2921,7 +2958,7 @@ onMounted(async () => {
             <div class="flex flex-col gap-1.5">
               <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">名称 <span class="text-error">*</span></label>
               <input v-model="editForm.title" type="text"
-                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="editReadonly"
                 placeholder="输入链接名称…" />
             </div>
@@ -2935,7 +2972,7 @@ onMounted(async () => {
                   {{ editSslExternal ? 'https://' : 'http://' }}
                 </span>
                 <input v-model="editExtBody" type="text"
-                  class="flex-1 min-w-0 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="flex-1 min-w-0 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="editReadonly"
                   placeholder="example.com" />
                 <label class="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-outline-variant bg-surface-container-low cursor-pointer shrink-0 select-none hover:bg-surface-container transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -2955,7 +2992,7 @@ onMounted(async () => {
                   {{ editSslInternal ? 'https://' : 'http://' }}
                 </span>
                 <input v-model="editIntBody" type="text"
-                  class="flex-1 min-w-0 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="flex-1 min-w-0 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="editReadonly"
                   placeholder="192.168.x.x:port" />
                 <label class="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-outline-variant bg-surface-container-low cursor-pointer shrink-0 select-none hover:bg-surface-container transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -2970,7 +3007,7 @@ onMounted(async () => {
             <div class="flex flex-col gap-1.5">
               <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">描述内容</label>
               <textarea v-model="editForm.description" rows="3"
-                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="editReadonly"
                 placeholder="添加描述信息…"></textarea>
             </div>
@@ -3005,11 +3042,11 @@ onMounted(async () => {
                     </label>
                   </div>
                   <input v-if="editSelectedProvider === 'custom'" v-model="editFaviconCustomUrl" type="text"
-                    class="w-full h-[38px] px-3 bg-surface-container-low border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="w-full h-[38px] px-3 bg-surface-container-low border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
                     :disabled="editReadonly"
                     placeholder="自定义接口模板：{scheme}://{host}/favicon.ico" />
                   <input v-model="editForm.icon" type="text"
-                    class="w-full h-[42px] px-4 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="w-full h-[42px] px-4 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40 disabled:opacity-50 disabled:cursor-not-allowed"
                     :disabled="editReadonly"
                     placeholder="图片网址 / 本地文件路径 / Material Symbols 名称" />
                   <button type="button" class="w-full h-9 shrink-0 rounded-lg bg-surface-container-high text-on-surface-variant hover:bg-surface-variant text-sm flex items-center justify-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" :disabled="editReadonly" @click="editIconPickerOpen = true">
@@ -3027,13 +3064,13 @@ onMounted(async () => {
               <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">选择分类</label>
               <div class="flex gap-2">
                 <select v-model="editCatParent"
-                  class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="editReadonly">
                   <option value="">父分类</option>
                   <option v-for="p in store.tree" :key="p.id" :value="p.id">{{ p.name }}</option>
                 </select>
                 <select v-model="editForm.category_id"
-                  class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+                  class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                   :disabled="editReadonly || (!editCatParent && !editForm.category_id)">
                   <option :value="null">子分类</option>
                   <template v-if="editCatParent">
@@ -3080,7 +3117,7 @@ onMounted(async () => {
             <div class="flex flex-col gap-2">
               <span class="font-label-xs text-label-xs text-on-surface-variant uppercase tracking-wider font-semibold">权限配置</span>
               <select v-model="editForm.permission"
-                class="w-full px-4 py-2.5 bg-bg-card border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                class="w-full px-4 py-2.5 bg-bg-card border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="editReadonly">
                 <option value="all">🌐 所有人 — 所有访客均可访问</option>
                 <option value="registered">👤 注册用户 — 登录后可见</option>
@@ -3110,13 +3147,13 @@ onMounted(async () => {
                 <div class="flex flex-col gap-1">
                   <label class="font-label-xs text-label-xs text-on-surface-variant">新密码</label>
                   <input v-model="editForm.pwdNew" type="password"
-                    class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+                    class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                     placeholder="至少 4 位密码" />
                 </div>
                 <div class="flex flex-col gap-1">
                   <label class="font-label-xs text-label-xs text-on-surface-variant">确认密码</label>
                   <input v-model="editForm.pwdConfirm" type="password"
-                    class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+                    class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                     placeholder="再次输入密码" />
                 </div>
                 <p v-if="editPwdError" class="text-error font-label-xs text-label-xs flex items-center gap-1">
@@ -3145,7 +3182,7 @@ onMounted(async () => {
 /* 移动端后台抽屉 / 遮罩淡入淡出 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.25s cubic-bezier(0.32, 0.72, 1);
+  transition: opacity 0.25s var(--ease-spring);
 }
 .fade-enter-from,
 .fade-leave-to {
@@ -3193,6 +3230,22 @@ onMounted(async () => {
   .settings-column .flex.items-center.justify-between.gap-3 {
     align-items: stretch;
     flex-direction: column;
+  }
+  /* 需要「始终保持单行」的行（如「每行显示列数」= 标签 + 滑块 + 数量）加 .set-row-inline 标记 */
+  .settings-column .flex.items-center.justify-between.gap-3.set-row-inline {
+    align-items: center;
+    flex-direction: row;
+  }
+  /* 修正：只带一个开关的行必须保持「一行」—— 标题+描述在左、开关在右。
+     （分段控件 / 下拉 / 数字输入仍需整行，所以下面用 :has 精确排除它们。）
+     若浏览器不支持 :has，则退回上面的纵向堆叠，不会溢出，属安全降级。 */
+  .settings-column .flex.items-center.justify-between.gap-3:has(> label.relative) {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  .settings-column .flex.items-center.justify-between.gap-3:has(> label.relative) > label.relative {
+    align-self: center;
   }
   .settings-column .flex.items-center.justify-between.gap-3 > .relative {
     width: 100%;

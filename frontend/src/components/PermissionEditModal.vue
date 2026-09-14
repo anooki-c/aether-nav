@@ -93,8 +93,17 @@ function close() {
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close"></div>
 
     <div class="relative responsive-modal-panel w-full max-w-4xl max-h-[90vh] flex flex-col bg-surface-container-lowest rounded-xl shadow-2xl border border-outline-variant/30 overflow-hidden">
+      <!-- 右上角关闭：两个页签下都常驻，不再依赖 denied 页签里的「关闭」文字按钮 -->
+      <button
+        type="button"
+        class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]"
+        aria-label="关闭"
+        @click="close"
+      >
+        <span class="material-symbols-outlined text-[20px]">close</span>
+      </button>
       <!-- Header -->
-      <div class="flex flex-wrap items-start justify-between gap-3 p-4 md:p-6 border-b border-outline-variant/30">
+      <div class="flex flex-wrap items-start justify-between gap-3 p-4 md:p-6 pr-14 md:pr-16 border-b border-outline-variant/30">
         <div class="min-w-0">
           <h2 class="font-headline-lg text-headline-lg text-text-primary tracking-tight">编辑权限：{{ user.display_name || user.username }}</h2>
           <p class="text-text-secondary mt-1 flex items-center gap-2 font-body-sm">
@@ -104,12 +113,11 @@ function close() {
         </div>
         <div class="flex flex-wrap gap-2 md:gap-3" v-if="tab === 'manage'">
           <button class="px-4 py-2 bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-high transition-colors font-headline-sm text-headline-sm shadow-sm" @click="restoreAll">恢复默认</button>
-          <button class="px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-surface-tint transition-colors font-headline-sm text-headline-sm shadow-[0_4px_14px_rgba(108,92,231,0.15)] flex items-center gap-2 disabled:opacity-50" :disabled="saving" @click="save">
+          <button class="px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-surface-tint transition-colors font-headline-sm text-headline-sm sh-glow-xs flex items-center gap-2 disabled:opacity-50" :disabled="saving" @click="save">
             <span class="material-symbols-outlined text-[18px]">save</span>
             {{ saving ? '保存中…' : '保存更改' }}
           </button>
         </div>
-        <button v-else class="px-4 py-2 bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-high transition-colors font-headline-sm text-headline-sm shadow-sm" @click="close">关闭</button>
       </div>
 
       <!-- Tabs -->
@@ -166,7 +174,7 @@ function close() {
                 <tr v-else-if="manageShown.length === 0" class="text-center text-on-surface-variant">
                   <td colspan="5" class="m-span py-10 font-body-md">该用户暂无可管理的链接</td>
                 </tr>
-                <tr v-for="(l, i) in manageShown" :key="l.id" class="hover:bg-surface-container-lowest transition-all group">
+                <tr v-for="(l, i) in manageShown" :key="l.id" class="hover:bg-surface-container-lowest transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] group">
                   <td data-label="序号" class="py-4 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
                   <td class="m-span py-4 px-4">
                     <div class="flex items-start gap-3 min-w-0">
@@ -194,12 +202,12 @@ function close() {
                       role="switch"
                       :aria-checked="l.visible"
                       @click="setVisible(l, !l.visible)"
-                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      class="relative inline-flex h-5 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
                       :class="l.visible ? 'bg-primary' : 'bg-outline/40'"
                     >
                       <span
-                        class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform"
-                        :class="l.visible ? 'translate-x-[22px]' : 'translate-x-0.5'"
+                        class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                        :class="l.visible ? 'translate-x-[30px]' : 'translate-x-0.5'"
                       ></span>
                     </button>
                   </td>
@@ -246,7 +254,7 @@ function close() {
                 <tr v-else-if="deniedShown.length === 0" class="text-center text-on-surface-variant">
                   <td colspan="5" class="m-span py-10 font-body-md">该用户对所有链接都有访问权限 🎉</td>
                 </tr>
-                <tr v-for="(l, i) in deniedShown" :key="l.id" class="hover:bg-surface-container-lowest transition-all group">
+                <tr v-for="(l, i) in deniedShown" :key="l.id" class="hover:bg-surface-container-lowest transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] group">
                   <td data-label="序号" class="py-4 px-4 text-center text-outline font-label-sm">{{ i + 1 }}</td>
                   <td class="m-span py-4 px-4">
                     <div class="flex items-start gap-3 min-w-0">

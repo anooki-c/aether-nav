@@ -67,6 +67,18 @@
   --c-warning: 245 158 11;             /* #F59E0B */
   --c-info: 59 130 246;                /* #3B82F6 */
   --c-brand: 108 92 231;               /* #6C5CE7 */
+
+  /* ----- 动效令牌（motion tokens）-----
+     缓动与时长在这里单点定义。此前本文件手写了 10 处 cubic-bezier(0.32,0.72,0,1)
+     与 5 种写法不一的时长（180ms / 220ms / 0.3s / 0.2s / 0.15s），且 tailwind.config
+     里的 ease-spring 是同一曲线的第二份定义 —— 改一处不会同步。现统一引用令牌。
+     数值与原值一一对应，视觉零变化。 */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);  /* 临界阻尼：平滑无回弹，通用默认 */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);      /* 入场 / 大位移 */
+  --dur-fast: 150ms;    /* 按压、微位移反馈 */
+  --dur-base: 180ms;    /* 默认交互：按钮 / 图标 / 开关 */
+  --dur-slow: 220ms;    /* 需要更柔和的变化：聚焦边框、阴影 */
+  --dur-panel: 300ms;   /* 卡片上浮、面板级位移 */
 }
 
 .dark {
@@ -133,7 +145,10 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   outline-offset: 2px;
 }
 
-/* 统一交互按钮：默认、悬浮、按下、禁用状态使用同一套节奏和语义色。 */
+/* 统一交互按钮：默认、悬浮、按下、禁用状态使用同一套节奏和语义色。
+   ⚠️ 悬浮/按下色必须「从令牌派生」：data-palette 有 6 套强调色会覆写 --c-primary，
+   若这里写死深紫（原 rgb(62 48 168) / rgb(45 35 130)），选了薄荷绿/落日橙之后
+   按钮常态是绿、一 hover 就变回紫色。改用 color-mix 深一档，一处适配全部配色。 */
 .ui-btn {
   display: inline-flex;
   align-items: center;
@@ -145,8 +160,9 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   border-radius: 0.75rem;
   font-size: 0.875rem;
   font-weight: 600;
-  transition: transform 180ms cubic-bezier(0.32, 0.72, 0, 1),
-    background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+  transition: transform var(--dur-base) var(--ease-spring),
+    background-color var(--dur-base) ease, border-color var(--dur-base) ease,
+    color var(--dur-base) ease, box-shadow var(--dur-base) ease;
 }
 .ui-btn:active { transform: scale(0.97); }
 .ui-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
@@ -156,29 +172,60 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   border-color: rgb(var(--c-primary));
   box-shadow: 0 5px 14px -8px rgb(var(--c-primary) / 0.85);
 }
-.ui-btn-primary:hover:not(:disabled) {
-  background: rgb(62 48 168);
-  border-color: rgb(62 48 168);
-  box-shadow: 0 8px 18px -9px rgb(var(--c-primary) / 0.9);
-  transform: translateY(-1px);
-}
-.ui-btn-primary:active:not(:disabled) {
-  background: rgb(45 35 130);
-  border-color: rgb(45 35 130);
-  box-shadow: 0 2px 6px -3px rgb(var(--c-primary) / 0.8);
-  transform: translateY(0) scale(0.96);
-}
 .ui-btn-secondary {
   color: rgb(var(--c-on-surface-variant));
   background: rgb(var(--c-surface-container));
   border-color: rgb(var(--c-outline-variant) / 0.72);
 }
-.ui-btn-secondary:hover:not(:disabled) {
-  color: rgb(var(--c-primary));
-  background: rgb(var(--c-primary-fixed));
-  border-color: rgb(var(--c-primary));
-  transform: translateY(-1px);
-  box-shadow: 0 5px 12px -9px rgb(var(--c-primary) / 0.7);
+.ui-btn-ghost {
+  color: rgb(var(--c-on-surface-variant));
+  background: transparent;
+}
+.ui-btn-danger {
+  color: rgb(var(--c-on-error));
+  background: rgb(var(--c-error));
+  border-color: rgb(var(--c-error));
+}
+
+/* 悬浮态只在「真有悬浮能力的精确指针设备」上生效。
+   触屏浏览器点击会错误命中 :hover，导致按钮点完仍保持上浮+变色（粘滞 hover）。
+   本文件 .ui-icon-hover / .glass-card / .nav-item 早已这样隔离，按钮是补齐。 */
+@media (hover: hover) and (pointer: fine) {
+  .ui-btn-primary:hover:not(:disabled) {
+    /* 第一行是兜底：不支持 color-mix 的浏览器退回纯主色，不会退色也不会报错 */
+    background: rgb(var(--c-primary));
+    background: color-mix(in srgb, rgb(var(--c-primary)) 78%, #000);
+    border-color: color-mix(in srgb, rgb(var(--c-primary)) 78%, #000);
+    box-shadow: 0 8px 18px -9px rgb(var(--c-primary) / 0.9);
+    transform: translateY(-1px);
+  }
+  .ui-btn-secondary:hover:not(:disabled) {
+    color: rgb(var(--c-primary));
+    background: rgb(var(--c-primary-fixed));
+    border-color: rgb(var(--c-primary));
+    transform: translateY(-1px);
+    box-shadow: 0 5px 12px -9px rgb(var(--c-primary) / 0.7);
+  }
+  .ui-btn-ghost:hover:not(:disabled) {
+    color: rgb(var(--c-primary));
+    background: rgb(var(--c-primary-fixed));
+    border-color: rgb(var(--c-primary) / 0.28);
+  }
+  .ui-btn-danger:hover:not(:disabled) {
+    background: rgb(var(--c-error));
+    background: color-mix(in srgb, rgb(var(--c-error)) 85%, #000);
+    border-color: color-mix(in srgb, rgb(var(--c-error)) 85%, #000);
+    transform: translateY(-1px);
+    box-shadow: 0 7px 15px -9px rgb(var(--c-error) / 0.9);
+  }
+}
+/* 按下态不依赖 hover 能力 —— 触屏同样需要「按下即响应」的即时反馈 */
+.ui-btn-primary:active:not(:disabled) {
+  background: rgb(var(--c-primary));
+  background: color-mix(in srgb, rgb(var(--c-primary)) 60%, #000);
+  border-color: color-mix(in srgb, rgb(var(--c-primary)) 60%, #000);
+  box-shadow: 0 2px 6px -3px rgb(var(--c-primary) / 0.8);
+  transform: translateY(0) scale(0.96);
 }
 .ui-btn-secondary:active:not(:disabled) {
   background: rgb(var(--c-primary-fixed-dim));
@@ -186,36 +233,17 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   transform: translateY(0) scale(0.96);
   box-shadow: none;
 }
-.ui-btn-ghost {
-  color: rgb(var(--c-on-surface-variant));
-  background: transparent;
-}
-.ui-btn-ghost:hover:not(:disabled) {
-  color: rgb(var(--c-primary));
-  background: rgb(var(--c-primary-fixed));
-  border-color: rgb(var(--c-primary) / 0.28);
-}
 .ui-btn-ghost:active:not(:disabled) {
   background: rgb(var(--c-primary-fixed-dim) / 0.7);
   transform: scale(0.96);
 }
-.ui-btn-danger {
-  color: rgb(var(--c-on-error));
-  background: rgb(var(--c-error));
-  border-color: rgb(var(--c-error));
-}
-.ui-btn-danger:hover:not(:disabled) {
-  background: rgb(190 42 42);
-  border-color: rgb(190 42 42);
-  transform: translateY(-1px);
-  box-shadow: 0 7px 15px -9px rgb(var(--c-error) / 0.9);
-}
 .ui-btn-danger:active:not(:disabled) {
-  background: rgb(150 28 28);
-  border-color: rgb(150 28 28);
+  background: rgb(var(--c-error));
+  background: color-mix(in srgb, rgb(var(--c-error)) 70%, #000);
+  border-color: color-mix(in srgb, rgb(var(--c-error)) 70%, #000);
   transform: scale(0.96);
 }
-.ui-icon-hover { transition: transform 180ms cubic-bezier(0.32, 0.72, 0, 1), color 180ms ease; }
+.ui-icon-hover { transition: transform var(--dur-base) var(--ease-spring), color var(--dur-base) ease; }
 @media (hover: hover) and (pointer: fine) {
   .ui-icon-hover:hover { color: rgb(var(--c-primary)); transform: translateY(-1px) scale(1.08) rotate(-4deg); }
 }
@@ -252,7 +280,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .search-field {
   min-height: 3.5rem;
   border-color: rgb(var(--c-outline-variant) / 0.72);
-  transition: box-shadow 220ms cubic-bezier(0.32, 0.72, 0, 1), border-color 220ms ease, transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: box-shadow var(--dur-slow) var(--ease-spring), border-color var(--dur-slow) ease, transform var(--dur-slow) var(--ease-spring);
 }
 .search-hero.is-compact .search-field {
   min-height: 2.5rem;
@@ -272,37 +300,48 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   box-shadow: none;
 }
 
-/* Material Symbols Outlined 图标字体（@fontsource 只提供 @font-face，需手动声明类） */
-.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: 'liga';
+/* Material Symbols Outlined 图标字体（@fontsource 只提供 @font-face，需手动声明类）。
+   ⚠️ 必须放在 @layer base 里：本文件是 Tailwind v3 结构（@tailwind utilities 在第 3 行），
+   而 base 层会在 utilities 之前输出。若把这条规则写成「无层」的普通 CSS（放在文件后段），
+   它会以「同特异性、更靠后」的次序压掉所有 text-* 工具类——实测全站 156 处
+   text-[9px]/text-[14px]/text-sm/text-label-sm… 全部被强行渲染成 24px。
+   放进 base 层后：工具类优先，未写字号时才回落到这里的 24px 默认值。 */
+@layer base {
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'liga';
+  }
 }
 
 /* 玻璃卡片（来自 Stitch DESIGN.md）
    优化：缓动改为弹簧曲线（平滑无回弹），悬停时提示 GPU 合成层 will-change，
    并在按压瞬间即时收缩（Apple：反馈始于按下而非释放）。 */
+/* 内容卡片：实心材质（原为 backdrop-filter: blur(16px) saturate(125%) 的毛玻璃）。
+   blur 是移动端最贵的常用 CSS 效果之一，且这里作用在**可滚动的内容卡片**上——
+   合成器每帧都要重算背景模糊。改实心后视觉几乎不变（卡片依旧比页面底略亮、
+   带描边与轻投影，符合 PRD「宁轻勿重、卡片浮在背景上」），但滚动明显跟手。
+   玻璃材质只保留在固定层：.site-topbar / .app-sidebar / 各类弹窗。 */
 .glass-card {
-  background: rgb(var(--c-surface-container-lowest) / 0.72);
-  backdrop-filter: blur(16px) saturate(125%);
-  -webkit-backdrop-filter: blur(16px) saturate(125%);
-  border: 1px solid rgb(var(--c-outline-variant) / 0.42);
+  background: rgb(var(--c-surface-container-lowest));
+  border: 1px solid rgb(var(--c-outline-variant) / 0.5);
   box-shadow: 0 5px 14px -10px rgb(33 27 72 / 0.38), inset 0 1px 0 rgb(255 255 255 / 0.55);
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1),
-    box-shadow 0.3s cubic-bezier(0.32, 0.72, 0, 1),
-    border-color 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: 0 5px 14px -10px color-mix(in srgb, color-mix(in srgb, rgb(var(--c-primary)) 40%, #000) 38%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.55);
+  transition: transform var(--dur-panel) var(--ease-spring),
+    box-shadow var(--dur-panel) var(--ease-spring),
+    border-color var(--dur-panel) var(--ease-spring);
 }
 /* 悬停上浮仅限精确指针设备：触摸设备点击会错误触发 :hover，导致卡片"跳一下"，
    Emil：用 @media (hover: hover) and (pointer: fine) 隔离，移动端只保留按压反馈。 */
@@ -310,12 +349,14 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   .glass-card:hover {
     transform: translateY(-3px);
     box-shadow: 0 16px 28px -16px rgb(33 27 72 / 0.48), inset 0 1px 0 rgb(255 255 255 / 0.7);
+    box-shadow: 0 16px 28px -16px color-mix(in srgb, color-mix(in srgb, rgb(var(--c-primary)) 40%, #000) 48%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.7);
     border-color: rgb(var(--c-primary) / 0.34);
     will-change: transform;
   }
 }
 .dark .glass-card {
-  background: rgb(var(--c-surface-container) / 0.72);
+  /* 暗色：卡片要比页面底（--c-bg-page: 14 18 27）更亮一档，故用 container-low */
+  background: rgb(var(--c-surface-container-low));
   border-color: rgb(255 255 255 / 0.1);
   box-shadow: 0 8px 22px -16px rgb(0 0 0 / 0.8), inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
@@ -346,7 +387,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   transform-origin: left center;
 }
 .settings-column { min-height: 100%; }
-.settings-collapse-enter { animation: settings-collapse-enter 180ms ease-out both; transform-origin: top; }
+.settings-collapse-enter { animation: settings-collapse-enter var(--dur-base) ease-out both; transform-origin: top; }
 @keyframes settings-collapse-enter {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -356,15 +397,26 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   to { transform: scaleX(0); }
 }
 
-/* 侧边栏导航项：过渡只指定实际变化的属性（transform/color），避免 transition:all；
-   悬停位移同样隔离触摸设备，防止点击误触发。 */
+/* 侧边栏导航项：过渡只指定实际变化的属性（transform/color/background），避免 transition:all；
+   悬停位移隔离触摸设备，防止点击误触发；「按下反馈」则刻意不隔离 —— 触屏没有 hover，
+   抽屉里点分类若连按下反馈都没有，会完全没有手感。 */
 .nav-item {
-  transition: transform 0.15s cubic-bezier(0.32, 0.72, 0, 1),
-    color 0.15s cubic-bezier(0.32, 0.72, 0, 1),
-    background-color 0.15s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform var(--dur-fast) var(--ease-spring),
+    color var(--dur-fast) var(--ease-spring),
+    background-color var(--dur-fast) var(--ease-spring);
+}
+/* 按下反馈：用背景压暗而不是 scale —— 桌面端 hover 已有 translateX(4px)，
+   :active 再改 transform 会把位移顶掉，出现「先右移再弹回」的抖动。 */
+.nav-item:active {
+  background-color: rgb(var(--c-surface-variant));
+}
+.dark .nav-item:active {
+  background-color: rgb(var(--c-surface-container-highest));
 }
 @media (hover: hover) and (pointer: fine) {
-  .nav-item:hover {
+  /* 排除危险项：退出登录用的是 .text-error，而 .nav-item:hover 的特异性是 (0,2,0)，
+     会压过 .text-error 的 (0,1,0) 把它染成品牌色，丢掉「危险操作」的颜色语义。 */
+  .nav-item:hover:not(.nav-item-danger) {
     transform: translateX(4px);
     color: rgb(var(--c-brand));
   }
@@ -384,7 +436,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   color: rgb(var(--c-on-background));
   font-size: 14px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color var(--dur-base), box-shadow var(--dur-base);
 }
 .zn-input:focus {
   border-color: rgb(var(--c-brand));
@@ -394,21 +446,42 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   background: rgb(var(--c-surface-container));
 }
 
-/* ===== 无障碍：尊重系统「减少动效 / 减少透明度」偏好 =====
-   Apple：减少动效不是「无反馈」，而是用更轻量的淡入/静态切换代替滑动与回弹。
-   这里把位移类动画降级为近乎瞬时，避免前庭不适；保留颜色/透明度变化以辅助理解。 */
+/* ===== 无障碍：尊重系统「减少动效 / 减少透明度 / 提高对比度」三种偏好 =====
+   Apple《Designing Fluid Interfaces》：减少动效不是「无反馈」，而是用更轻量的
+   交叉淡入代替滑动与回弹，并且「保留帮助理解的颜色/透明度变化」。
+   原实现用 `transition-duration: 0.01ms !important` 一刀切 —— 连颜色淡出也压成瞬时，
+   与下面这行注释原本的意图正好相反。现改为「按属性降级」：只砍位移/缩放/回弹。 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
+    /* 装饰性 keyframes 一律瞬时 */
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    /* 关键：只让「合成 / 绘制」类属性参与过渡。
+       transform 不在列表里 → 所有位移与缩放直接到位，不产生空间移动（前庭友好）。 */
+    transition-property: opacity, color, background-color, border-color,
+      box-shadow, filter, outline-color !important;
+    transition-duration: var(--dur-base) !important;
+    transition-timing-function: ease-out !important;
     scroll-behavior: auto !important;
   }
-  .glass-card:hover,
-  .glass-card:active {
-    transform: none;
+
+  /* 显式写过 transform 过渡的组件再补一刀，防止 scoped / inline 规则抢先 */
+  .glass-card, .glass-card:hover, .glass-card:active,
+  .nav-item, .nav-item:hover, .nav-item:active,
+  .ui-btn, .ui-btn:active, .ui-icon-hover,
+  .m-act, .m-act:active {
+    transform: none !important;
+  }
+
+  /* 例外：toast 倒计时条是「状态指示」而不是动效装饰 —— 它用 scaleX 表达剩余时间，
+     压成瞬时会让进度条一出现就空掉，反而丢信息。它只有 3px 高，不构成前庭刺激。 */
+  .toast-progress {
+    animation-duration: var(--toast-duration, 3200ms) !important;
+  }
+  .admin-msg-progress {
+    animation-duration: var(--admin-msg-duration, 3600ms) !important;
   }
 }
 @media (prefers-reduced-transparency: reduce) {
@@ -419,6 +492,37 @@ button:focus-visible, a:focus-visible, input:focus-visible {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     background: rgb(var(--c-surface-container-low));
+  }
+}
+/* 提高对比度：Apple 要求把半透明材质「实心化」并给出明确边界。
+   项目原先完全没有实现这个信号（prefers-contrast 命中数为 0）。 */
+@media (prefers-contrast: more) {
+  /* 材质实心化：去掉模糊、换成不透明底色，避免文字压在不断变化的内容上 */
+  .site-topbar {
+    background: rgb(var(--c-background));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom-color: rgb(var(--c-on-surface) / 0.38);
+  }
+  .glass-card,
+  .dark .glass-card,
+  .search-field {
+    background: rgb(var(--c-surface-container-lowest));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: rgb(var(--c-on-surface) / 0.42);
+  }
+  /* 描边式按钮给出可见边界，而不是只靠一点点底色差 */
+  .ui-btn-secondary,
+  .ui-btn-ghost {
+    border-color: rgb(var(--c-outline));
+  }
+  /* 焦点框加粗并去掉半透明 */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible {
+    outline: 3px solid rgb(var(--c-primary));
+    outline-offset: 3px;
   }
 }
 
@@ -567,10 +671,12 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 
 /* 移动端主滚动区：为 MobileNav + 安全区留出底部留白。
- * 桌面端 (≥1024px) 不留，避免空白条。 */
+ * 桌面端 (≥1024px) 不留，避免空白条。
+ * 4.75rem = 76px = 底栏 64px + 12px 呼吸位；不要再用 5rem+ 的大值，
+ * 否则会与页面自身的内边距叠加成整屏空白（首页曾达 ~216px）。 */
 @media (max-width: 1023px) {
   #main-scroll {
-    padding-bottom: calc(5rem + var(--sab));
+    padding-bottom: calc(4.75rem + var(--sab));
   }
 }
 
@@ -620,6 +726,7 @@ button, a, [role="button"], label, summary {
     border-radius: 14px;
     background: rgb(var(--c-bg-card));
     box-shadow: 0 2px 10px -8px rgb(33 27 72 / 0.45);
+    box-shadow: 0 2px 10px -8px color-mix(in srgb, color-mix(in srgb, rgb(var(--c-primary)) 40%, #000) 45%, transparent);
   }
   .m-table > tbody > tr:last-child { margin-bottom: 0; }
 
@@ -673,6 +780,10 @@ button, a, [role="button"], label, summary {
     min-height: 2.5rem;
   }
   .m-table td button { min-height: 2.25rem; }
+  /* ⚠️ 开关（role=switch）不是普通按钮：不能被上面的 2.25rem 触控下限撑高。
+     否则一条 20px 高的轨道会被拉成 36px —— 比整行文字（约 17px）还高，
+     在权限编辑弹窗的「可见」列上表现为「开关比一行还高」。 */
+  .m-table td button[role="switch"] { min-height: 0; align-self: center; }
 
   /* ---------- 变体：更紧凑（is-dense） ----------
    * 用于字段短、条数多的表：审计日志 / 权限编辑 / 用户行为。
@@ -719,6 +830,7 @@ button, a, [role="button"], label, summary {
   border-radius: 14px;
   background: rgb(var(--c-bg-card));
   box-shadow: 0 2px 10px -8px rgb(33 27 72 / 0.45);
+  box-shadow: 0 2px 10px -8px color-mix(in srgb, color-mix(in srgb, rgb(var(--c-primary)) 40%, #000) 45%, transparent);
 }
 .m-lcard + .m-lcard { margin-top: 10px; }
 .m-lcard-top { display: flex; gap: 11px; align-items: flex-start; }
@@ -759,7 +871,7 @@ button, a, [role="button"], label, summary {
   background: rgb(var(--c-surface-container));
   color: rgb(var(--c-primary));
 }
-.m-lcard-check { flex: none; display: flex; align-items: center; padding-top: 2px; }
+.m-lcard-check { flex: none; display: flex; align-items: center; padding-top: 2px; margin-left: auto; }
 .m-lcard-check input { width: 1.125rem; height: 1.125rem; accent-color: rgb(var(--c-primary)); }
 
 /* 小标签：自身不换行、过长省略。用在 .m-lcard-sub 里做元信息 chip。 */
@@ -798,7 +910,7 @@ button, a, [role="button"], label, summary {
   color: rgb(var(--c-on-surface-variant));
   font-size: 0.8125rem;
   font-weight: 600;
-  transition: transform 180ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform var(--dur-base) var(--ease-spring);
 }
 .m-act:active { transform: scale(0.97); }
 .m-act .material-symbols-outlined { font-size: 18px; }
@@ -826,12 +938,60 @@ button, a, [role="button"], label, summary {
 .m-act.is-warn.is-on { background: rgb(var(--c-warning) / 0.18); color: rgb(var(--c-warning)); border-color: rgb(var(--c-warning) / 0.36); }
 .m-act.is-ok.is-on { background: rgb(var(--c-success) / 0.14); color: rgb(var(--c-success)); border-color: rgb(var(--c-success) / 0.34); }
 
-/* 键值对：标签定宽不换行 + 值占满剩余并可断行（替代窄表格列） */
-.m-kv { display: flex; gap: 10px; padding: 8px 0; font-size: 0.8125rem; }
+/* 键值对：标签定宽不换行 + 值占满剩余并可断行（替代窄表格列）。
+ * 标签列宽只有 3rem（48px，够放最长的「可见性」3 字）——之前用 4.75rem（76px）
+ * 时，2 汉字的「外网/内网」后面会多出约 50px 空档，视觉上像被硬生生撑开。 */
+.m-kv { display: flex; gap: 8px; padding: 5px 0; font-size: 0.8125rem; }
 .m-kv + .m-kv { border-top: 1px dashed rgb(var(--c-outline-variant) / 0.65); }
-.m-kv > .k { flex: none; width: 4.75rem; color: rgb(var(--c-on-surface-variant)); white-space: nowrap; }
+.m-kv > .k { flex: none; width: 3rem; color: rgb(var(--c-on-surface-variant)); white-space: nowrap; }
 .m-kv > .v { flex: 1; min-width: 0; line-height: 1.6; overflow-wrap: anywhere; }
+
+/* ---------- 链接管理「筛选条件」行（.link-filters） ----------
+ * PC 端保持原来的 flex 自然换行；手机端改成两列网格：
+ * 每个筛选项变为「标签在上 / 控件在下」且控件 width:100%，于是每一行都被
+ * 精确铺满、左右对齐 —— 原来 flex-wrap 会留下参差不齐的半行。
+ * 首项（分类，含父/子两个下拉）与末项（标题输入框）各独占整行，避免出现半格空位。 */
+@media (max-width: 767px) {
+  .link-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 10px;
+  }
+  .link-filters > div {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+    min-width: 0;
+  }
+  .link-filters > div > label { font-size: 0.6875rem; line-height: 1.2; }
+  .link-filters > div > select,
+  .link-filters > div > input { width: 100%; min-width: 0; }
+  .link-filters > div:first-child,
+  .link-filters > div:last-child { grid-column: 1 / -1; }
+  .link-filters > div:first-child { flex-direction: row; align-items: center; gap: 8px; }
+  .link-filters > div:first-child > label { flex: none; }
+  .link-filters > div:first-child > select { flex: 1 1 0; width: auto; }
+}
 
 /* 注：原计划的 .m-gtitle / .m-gcard / .m-row（设置页分组卡）与 .m-fab 最终未采用，
    系统设置页的移动端改造已由 .settings-column 的媒体查询覆盖，故已删除以免留死代码。 */
 
+/* ---------- 强调色阴影（跟随 [data-palette]）----------
+ * 原先这些阴影写死成紫色 rgba(108,92,231,α) / rgba(83,65,205,α)：切到马卡龙、薄荷、
+ * 日落等 6 套配色后，按钮 / FAB / 弹窗底下仍泛紫（与「hover 从令牌派生」同一类漂移）。
+ * 统一改用 rgb(var(--c-primary) / α) —— 本文件其它阴影本来就是这么写的。
+ * 抬升类阴影（.glass-card 等）另需压暗，用嵌套 color-mix 派生并向 --c-primary 靠拢。 */
+.sh-glow-xs    { box-shadow: 0 4px 14px rgb(var(--c-primary) / 0.15); }
+.sh-glow-sm    { box-shadow: 0 4px 12px rgb(var(--c-primary) / 0.25); }
+.sh-glow-modal { box-shadow: 0 20px 40px -15px rgb(var(--c-primary) / 0.15); }
+.sh-glow-modal-lg { box-shadow: 0 20px 40px -15px rgb(var(--c-primary) / 0.25); }
+.sh-glow-fab   { box-shadow: 0 10px 25px -5px rgb(var(--c-primary) / 0.5); }
+.sh-glow-login { box-shadow: 0 8px 32px rgb(var(--c-primary) / 0.06); }
+.sh-elev-card  {
+                 box-shadow: 0 10px 23px rgb(52 42 100 / 0.11);   /* 兜底 */
+                 box-shadow: 0 10px 23px color-mix(in srgb, color-mix(in srgb, rgb(var(--c-primary)) 55%, #000) 11%, transparent); }
+/* hover 增强：仅精确指针设备，触屏不误触发（沿用全站 hover 隔离约定） */
+@media (hover: hover) and (pointer: fine) {
+  .sh-glow-sm-on-hover:hover { box-shadow: 0 6px 16px rgb(var(--c-primary) / 0.35); }
+}

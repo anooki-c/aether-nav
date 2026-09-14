@@ -79,7 +79,7 @@ async function submit() {
             <PasswordField id="confirm-password" v-model="confirm" icon="swipe_left_alt" placeholder="••••••••" autocomplete="new-password" input-class="block w-full py-2 border border-outline-variant/50 rounded-lg bg-surface-container-lowest font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-colors shadow-sm placeholder:text-outline/50" />
           </div>
           <p v-if="error" class="text-error font-body-sm text-body-sm">{{ error }}</p>
-          <button type="submit" :disabled="loading" class="w-full bg-primary-container hover:bg-primary text-on-primary-container font-headline-sm text-headline-sm py-2.5 px-4 rounded-lg shadow-sm transition-all duration-200 active:scale-[0.98] mt-6 flex items-center justify-center gap-2 group disabled:opacity-50">
+          <button type="submit" :disabled="loading" class="w-full bg-primary-container hover:bg-primary text-on-primary-container font-headline-sm text-headline-sm py-2.5 px-4 rounded-lg shadow-sm transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] duration-200 active:scale-[0.98] mt-6 flex items-center justify-center gap-2 group disabled:opacity-50">
             <span>{{ loading ? '重置中…' : '重置密码' }}</span>
             <span class="material-symbols-outlined text-on-primary-container group-hover:translate-x-1 transition-transform" style="font-size: 18px;">arrow_forward</span>
           </button>

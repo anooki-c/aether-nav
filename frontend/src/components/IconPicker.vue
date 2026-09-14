@@ -227,7 +227,7 @@ function close() {
       <div class="px-4 py-3 md:px-6 border-b border-outline-variant/20 shrink-0">
         <div class="flex items-center bg-surface-container-highest rounded-full p-1 gap-1 overflow-x-auto">
           <button type="button" v-for="t in TABS" :key="t.key"
-            class="flex-none px-3 py-1.5 rounded-full text-sm font-medium transition-all"
+            class="flex-none px-3 py-1.5 rounded-full text-sm font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
             :class="activeTab === t.key ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-variant'"
             @click="activeTab = t.key">
             {{ t.label }}
@@ -241,7 +241,7 @@ function close() {
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
           <input
             v-model="search"
-            class="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-full font-body-sm text-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+            class="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-full font-body-sm text-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
             placeholder="搜索图标名称，如 home、cloud、settings…"
             type="text"
             autofocus
@@ -321,7 +321,7 @@ function close() {
   transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.42s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .modal-leave-active .modal-panel {
-  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 0, 1), opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.22s var(--ease-spring), opacity 0.22s var(--ease-spring);
 }
 .modal-enter-from .modal-panel,
 .modal-leave-to .modal-panel {

@@ -68,6 +68,8 @@ const symbolName = computed(() => (isSymbol.value ? value.value : props.fallback
     v-if="isImage"
     :src="value"
     :alt="alt"
+    loading="lazy"
+    decoding="async"
     :class="cover ? 'w-full h-full object-cover' : 'object-contain shrink-0'"
     :style="cover ? null : { width: px, height: px }"
     @error="imgError = true"

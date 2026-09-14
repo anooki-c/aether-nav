@@ -60,23 +60,23 @@ async function submit() {
         <form class="flex flex-col gap-unit-16" @submit.prevent="submit">
           <div class="flex flex-col gap-unit-4">
             <label class="font-label-sm text-label-sm text-on-surface-variant" for="fullName">姓名</label>
-            <input id="fullName" v-model="fullName" type="text" class="w-full bg-surface rounded-lg border border-outline-variant px-unit-16 py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" placeholder="张三" />
+            <input id="fullName" v-model="fullName" type="text" class="w-full bg-surface rounded-lg border border-outline-variant px-unit-16 py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm" placeholder="张三" />
           </div>
           <div class="flex flex-col gap-unit-4">
             <label class="font-label-sm text-label-sm text-on-surface-variant" for="username">用户名</label>
-            <input id="username" v-model="username" type="text" class="w-full bg-surface rounded-lg border border-outline-variant px-unit-16 py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" placeholder="zhangsan" />
+            <input id="username" v-model="username" type="text" class="w-full bg-surface rounded-lg border border-outline-variant px-unit-16 py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm" placeholder="zhangsan" />
           </div>
           <div class="flex flex-col gap-unit-4">
             <label class="font-label-sm text-label-sm text-on-surface-variant" for="email">邮箱</label>
-            <input id="email" v-model="email" type="email" class="w-full bg-surface rounded-lg border border-outline-variant px-unit-16 py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" placeholder="zhangsan@example.com" />
+            <input id="email" v-model="email" type="email" class="w-full bg-surface rounded-lg border border-outline-variant px-unit-16 py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm" placeholder="zhangsan@example.com" />
           </div>
           <div class="flex flex-col gap-unit-4">
             <label class="font-label-sm text-label-sm text-on-surface-variant" for="password">密码</label>
-            <PasswordField id="password" v-model="password" placeholder="••••••••" autocomplete="new-password" input-class="w-full bg-surface rounded-lg border border-outline-variant py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" />
+            <PasswordField id="password" v-model="password" placeholder="••••••••" autocomplete="new-password" input-class="w-full bg-surface rounded-lg border border-outline-variant py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm" />
           </div>
           <div class="flex flex-col gap-unit-4">
             <label class="font-label-sm text-label-sm text-on-surface-variant" for="confirmPassword">确认密码</label>
-            <PasswordField id="confirmPassword" v-model="confirm" placeholder="••••••••" autocomplete="new-password" input-class="w-full bg-surface rounded-lg border border-outline-variant py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-sm" />
+            <PasswordField id="confirmPassword" v-model="confirm" placeholder="••••••••" autocomplete="new-password" input-class="w-full bg-surface rounded-lg border border-outline-variant py-[10px] text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] shadow-sm" />
           </div>
           <p v-if="error" class="text-error font-body-sm text-body-sm">{{ error }}</p>
           <div class="pt-unit-8">

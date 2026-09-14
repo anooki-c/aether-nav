@@ -174,7 +174,7 @@ async function runSharedIpCheck() {
           </div>
           <h2 id="network-check-title" class="font-headline-md text-headline-md text-text-primary">网络检测</h2>
         </div>
-        <button @click="close" aria-label="关闭网络检测" class="text-text-secondary hover:text-text-primary transition-all">
+        <button @click="close" aria-label="关闭网络检测" class="text-text-secondary hover:text-text-primary transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">
           <span class="material-symbols-outlined text-[22px]">close</span>
         </button>
       </div>
@@ -193,7 +193,7 @@ async function runSharedIpCheck() {
             <input v-model="portValue" @keyup.enter="runSharedPortCheck" :disabled="portBusy" type="text"
               placeholder="输入端口号，如 3000" class="flex-1 px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60" />
             <button @click="runSharedPortCheck" :disabled="portBusy"
-              class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all disabled:opacity-60">
+              class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-60">
               {{ portBusy ? '检测中…' : '检测' }}
             </button>
           </div>
@@ -255,7 +255,7 @@ async function runSharedIpCheck() {
                 class="px-3 py-2 rounded-xl text-sm bg-surface-container text-text-primary border border-outline-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono" />
             </label>
             <button @click="runSharedIpCheck"
-              class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-all">
+              class="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-on-primary hover:opacity-90 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]">
               检测
             </button>
           </div>

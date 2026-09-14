@@ -15,6 +15,9 @@ const groups = ref([])
 // 快捷访问区（收藏）链接：与 /api/links 同一次请求返回，按当前用户的 position 排序
 const favorites = ref([])
 const loading = ref(false)
+/* 卡片入场过渡开关：false = 不播入场（用于键盘驱动的搜索过滤）。
+   与 <TransitionGroup :css> 绑定；:css=false 时 Vue 完全不下发过渡类。 */
+const cardAnim = ref(true)
 const pendingLink = ref(null)
 const showPwd = ref(false)
 // 首页区块入场仅首次挂载播放一次：切换内外网/搜索会经 loading 态卸载重建区块，
@@ -54,7 +57,7 @@ const cardCompact = computed(() => store.compactMode || store.density === 'compa
 const searchFixed = computed(() => store.searchBoxPos === 'fixed')
 
 function onSearch({ engine, q }) {
-  if (engine === 'local') load(q)
+  if (engine === 'local') load(q, { instant: true })
   else if (store.searchQuery) {
     store.searchQuery = ''
     load('')
@@ -87,9 +90,14 @@ const orderedGroups = computed(() => {
     .map((x) => x.g)
 })
 
-async function load(query) {
+async function load(query, opts = {}) {
   const sequence = ++loadSequence
-  loading.value = true
+  /* opts.instant（搜索等键盘驱动的原地过滤）：不显示加载态、不播卡片入场 ——
+     否则每敲一个字都会先把整片内容换成「加载中…」，数据回来再让所有卡片 220ms 重飞。
+     非搜索刷新（内外网切换、链接数据变更）保持原有加载态，那里的指示是有意义的。 */
+  const instant = opts.instant === true
+  cardAnim.value = !instant
+  if (!instant) loading.value = true
   try {
     const data = await api.links(store.network, query || '')
     if (sequence !== loadSequence) return
@@ -177,7 +185,7 @@ watch(() => store.network, () => load())
 watch(() => store.linksVersion, () => load())
 // 站点设置（拖拽开关）变化后刷新以应用/取消拖拽
 watch(() => store.dragSortEnabled, () => load())
-watch(() => store.searchQuery, (query) => load(query))
+watch(() => store.searchQuery, (query) => load(query, { instant: true }))
 // 侧边栏选中分类变化后刷新（重新拉取，保证排序/可见性最新）
 // 点击侧边栏分类：主页始终显示全部卡片，仅平滑滚动到对应分类区域
 watch(() => store.scrollNonce, async () => {
@@ -192,7 +200,7 @@ watch(() => store.scrollNonce, async () => {
 </script>
 
 <template>
-  <div class="home-shell w-full px-4 lg:px-24 pb-24">
+  <div class="home-shell w-full px-4 lg:px-24 pb-4 lg:pb-24">
     <div class="pt-6">
     <div
       :class="searchFixed ? 'sticky top-0 z-20 lg:-mx-24 lg:px-24 bg-background/85 backdrop-blur-md border-b border-outline-variant/30' : ''"
@@ -204,10 +212,14 @@ watch(() => store.scrollNonce, async () => {
       <div v-if="loading" key="loading" class="text-center text-on-surface-variant py-12 font-body-md text-body-md">加载中…</div>
 
       <div v-else-if="!groups.length" key="empty" class="text-center py-20">
-        <span class="material-symbols-outlined text-5xl text-outline-variant empty-pop">search_off</span>
-      <p class="mt-3 font-headline-sm text-headline-sm text-on-surface-variant">暂无可见链接</p>
-      <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">试试切换内外网<span v-if="store.allowHomeEdit">，或使用顶栏的 + 添加链接</span></p>
-    </div>
+        <span class="material-symbols-outlined text-5xl text-outline-variant" :class="cardAnim ? 'empty-pop' : ''">search_off</span>
+        <p class="mt-3 font-headline-sm text-headline-sm text-on-surface-variant">当前没有可见链接</p>
+        <!-- 空状态要能解释「为什么空、下一步做什么」：访客看到空列表，绝大多数是权限问题而非内外网问题 -->
+        <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">
+          <template v-if="!store.token">这里只显示「所有人可见」的链接，<RouterLink to="/login" class="text-primary underline underline-offset-2">登录</RouterLink>后可看到更多</template>
+          <template v-else>试试切换右上角的内外网模式<span v-if="store.allowHomeEdit">，或用顶栏「+」添加链接</span></template>
+        </p>
+      </div>
 
       <div v-else key="content">
       <!-- 快捷访问（收藏）：置顶于所有分类卡片之上，只显示图标；登录用户可拖拽排序 -->
@@ -223,7 +235,7 @@ watch(() => store.scrollNonce, async () => {
         v-for="(g, gi) in orderedGroups"
       :key="g.category.id"
       :id="'cat-section-' + g.category.id"
-       :class="['mb-10', !entranceDone ? 'home-group' : '', 'scroll-mt-20']"
+       :class="['mb-10 last:mb-0', !entranceDone ? 'home-group' : '', 'scroll-mt-20']"
       :style="!entranceDone ? { animationDelay: gi * 35 + 'ms' } : null"
     >
       <h3 class="font-headline-md text-headline-md text-on-background mb-6 flex items-center gap-2">
@@ -251,7 +263,7 @@ watch(() => store.scrollNonce, async () => {
         </draggable>
 
         <!-- 静态网格（访客 / 未开启拖拽） -->
-        <TransitionGroup v-else :class="gridClass" name="card" tag="div">
+        <TransitionGroup v-else :class="gridClass" name="card" tag="div" :css="cardAnim">
           <LinkCard v-for="l in g.links" :key="l.id" :link="l" :compact="cardCompact" :editable="canEditHome" :category-color="g.category.color" @open="openLink" @edit="onEdit" @fetch-icon="onFetchIcon" />
         </TransitionGroup>
       </div>

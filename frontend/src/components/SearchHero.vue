@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { store } from '../store'
 
 const props = defineProps({
@@ -27,13 +27,28 @@ watch(engines, (items) => {
   if (!items.some((item) => item.id === engine.value)) engine.value = items[0]?.id || 'local'
 })
 
+/* 本地过滤：按键即发请求会让内容区每敲一下都换一遍数据。键盘输入属 100+/天 级动作
+   （improve-animations §1），既不该每键一次网络往返，也不该每次重播内容入场。
+   这里做 250ms 尾随防抖，只在停顿后查一次；回车提交 / 点「站内」引擎走 flushInput() 立即出结果。 */
+let inputTimer = null
 function onInput() {
-  if (engine.value === 'local') emit('search', { engine: 'local', q: query.value })
+  if (engine.value !== 'local') return
+  clearTimeout(inputTimer)
+  inputTimer = setTimeout(() => {
+    if (engine.value === 'local') emit('search', { engine: 'local', q: query.value })
+  }, 250)
 }
+/* 取消防抖并立即触发，避免回车时还要多等 250ms */
+function flushInput() {
+  clearTimeout(inputTimer)
+  inputTimer = null
+  emit('search', { engine: 'local', q: query.value })
+}
+onBeforeUnmount(() => clearTimeout(inputTimer))
 
 function onEnter() {
   if (engine.value === 'local') {
-    emit('search', { engine: 'local', q: query.value })
+    flushInput()
     return
   }
   const q = encodeURIComponent(query.value)
@@ -45,7 +60,7 @@ function onEnter() {
 
 function pickEngine(e) {
   engine.value = e
-  if (e === 'local') emit('search', { engine: 'local', q: query.value })
+  if (e === 'local') flushInput()
 }
 
 // 移动端底栏"搜索"触发聚焦 + 回到顶部

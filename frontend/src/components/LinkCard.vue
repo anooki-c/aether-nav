@@ -48,7 +48,7 @@ function onCardClick() {
 
 <template>
   <a
-    class="glass-card rounded-xl flex items-center relative overflow-hidden group cursor-pointer border transition-[transform,box-shadow,border-color] duration-300 ease-spring hover:-translate-y-0.5 hover:shadow-[0_10px_23px_rgba(52,42,100,0.11)] active:scale-[0.98]"
+    class="glass-card rounded-xl flex items-center relative overflow-hidden group cursor-pointer border transition-[transform,box-shadow,border-color] duration-300 ease-spring hover:-translate-y-0.5 hover:sh-elev-card active:scale-[0.98]"
     :class="[
       draggable ? 'cursor-grab active:cursor-grabbing' : '',
       compact ? 'p-3 h-20 gap-3' : 'p-4 h-24 gap-4',

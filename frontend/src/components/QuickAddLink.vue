@@ -240,7 +240,7 @@ async function save() {
           <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">页面主 URL <span class="text-error">*</span></label>
           <div class="flex gap-2">
             <input v-model="mainUrl" type="text" @keyup.enter="detect"
-              class="flex-1 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+              class="flex-1 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
               placeholder="粘贴链接，如 https://example.com 或 http://192.168.1.100:8080" />
             <button type="button" class="px-4 h-[42px] rounded-xl bg-primary text-on-primary text-sm font-medium shrink-0 hover:brightness-105 disabled:opacity-50 flex items-center gap-1"
               :disabled="detecting" @click="detect">
@@ -268,7 +268,7 @@ async function save() {
         <div class="flex flex-col gap-1.5">
           <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">名称 <span class="text-error">*</span></label>
           <input v-model="title" type="text"
-            class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+            class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
             placeholder="识别后会自动带入页面标题，可修改" />
         </div>
 
@@ -277,12 +277,12 @@ async function save() {
           <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">选择分类 <span class="text-error">*</span></label>
           <div class="flex gap-2">
             <select v-model="catParent"
-              class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer">
+              class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer">
               <option value="">父分类</option>
               <option v-for="p in store.tree" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
             <select v-model="category_id"
-              class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+              class="flex-1 px-3 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
               :disabled="store.tree.length === 0">
               <option :value="null">子分类</option>
               <template v-if="catParent">
@@ -314,7 +314,7 @@ async function save() {
             <div class="flex flex-col gap-1.5">
               <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">描述内容</label>
               <textarea v-model="description" rows="2"
-                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                 placeholder="添加描述信息…"></textarea>
             </div>
 
@@ -322,7 +322,7 @@ async function save() {
             <div v-if="otherField" class="flex flex-col gap-1.5">
               <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">{{ otherField }} URL（可选）</label>
               <input v-model="manualOther" type="text"
-                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                 :placeholder="otherField === '内网' ? 'http://192.168.x.x:port' : 'https://example.com'" />
             </div>
 
@@ -334,7 +334,7 @@ async function save() {
                   <EntityIcon :icon="icon" :fallback="getLinkIcon(title)" :size="32" />
                 </div>
                 <input v-model="icon" type="text"
-                  class="flex-1 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/40"
+                  class="flex-1 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] placeholder:text-on-surface-variant/40"
                   placeholder="识别后自动填入，可手动替换" />
                 <button type="button" class="px-3 h-[42px] rounded-xl bg-surface-container-high text-on-surface-variant hover:bg-surface-variant text-sm flex items-center gap-1 transition-colors" @click="iconPickerOpen = true">
                   <span class="material-symbols-outlined text-[18px]">emoji_emotions</span>
@@ -347,7 +347,7 @@ async function save() {
             <div class="flex flex-col gap-1.5">
               <label class="font-label-sm text-label-sm text-on-surface-variant font-medium">访问权限</label>
               <select v-model="permission"
-                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer">
+                class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl font-body-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] appearance-none cursor-pointer">
                 <option value="all">🌐 所有人 — 所有访客均可访问</option>
                 <option value="registered">👤 注册用户 — 登录后可见</option>
                 <option value="admin">🛡️ 管理员 — 仅管理员与所有者可见</option>
@@ -371,10 +371,10 @@ async function save() {
               </div>
               <div v-if="enablePwd" class="space-y-3 pl-1 pt-1">
                 <input v-model="pwdNew" type="password"
-                  class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+                  class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                   placeholder="至少 4 位密码" />
                 <input v-model="pwdConfirm" type="password"
-                  class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+                  class="w-full px-4 py-2 bg-bg-card border border-outline-variant rounded-lg font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color]"
                   placeholder="再次输入密码" />
                 <p v-if="pwdError" class="text-error font-label-xs text-label-xs flex items-center gap-1">
                   <span class="material-symbols-outlined text-[14px]">error</span>{{ pwdError }}

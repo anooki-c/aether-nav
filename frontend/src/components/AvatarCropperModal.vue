@@ -120,8 +120,16 @@ async function confirm() {
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="cancel"></div>
 
       <!-- 弹窗主体 -->
-      <div class="relative responsive-modal-panel w-full max-w-md bg-surface rounded-2xl shadow-[0_20px_40px_-15px_rgba(108,92,231,0.25)] border border-outline-variant/30 overflow-hidden flex flex-col">
-        <div class="px-6 py-4 border-b border-outline-variant/40">
+      <div class="relative responsive-modal-panel w-full max-w-md bg-surface rounded-2xl sh-glow-modal-lg border border-outline-variant/30 overflow-hidden flex flex-col">
+        <button
+          type="button"
+          class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center text-text-secondary hover:bg-surface-container-high hover:text-on-surface active:scale-95 transition-[transform,background-color,color]"
+          aria-label="关闭"
+          @click="cancel"
+        >
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+        <div class="px-6 py-4 pr-14 border-b border-outline-variant/40">
           <h3 class="font-headline-sm text-headline-sm text-text-primary">调整头像</h3>
           <p class="text-label-sm text-text-secondary mt-1">拖动图片、滚轮或下方按钮缩放，圆形区域即为头像在各页面的显示效果</p>
         </div>
@@ -162,7 +170,7 @@ async function confirm() {
           <button type="button" class="flex-1 px-4 py-2.5 rounded-xl bg-surface-container text-on-surface-variant text-sm font-semibold hover:bg-surface-container-high transition-colors" @click="cancel">
             取消
           </button>
-          <button type="button" :disabled="busy" class="flex-1 px-4 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50" @click="confirm">
+          <button type="button" :disabled="busy" class="flex-1 px-4 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold shadow-sm hover:bg-primary/90 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter,outline-color] disabled:opacity-50" @click="confirm">
             {{ busy ? '处理中…' : '确定' }}
           </button>
         </div>
